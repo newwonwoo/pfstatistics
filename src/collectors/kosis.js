@@ -112,9 +112,13 @@ export async function collect(indicator, { region, period }) {
  * 통계표 ID 가 맞아도 이것 때문에 빈손으로 돌아오므로, 메타를 먼저 읽어 채운다.
  */
 export async function fetchMeta({ orgId, tblId, type = 'ITM' }) {
+  // 메타는 통계자료(Param/…)가 아니라 statisticsData.do 로 가며 loadGubun 이 필요하다.
+  // type: ITM(항목) / OBJ(분류) / PRD(수록시점)
+  const loadGubun = { ITM: '1', OBJ: '2', PRD: '3' }[type] ?? '1';
   const qs = new URLSearchParams({
-    method: 'getMeta', apiKey: key(), orgId, tblId, type, format: 'json', jsonVD: 'Y',
+    method: 'getMeta', apiKey: key(), orgId, tblId, type, loadGubun,
+    format: 'json', jsonVD: 'Y',
   });
-  const r = check(await getJson(`${BASE}/Param/statisticsParameterData.do?${qs}`));
+  const r = check(await getJson(`${BASE}/statisticsData.do?${qs}`));
   return Array.isArray(r) ? r : [];
 }
