@@ -21,12 +21,38 @@
         },
         "dataUpdatedAt": null
       },
-      "collectedAt": "2026-09-10T04:35:04.445Z",
+      "collectedAt": "2026-09-10T05:02:17.914Z",
       "raw": {
         "period": "2026-07",
         "sido": "경기",
         "sgg": "광주시",
         "value": 93
+      }
+    },
+    {
+      "indicatorId": "cd_rate_91",
+      "name": "CD(91일) 수익률",
+      "region": "전국",
+      "period": "20260909",
+      "value": 3.12,
+      "unit": "%",
+      "source": {
+        "org": "금융투자협회",
+        "citation": "금융투자협회 CD금리_2026.09.09",
+        "url": "https://www.kofiabond.or.kr/proframeWeb/XMLSERVICES/",
+        "queryParams": {
+          "pfmAppName": "BIS-KOFIABOND",
+          "pfmSvcName": "BISCDPSrchSO",
+          "pfmFnName": "selectCdpMain"
+        },
+        "dataUpdatedAt": "2026.09.09"
+      },
+      "collectedAt": "2026-09-10T05:02:18.748Z",
+      "raw": {
+        "고시일": "2026.09.09",
+        "오전": 3.12,
+        "오후": 3.12,
+        "비고": "매 영업일 16시 기준 1회 산출·공시"
       }
     },
     {
@@ -48,7 +74,7 @@
         },
         "dataUpdatedAt": "20260810"
       },
-      "collectedAt": "2026-09-10T04:35:08.880Z",
+      "collectedAt": "2026-09-10T05:02:25.884Z",
       "raw": {
         "지역코드": "4161000000",
         "지역명": "광주시",
@@ -134,14 +160,6 @@
     {
       "name": "주택매매시장 소비심리지수",
       "reason": "주택매매시장 소비심리지수: tblId 미확정 — 'npm run collect -- --discover \"주택매매시장 소비심리지수\"' 로 먼저 확인 필요"
-    },
-    {
-      "name": "CD(91일) 금리",
-      "reason": "ECOS_API_KEY 미설정 — 발급: https://ecos.bok.or.kr/api/"
-    },
-    {
-      "name": "주택담보대출금리",
-      "reason": "주택담보대출금리: itemCode 미확정 — 'npm run collect -- --items 121Y002' 로 먼저 확인 필요"
     },
     {
       "name": "시공능력평가순위",
