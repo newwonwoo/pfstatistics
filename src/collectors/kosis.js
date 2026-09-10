@@ -95,21 +95,32 @@ export async function collect(indicator, { region, period }) {
     objL1 = known(region) ?? await toSggCode(region, { kakaoKey: process.env.KAKAO_REST_KEY });
   }
 
+  // 연 단위 지표에 조회월(YYYYMM)을 그대로 넘기면 조회가 깨진다.
+  // 주택보급률처럼 공표가 2년 지연되는 통계도 있어, 최근 몇 해를 훑고 최신치를 쓴다.
+  const annual = indicator.period === 'Y';
+  const year = Number(String(period).slice(0, 4));
+  const startPrdDe = annual ? String(year - 3) : period;
+  const endPrdDe = annual ? String(year) : period;
+
   const { rows, url } = await fetchData({
     orgId: t.orgId, tblId: t.tblId, prdSe: indicator.period,
-    startPrdDe: period, endPrdDe: period,
+    startPrdDe, endPrdDe,
     itmId: s.itmId ?? '', objL1,
   });
   const short = region.trim().split(/\s+/).at(-1);   // "경기도 광주시" → "광주시"
-  const hit = rows.find(r => nameOf(r).includes(short)) ?? (rows.length === 1 ? rows[0] : null);
+  const matched = rows.filter(r => nameOf(r).includes(short));
+  const pool = matched.length ? matched : (rows.length === 1 ? rows : []);
+  // 연 단위는 조회범위 중 가장 최근 시점을 쓴다
+  const hit = pool.sort((a, b) => String(a.PRD_DE).localeCompare(String(b.PRD_DE))).at(-1);
   if (!hit) throw new Error(`"${region}" 미발견 (${rows.length}행 조회됨)`);
 
   return envelope({
-    indicatorId: indicator.id, name: indicator.name, region, period,
+    indicatorId: indicator.id, name: indicator.name, region,
+    period: hit.PRD_DE ?? period,
     value: num(hit.DT), unit: indicator.unit,
     source: {
       org: s.org, citation: s.citation, url,
-      queryParams: { orgId: t.orgId, tblId: t.tblId, prdSe: indicator.period, period, itmId: s.itmId ?? null, objL1: objL1 || null },
+      queryParams: { orgId: t.orgId, tblId: t.tblId, prdSe: indicator.period, period: hit.PRD_DE ?? period, itmId: s.itmId ?? null, objL1: objL1 || null },
       dataUpdatedAt: hit.LST_CHN_DE ?? null,
       viewUrl: s.viewUrl ?? null,
       autoResolved: !s.tblId ? t.tblNm ?? t.tblId : null,
