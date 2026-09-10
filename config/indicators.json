@@ -42,8 +42,9 @@
         "orgId": "101",
         "tblId": "DT_1B040B3",
         "keyRequired": "KOSIS_API_KEY",
-        "verified": false,
-        "note": "통계표 ID 사용자 확인 (kosis.kr statHtml orgId=101 tblId=DT_1B040B3). itmId 확정 필요 — 미지정시 err 20"
+        "verified": true,
+        "note": "✅ 골든검증 통과 (경기도 광주시 202607 = 178,187세대). orgId=101 / tblId=DT_1B040B3 / itmId=T1(세대수) / objL1=시군구코드. itmId·objL1 둘 다 없으면 err 20",
+        "itmId": "T1"
       },
       "golden": {
         "region": "경기도 광주시",

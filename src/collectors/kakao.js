@@ -13,7 +13,8 @@ export const FACILITY_SPEC = {
   지하철역:   { sheet: '교통환경', category: 'SW8', radius: 1000 },
   // 6차선 왕복도로는 POI 가 아니라 도로 → 카테고리 검색 불가. 도로망 데이터 별도 필요(아래 note)
   // 주거편의
-  상업시설:   { sheet: '주거편의', category: 'MT1', radius: 1500 },
+  // 상업시설 = 대형마트(MT1) + 백화점 (실무 확인). 백화점은 별도 카테고리가 없어 키워드로 보완한다.
+  상업시설:   { sheet: '주거편의', category: 'MT1', keywordAlso: '백화점', radius: 1500 },
   의료시설:   { sheet: '주거편의', category: 'HP8', radius: 1500 },
   공원:       { sheet: '주거편의', keyword: '공원', radius: 1000 },
   문화시설:   { sheet: '주거편의', category: 'CT1', radius: 1000 },
@@ -55,6 +56,12 @@ export async function collectFacilities({ x, y }, only = null) {
     let docs = spec.category
       ? await searchAll('category', { ...params, category_group_code: spec.category })
       : await searchAll('keyword', { ...params, query: spec.keyword });
+    if (spec.keywordAlso) {
+      const extra = await searchAll('keyword', { ...params, query: spec.keywordAlso });
+      const seen = new Set(docs.map(d => d.id ?? d.place_name));
+      docs = [...docs, ...extra.filter(d => !seen.has(d.id ?? d.place_name))];
+      docs.sort((a, b) => Number(a.distance) - Number(b.distance));
+    }
     if (spec.nameFilter) docs = docs.filter(d => spec.nameFilter.test(d.place_name));
     result[label] = {
       sheet: spec.sheet,

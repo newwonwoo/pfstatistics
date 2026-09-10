@@ -1,5 +1,6 @@
 import { requireKey } from '../lib/env.js';
 import { getJson, envelope } from '../lib/http.js';
+import { toSggCode, known } from '../lib/region.js';
 
 const BASE = 'https://kosis.kr/openapi';
 
@@ -85,11 +86,19 @@ export async function collect(indicator, { region, period }) {
   // config 에 박혀 있으면 그걸 쓰고, 없으면 그 자리에서 찾아낸다
   const t = s.tblId ? { orgId: s.orgId, tblId: s.tblId, tblNm: null } : await resolveTable(indicator);
 
+  // 시군구 단위 통계표는 objL1(지역코드)이 없으면 err 20 을 준다.
+  let objL1 = '';
+  if (indicator.regionLevel === 'sgg') {
+    objL1 = known(region) ?? await toSggCode(region, { kakaoKey: process.env.KAKAO_REST_KEY });
+  }
+
   const { rows, url } = await fetchData({
     orgId: t.orgId, tblId: t.tblId, prdSe: indicator.period,
     startPrdDe: period, endPrdDe: period,
+    itmId: s.itmId ?? '', objL1,
   });
-  const hit = rows.find(r => nameOf(r).includes(region));
+  const short = region.trim().split(/\s+/).at(-1);   // "경기도 광주시" → "광주시"
+  const hit = rows.find(r => nameOf(r).includes(short)) ?? (rows.length === 1 ? rows[0] : null);
   if (!hit) throw new Error(`"${region}" 미발견 (${rows.length}행 조회됨)`);
 
   return envelope({
@@ -97,7 +106,7 @@ export async function collect(indicator, { region, period }) {
     value: num(hit.DT), unit: indicator.unit,
     source: {
       org: s.org, citation: s.citation, url,
-      queryParams: { orgId: t.orgId, tblId: t.tblId, prdSe: indicator.period, period },
+      queryParams: { orgId: t.orgId, tblId: t.tblId, prdSe: indicator.period, period, itmId: s.itmId ?? null, objL1: objL1 || null },
       dataUpdatedAt: hit.LST_CHN_DE ?? null,
       autoResolved: !s.tblId ? t.tblNm ?? t.tblId : null,
     },
