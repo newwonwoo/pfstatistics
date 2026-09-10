@@ -4,5 +4,6 @@
   "/api/collect/route": "app/api/collect/route.js",
   "/api/facilities/route": "app/api/facilities/route.js",
   "/api/health/route": "app/api/health/route.js",
+  "/api/kosis/route": "app/api/kosis/route.js",
   "/page": "app/page.js"
 }

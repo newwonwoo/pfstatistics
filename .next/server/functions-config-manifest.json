@@ -9,6 +9,9 @@
     },
     "/api/health": {
       "maxDuration": 30
+    },
+    "/api/kosis": {
+      "maxDuration": 60
     }
   }
 }

@@ -58,6 +58,12 @@
       "regex": "^/api/health(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/health(?:/)?$"
+    },
+    {
+      "page": "/api/kosis",
+      "regex": "^/api/kosis(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/kosis(?:/)?$"
     }
   ],
   "dataRoutes": [],

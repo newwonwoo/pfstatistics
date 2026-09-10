@@ -104,3 +104,17 @@ export async function collect(indicator, { region, period }) {
     raw: hit,
   });
 }
+
+/**
+ * 통계표 메타 조회 — 항목코드(itmId)·분류코드(objL1).
+ *
+ * KOSIS 는 itmId 를 비워두면 통계표에 따라 err 20("해당 자료가 없습니다")을 준다.
+ * 통계표 ID 가 맞아도 이것 때문에 빈손으로 돌아오므로, 메타를 먼저 읽어 채운다.
+ */
+export async function fetchMeta({ orgId, tblId, type = 'ITM' }) {
+  const qs = new URLSearchParams({
+    method: 'getMeta', apiKey: key(), orgId, tblId, type, format: 'json', jsonVD: 'Y',
+  });
+  const r = check(await getJson(`${BASE}/Param/statisticsParameterData.do?${qs}`));
+  return Array.isArray(r) ? r : [];
+}

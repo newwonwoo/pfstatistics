@@ -43,7 +43,7 @@
         "tblId": "DT_1B040B3",
         "keyRequired": "KOSIS_API_KEY",
         "verified": false,
-        "note": "tblId 실호출 검증 필요. 캡쳐상 수록기간 1992~2026.07, 자료갱신일 2026-08-05"
+        "note": "통계표 ID 사용자 확인 (kosis.kr statHtml orgId=101 tblId=DT_1B040B3). itmId 확정 필요 — 미지정시 err 20"
       },
       "golden": {
         "region": "경기도 광주시",
@@ -64,11 +64,11 @@
         "table": "(新)주택보급률",
         "citation": "KOSIS-국내통계-주제별통계-주거-주택보급률",
         "adapter": "kosis",
-        "orgId": "116",
-        "tblId": "DT_MLTM_5403",
+        "orgId": null,
+        "tblId": null,
         "keyRequired": "KOSIS_API_KEY",
         "verified": false,
-        "note": "다가구 구분거처 반영 컬럼 사용. 최신치 2024년(2년 지연), 자료갱신일 2026-01-07"
+        "note": "tblId 미확정 — 수집 시점에 자동결선 (지표명 검색 → 골든값 대조)"
       },
       "golden": {
         "region": "경기도",
@@ -89,11 +89,11 @@
         "table": "부동산시장 소비자심리조사 - 주택매매시장 소비심리지수",
         "citation": "국토연구원 부동산시장연구센터 주택매매시장 소비심리지수",
         "adapter": "kosis",
-        "orgId": "390",
+        "orgId": null,
         "tblId": null,
         "keyRequired": "KOSIS_API_KEY",
         "verified": false,
-        "note": "캡쳐 화면에 OPENAPI 버튼 확인됨 → KOSIS OpenAPI 직결 가능. 수록 2011.07~, 자료갱신일 2026-08-27"
+        "note": "tblId 미확정 — 수집 시점에 자동결선 (지표명 검색 → 골든값 대조)"
       },
       "golden": {
         "region": "경기도",
