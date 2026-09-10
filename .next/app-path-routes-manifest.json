@@ -3,5 +3,6 @@
   "/_not-found/page": "/_not-found",
   "/api/collect/route": "/api/collect",
   "/api/facilities/route": "/api/facilities",
+  "/api/health/route": "/api/health",
   "/page": "/"
 }

@@ -6,6 +6,9 @@
     },
     "/api/facilities": {
       "maxDuration": 60
+    },
+    "/api/health": {
+      "maxDuration": 30
     }
   }
 }

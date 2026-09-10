@@ -16,7 +16,6 @@ export const SHEETS = [
   { id: '교육환경',     label: '교육환경',     kind: 'poi' },
   { id: '규모 및 배치', label: '규모 및 배치', kind: 'manual' },
   { id: '평형구성',     label: '평형구성',     kind: 'manual' },
-  { id: '인근초기분양률', label: '인근초기분양률', kind: 'manual' },
   { id: '지역미분양',   label: '지역미분양',   kind: 'stat' },
   { id: '지역수요',     label: '지역수요',     kind: 'stat' },
   { id: '지역경쟁력',   label: '지역경쟁력',   kind: 'stat' },

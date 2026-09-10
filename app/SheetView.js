@@ -2,6 +2,7 @@
 import { buildSheet } from './sheets';
 import { T, mono } from './theme';
 import EvidenceCard from './EvidenceCard';
+import RadiusMap from './RadiusMap';
 
 const S = {
   page: { background: T.panel, border: `1px solid ${T.lineStrong}`, borderTop: 0, borderRadius: `0 0 ${T.radius}px ${T.radius}px`, padding: '22px 24px 26px' },
@@ -79,6 +80,27 @@ export default function SheetView({ sheetId, data, facilities }) {
 
         {facilities && (
           <>
+            <div style={S.secTitle}>증빙 — 반경원 지도</div>
+            <div style={{ display: 'grid', gap: 14, marginBottom: 6 }}>
+              {spec.facilities.filter(f => !f.manual).map(f => {
+                const hit = facilities.facilities?.[f.label];
+                if (!hit) return null;
+                const near = hit.nearest;
+                return (
+                  <RadiusMap
+                    key={f.label}
+                    title={f.label}
+                    center={{ lat: Number(facilities.coord.y), lng: Number(facilities.coord.x) }}
+                    radius={hit.radius}
+                    markers={near ? [{ lat: Number(near.y), lng: Number(near.x), name: near.name }] : []}
+                    caption={near
+                      ? `최근접 ${near.name} · ${near.distance}m · 반경 내 ${hit.count}건`
+                      : `반경 ${hit.radius}m 이내 부재`}
+                  />
+                );
+              })}
+            </div>
+
             <div style={S.secTitle}>증빙 — 반경내 시설 목록</div>
             {spec.facilities.filter(f => !f.manual).map(f => {
               const hit = facilities.facilities?.[f.label];
