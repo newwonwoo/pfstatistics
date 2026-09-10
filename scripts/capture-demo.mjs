@@ -1,6 +1,6 @@
 /** 캡쳐 03(미분양) 을 로데이터로 재현해 PNG 로 뽑는다 */
 import { fetchUnsoldBySgg } from '../src/collectors/molit.js';
-import { buildEvidenceHtml, htmlToPng } from '../src/evidence/capture.js';
+import { buildEvidenceHtml, htmlToPng } from '../tools/capture-headless.js';
 
 const period = '202607';
 const { items, url } = await fetchUnsoldBySgg(period);

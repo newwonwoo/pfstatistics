@@ -16,11 +16,11 @@
     "node": ">=20"
   },
   "devDependencies": {
-    "html-to-image": "^1.11.13",
     "playwright": "^1.63.0"
   },
   "dependencies": {
     "exceljs": "^4.4.0",
+    "html-to-image": "^1.11.13",
     "next": "^16.3.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
