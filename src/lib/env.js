@@ -16,6 +16,7 @@ const ISSUE_URL = {
   DATA_GO_KR_KEY: 'https://www.data.go.kr/',
   ECOS_API_KEY: 'https://ecos.bok.or.kr/api/',
   KAKAO_REST_KEY: 'https://developers.kakao.com/',
+  KAKAO_JS_KEY: 'https://developers.kakao.com/  (JavaScript 키 — 지도 캡쳐용)',
 };
 
 /** 키가 없으면 무엇을 어디서 발급받는지 알려주고 멈춘다 */

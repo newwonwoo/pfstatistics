@@ -40,12 +40,12 @@ for (const ind of cat.indicators) {
   const s = ind.source;
   const blockers = [];
   if (s.keyRequired && !keyOk[s.keyRequired]) blockers.push(`${s.keyRequired} 없음`);
-  if (s.adapter === 'kosis' && !s.tblId) blockers.push('tblId 미확정');
+  if (s.adapter === 'kosis' && !s.tblId) blockers.push('tblId 미확정 → npm run resolve');
   if (s.adapter === 'ecos' && !s.itemCode) blockers.push('itemCode 미확정');
-  if (s.adapter === 'molit' && !s.endpointUrl) blockers.push('엔드포인트 미설정');
-  if (s.adapter === 'manual') blockers.push('수기입력 항목');
-  if (s.adapter === 'kb') blockers.push('KB API 경로 탐색 필요');
+  if (s.adapter === 'constructor' && !fs.existsSync('data/constructor-rank.json')) blockers.push('순위표 미적재 → npm run ingest-rank');
+  if (s.adapter === 'kakao' && !keyOk.KAKAO_JS_KEY) blockers.push('KAKAO_JS_KEY 없음(지도캡쳐)');
   if (!blockers.length) ready++;
-  console.log(` ${blockers.length ? '✗' : '✔'} ${ind.name.padEnd(34)} ${blockers.join(', ') || '수집가능'}`);
+  const mark = blockers.length ? '✗' : (s.verified ? '✅' : '✔');
+  console.log(` ${mark} ${ind.name.padEnd(34)} ${blockers.join(', ') || (s.verified ? '수집가능 · 골든검증 통과' : '수집가능')}`);
 }
 console.log(`\n → ${ready}/${cat.indicators.length} 지표 수집가능\n`);

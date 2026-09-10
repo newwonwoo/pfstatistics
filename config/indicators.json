@@ -159,10 +159,11 @@
         "org": "대한건설협회",
         "portal": "사내 GRU1119-06071 / 건설협회 공시",
         "citation": "시공능력평가순위",
-        "adapter": "manual",
+        "adapter": "constructor",
         "keyRequired": null,
         "verified": false,
-        "note": "cak.or.kr 직접접속 차단(000). 연 1회(8월) 공시 → 연간 표 적재 방식이 현실적. 업종코드 03 토목건축공사업 기준"
+        "note": "✅ 엑셀 업로드 방식. 연 1회(8월) 공시라 실시간 API 불필요. 사내 GRU1119-06071 목록을 그대로 업로드. 헤더 별칭 흡수(상호/업체명/회사명…), 상호 표기차((주)/주식회사/공백) 정규화 매칭",
+        "endpoint": "엑셀 업로드 → data/constructor-rank.json"
       },
       "golden": {
         "region": "제일건설(주)",

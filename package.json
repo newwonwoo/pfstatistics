@@ -6,12 +6,17 @@
   "scripts": {
     "doctor": "node scripts/doctor.js",
     "collect": "node scripts/collect.js",
-    "verify": "node scripts/verify.js"
+    "resolve": "node scripts/resolve-kosis.js",
+    "ingest-rank": "node scripts/ingest-rank.js",
+    "capture": "node scripts/capture-demo.mjs"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
     "playwright": "^1.63.0"
+  },
+  "dependencies": {
+    "xlsx": "^0.18.5"
   }
 }
