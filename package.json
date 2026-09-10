@@ -8,5 +8,10 @@
     "collect": "node scripts/collect.js",
     "verify": "node scripts/verify.js"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0"
+  }
 }

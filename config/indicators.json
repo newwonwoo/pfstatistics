@@ -164,10 +164,10 @@
         "table": "아파트 매매가격지수",
         "citation": "KB부동산 월간KB주택가격동향 통계표 - 아파트 매매가격지수",
         "adapter": "kb",
-        "endpoint": "https://api.kbland.kr",
+        "endpoint": "https://data-api.kbland.kr/bfmstat/weekMnthlyHuseTrnd/priceIndex?매매전세코드=01&월간주간구분코드=01&메뉴코드=1&지역코드={시도코드}",
         "keyRequired": null,
-        "verified": false,
-        "note": "공식 OpenAPI 없음. api.kbland.kr 게이트웨이 응답 확인(dataHeader/dataBody 구조) — 경로 탐색 필요. 대안: 월간 통계표 엑셀 공개배포분 파싱"
+        "verified": true,
+        "note": "✅ 키 불필요 직결 성공. data.kbland.kr 번들에서 baseURL(data-api.kbland.kr) 역산. 증감률 전용 엔드포인트(prcIndxFlxblRt)는 서버측 SQL 오류 → 지수 원본에서 직접 계산. 골든검증 통과(캡쳐07 6개지역×8개월 전량 일치, 광주시 202608=0.341%)"
       },
       "golden": {
         "region": "경기도 광주시",

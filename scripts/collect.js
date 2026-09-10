@@ -13,6 +13,7 @@ import * as kosis from '../src/collectors/kosis.js';
 import * as ecos from '../src/collectors/ecos.js';
 import * as molit from '../src/collectors/molit.js';
 import * as kakao from '../src/collectors/kakao.js';
+import * as kb from '../src/collectors/kb.js';
 
 loadEnv();
 const argv = process.argv.slice(2);
@@ -56,7 +57,7 @@ if (!region || !period) {
   process.exit(1);
 }
 
-const ADAPTERS = { kosis, ecos, molit };
+const ADAPTERS = { kosis, ecos, molit, kb };
 const results = [], failures = [];
 
 for (const ind of cat.indicators) {
