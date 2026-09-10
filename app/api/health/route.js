@@ -38,7 +38,7 @@ async function probeKosis(key) {
         '31': '기간만료 — 인증키 재발급 필요',
         '32': '일일 호출 초과',
       }[String(j.err)];
-      return { status: 'rejected', code: j.err, message: j.errMsg, hint };
+      return { status: 'rejected', code: j.err, message: j.errMsg, hint, body: t.slice(0, 200) };
     }
     return { status: 'ok', sample: Array.isArray(j) ? `${j.length}건 조회됨` : 'ok' };
   } catch (e) { return { status: 'error', message: e.message }; }
@@ -50,11 +50,17 @@ async function probeKakaoRest(key) {
     const r = await fetch('https://dapi.kakao.com/v2/local/search/address.json?query=서울시청', {
       headers: { Authorization: `KakaoAK ${key.trim()}` },
     });
-    if (r.status === 401) return { status: 'rejected', code: 401, hint: 'REST API 키가 아니거나 오탈자. 콘솔 > 앱 키 > REST API 키 확인' };
-    if (r.status === 403) return { status: 'rejected', code: 403, hint: '앱 권한 문제. 플랫폼 > Web 등록 확인' };
-    if (!r.ok) return { status: 'rejected', code: r.status };
-    const j = await r.json();
-    return { status: 'ok', sample: `${j.documents?.length ?? 0}건 조회됨` };
+    const body = await r.text();
+    if (r.ok) {
+      let j; try { j = JSON.parse(body); } catch {}
+      return { status: 'ok', sample: `${j?.documents?.length ?? 0}건 조회됨` };
+    }
+    // 카카오는 403 을 여러 이유로 준다. 원인 판별은 응답 본문의 코드에 달려있다.
+    const hint = {
+      401: 'REST API 키가 아니거나 오탈자입니다',
+      403: '키는 인식되나 거부됨 — 아래 body 의 code 를 보십시오. -401/-402 는 앱 권한, -10 은 서비스 미신청',
+    }[r.status];
+    return { status: 'rejected', code: r.status, hint, body: body.slice(0, 300) };
   } catch (e) { return { status: 'error', message: e.message }; }
 }
 
