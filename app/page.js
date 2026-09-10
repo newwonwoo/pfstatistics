@@ -7,6 +7,7 @@ import SheetTabs from './SheetTabs';
 import SheetView from './SheetView';
 import Overview from './Overview';
 import SavedList from './SavedList';
+import SourceHealth from './SourceHealth';
 import * as store from './storage';
 
 const S = {
@@ -133,6 +134,8 @@ export default function Home() {
         <span style={S.tag}>원천 직결</span>
       </div>
       <p style={S.lead}>사업장 시군구를 입력하면 심사에 필요한 수치와 증빙을 원천에서 직접 수집합니다.</p>
+
+      <SourceHealth />
 
       <div style={S.bar}>
         <div style={S.grid}>

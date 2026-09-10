@@ -13,6 +13,9 @@
     },
     "/api/kosis": {
       "maxDuration": 60
+    },
+    "/api/selftest": {
+      "maxDuration": 120
     }
   }
 }

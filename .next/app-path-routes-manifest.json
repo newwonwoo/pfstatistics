@@ -6,5 +6,6 @@
   "/api/facilities/route": "/api/facilities",
   "/api/health/route": "/api/health",
   "/api/kosis/route": "/api/kosis",
+  "/api/selftest/route": "/api/selftest",
   "/page": "/"
 }

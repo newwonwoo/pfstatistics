@@ -70,6 +70,12 @@
       "regex": "^/api/kosis(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/kosis(?:/)?$"
+    },
+    {
+      "page": "/api/selftest",
+      "regex": "^/api/selftest(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/selftest(?:/)?$"
     }
   ],
   "dataRoutes": [],

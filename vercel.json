@@ -1,8 +1,18 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "regions": ["icn1"],
+  "regions": [
+    "icn1"
+  ],
   "functions": {
-    "app/api/**/route.js": { "maxDuration": 60 }
-  }
+    "app/api/**/route.js": {
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/selftest",
+      "schedule": "0 0 * * *"
+    }
+  ]
 }
