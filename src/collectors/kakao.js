@@ -13,10 +13,32 @@ export const FACILITY_SPEC = {
   지하철역:   { sheet: '교통환경', category: 'SW8', radius: 1000 },
   // 6차선 왕복도로는 POI 가 아니라 도로 → 카테고리 검색 불가. 도로망 데이터 별도 필요(아래 note)
   // 주거편의
-  // 상업시설 = 대형마트(MT1) + 백화점 (실무 확인). 백화점은 별도 카테고리가 없어 키워드로 보완한다.
-  상업시설:   { sheet: '주거편의', category: 'MT1', keywordAlso: '백화점', radius: 1500 },
-  의료시설:   { sheet: '주거편의', category: 'HP8', radius: 1500 },
-  공원:       { sheet: '주거편의', keyword: '공원', radius: 1000 },
+  /*
+   * 상업시설 = 대형마트 + 백화점.
+   * 백화점은 카테고리 코드가 없어 키워드로 보완하는데, 그대로 쓰면
+   * "밧데리백화점" 같은 상호가 딸려온다(실제 광주시 조회에서 확인).
+   * → 카카오가 분류한 category_name 이 대형마트/백화점 계열인 것만 남긴다.
+   */
+  상업시설: {
+    sheet: '주거편의', category: 'MT1', keywordAlso: '백화점', radius: 1500,
+    categoryFilter: /대형마트|백화점/,
+  },
+  /*
+   * 의료시설: HP8(병원)에는 동물병원도 들어간다("송정동물의료센터" 확인).
+   * 사람 대상 의료기관만 남긴다.
+   */
+  의료시설: {
+    sheet: '주거편의', category: 'HP8', radius: 1500,
+    categoryFilter: /병원|의원|종합병원|치과|한의원|보건소/,
+    excludeName: /동물|반려|펫|애견/,
+  },
+  // 공원도 카테고리가 없어 키워드로 잡는다. "물놀이장·주차장" 같은 부속시설이 섞이므로
+  // 카카오 분류가 공원 계열인 것만 남긴다.
+  공원: {
+    sheet: '주거편의', keyword: '공원', radius: 1000,
+    categoryFilter: /공원/,
+    excludeName: /주차장|화장실|매점/,
+  },
   문화시설:   { sheet: '주거편의', category: 'CT1', radius: 1000 },
   공공시설:   { sheet: '주거편의', category: 'PO3', radius: 1000 },
   // 교육환경 (500m / 1km 2단 판정)
@@ -62,13 +84,21 @@ export async function collectFacilities({ x, y }, only = null) {
       docs = [...docs, ...extra.filter(d => !seen.has(d.id ?? d.place_name))];
       docs.sort((a, b) => Number(a.distance) - Number(b.distance));
     }
+    // 카카오가 붙인 분류(category_name)로 걸러야 상호에 낚이지 않는다
+    if (spec.categoryFilter) docs = docs.filter(d => spec.categoryFilter.test(d.category_name ?? ''));
+    if (spec.excludeName) docs = docs.filter(d => !spec.excludeName.test(d.place_name));
     if (spec.nameFilter) docs = docs.filter(d => spec.nameFilter.test(d.place_name));
     result[label] = {
       sheet: spec.sheet,
       radius: spec.radius,
       count: docs.length,
       nearest: docs[0] ? { name: docs[0].place_name, distance: Number(docs[0].distance), x: docs[0].x, y: docs[0].y } : null,
-      items: docs.map(d => ({ name: d.place_name, distance: Number(d.distance), address: d.road_address_name || d.address_name, x: d.x, y: d.y })),
+      items: docs.map(d => ({
+        name: d.place_name, distance: Number(d.distance),
+        address: d.road_address_name || d.address_name,
+        category: d.category_name ?? null,      // 판정 근거를 증빙에 남긴다
+        x: d.x, y: d.y,
+      })),
     };
   }
   return result;
