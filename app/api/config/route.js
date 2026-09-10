@@ -15,5 +15,10 @@ export async function GET() {
     : process.env.KAKAO_JS_KEY ? 'KAKAO_JS_KEY'
     : process.env.KAKAO_JAVASCRIPT_KEY ? 'KAKAO_JAVASCRIPT_KEY' : null;
   const kakaoJsKey = src ? process.env[src].trim() : null;
-  return NextResponse.json({ kakaoJsKey, kakaoJsKeySource: src });
+  return NextResponse.json({
+    kakaoJsKey, kakaoJsKeySource: src,
+    // 배포본이 최신인지 확인하는 표식 (Vercel 이 커밋 SHA 를 주입한다)
+    commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'local',
+    deployedAt: process.env.VERCEL_DEPLOYMENT_ID ?? null,
+  });
 }
