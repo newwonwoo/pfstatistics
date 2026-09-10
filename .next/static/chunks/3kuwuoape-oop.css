@@ -1,1 +1,0 @@
-*,:before,:after{box-sizing:border-box}:root{--bg:#f6f7f9;--panel:#fff;--line:#dfe3e8;--ink:#1a1d21;--muted:#6b7280;--accent:#1d4ed8;--ok:#15803d;--warn:#b45309;--err:#b91c1c;--mark:#e53935}html,body{margin:0;padding:0}body{background:var(--bg);color:var(--ink);font:14px/1.55 Malgun Gothic,Apple SD Gothic Neo,-apple-system,sans-serif}

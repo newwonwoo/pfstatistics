@@ -1,9 +1,18 @@
+# 빌드 산출물 — 커밋하면 베르셀 빌드가 깨진다
+.next/
+out/
+dist/
+.turbo/
+
+# 의존성
+node_modules/
+
 # API 키 — 절대 커밋 금지
 .env
 .env.local
 .env.*.local
 
-node_modules/
-out/
+# 로컬 산출물
 *.log
 .DS_Store
+.vercel
