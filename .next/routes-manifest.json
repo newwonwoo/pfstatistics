@@ -48,6 +48,12 @@
       "namedRegex": "^/api/collect(?:/)?$"
     },
     {
+      "page": "/api/config",
+      "regex": "^/api/config(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/config(?:/)?$"
+    },
+    {
       "page": "/api/facilities",
       "regex": "^/api/facilities(?:/)?$",
       "routeKeys": {},

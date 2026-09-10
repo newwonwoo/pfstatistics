@@ -2,6 +2,7 @@
   "/_global-error/page": "/_global-error",
   "/_not-found/page": "/_not-found",
   "/api/collect/route": "/api/collect",
+  "/api/config/route": "/api/config",
   "/api/facilities/route": "/api/facilities",
   "/api/health/route": "/api/health",
   "/api/kosis/route": "/api/kosis",

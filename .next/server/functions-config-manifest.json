@@ -4,6 +4,7 @@
     "/api/collect": {
       "maxDuration": 60
     },
+    "/api/config": {},
     "/api/facilities": {
       "maxDuration": 60
     },

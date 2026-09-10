@@ -87,8 +87,11 @@ export async function collect(indicator, { region, period }) {
   const t = s.tblId ? { orgId: s.orgId, tblId: s.tblId, tblNm: null } : await resolveTable(indicator);
 
   // 시군구 단위 통계표는 objL1(지역코드)이 없으면 err 20 을 준다.
-  let objL1 = '';
-  if (indicator.regionLevel === 'sgg') {
+  // 지역코드 규칙이 통계표마다 다르다.
+  //  - 시군구 표(DT_1B040B3): 법정동코드 앞5자리
+  //  - 시도 표(주택보급률·소비심리): 통계표 전용코드 → config 에 고정
+  let objL1 = s.objL1 ?? '';
+  if (!objL1 && indicator.regionLevel === 'sgg') {
     objL1 = known(region) ?? await toSggCode(region, { kakaoKey: process.env.KAKAO_REST_KEY });
   }
 

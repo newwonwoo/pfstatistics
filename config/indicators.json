@@ -65,11 +65,13 @@
         "table": "(新)주택보급률",
         "citation": "KOSIS-국내통계-주제별통계-주거-주택보급률",
         "adapter": "kosis",
-        "orgId": null,
-        "tblId": null,
+        "orgId": "116",
+        "tblId": "DT_MLTM_2100",
         "keyRequired": "KOSIS_API_KEY",
-        "verified": false,
-        "note": "tblId 미확정 — 수집 시점에 자동결선 (지표명 검색 → 골든값 대조)"
+        "verified": true,
+        "note": "✅ 골든검증 통과 (경기 2024 = 99.4%). (新)주택보급률, 항목=보급률(다가구 구분거처 반영). 시도코드가 일반 행정코드가 아닌 통계표 전용코드라 objL1 고정 필요",
+        "itmId": "13103871096T6",
+        "objL1": "13102871096A.0011"
       },
       "golden": {
         "region": "경기도",
@@ -90,11 +92,13 @@
         "table": "부동산시장 소비자심리조사 - 주택매매시장 소비심리지수",
         "citation": "국토연구원 부동산시장연구센터 주택매매시장 소비심리지수",
         "adapter": "kosis",
-        "orgId": null,
-        "tblId": null,
+        "orgId": "390",
+        "tblId": "DT_39002_04",
         "keyRequired": "KOSIS_API_KEY",
-        "verified": false,
-        "note": "tblId 미확정 — 수집 시점에 자동결선 (지표명 검색 → 골든값 대조)"
+        "verified": true,
+        "note": "✅ 골든검증 통과 (경기도 202607 = 125.1). 국토연구원 주택매매시장 소비심리지수. 지역코드 K0205=경기도",
+        "itmId": "T1",
+        "objL1": "K0205"
       },
       "golden": {
         "region": "경기도",
