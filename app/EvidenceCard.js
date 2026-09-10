@@ -95,12 +95,18 @@ export default function EvidenceCard({ row, region }) {
       <div style={S.bar}>
         <span style={S.name}>{row.name}</span>
         <div style={S.btns}>
+          {row.source?.viewUrl && (
+            <a style={{ ...S.btn, textDecoration: 'none', display: 'inline-block' }}
+               href={row.source.viewUrl} target="_blank" rel="noreferrer">
+              원문 확인 ↗
+            </a>
+          )}
           <button style={S.btn} onClick={copyImage} disabled={busy}>엑셀로 복사</button>
           <button style={S.btn} onClick={download} disabled={busy}>PNG 저장</button>
         </div>
       </div>
 
-      <div ref={ref} style={S.shot}>
+      <div ref={ref} data-evidence={row.indicatorId} style={S.shot}>
         <div style={S.title}>{row.name}</div>
         <div style={S.sub}>▶ {row.region} · {row.period}</div>
         <table style={S.table}>

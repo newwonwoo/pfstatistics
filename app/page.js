@@ -1,7 +1,7 @@
 'use client';
 import { useState, useMemo } from 'react';
 import './globals.css';
-import { SHEETS } from './sheets';
+import { SHEETS, buildSheet } from './sheets';
 import { T } from './theme';
 import SheetTabs from './SheetTabs';
 import SheetView from './SheetView';
@@ -44,6 +44,23 @@ export default function Home() {
   const [tab, setTab] = useState('지역미분양');
   const [busy, setBusy] = useState(null);
   const [msg, setMsg] = useState(null);
+
+  /** 엑셀 내보내기 — 화면에 그려진 증빙 카드를 그대로 캡쳐해 넣는다 */
+  async function exportXlsx() {
+    if (!data) return;
+    setBusy('xlsx'); setMsg(null);
+    try {
+      const { exportWorkbook } = await import('./exportExcel');
+      await exportWorkbook({
+        data, facilities, sheets: SHEETS, buildSheet,
+        getCardEl: (id) => document.querySelector(`[data-evidence="${id}"]`),
+        onProgress: (sheet) => setMsg({ kind: 'warn', text: `엑셀 생성 중 — ${sheet}` }),
+      });
+      setMsg(null);
+    } catch (e) {
+      setMsg({ kind: 'err', text: `엑셀 생성 실패: ${e.message}` });
+    } finally { setBusy(null); }
+  }
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
@@ -119,6 +136,12 @@ export default function Home() {
           <button style={S.btn(busy === 'poi', false)} onClick={collectPoi} disabled={!!busy}>
             {busy === 'poi' ? '수집 중…' : '반경시설 수집'}
           </button>
+          {data && (
+            <button style={{ ...S.btn(busy === 'xlsx', false), marginLeft: 'auto' }}
+                    onClick={exportXlsx} disabled={!!busy}>
+              {busy === 'xlsx' ? '생성 중…' : '엑셀 다운로드'}
+            </button>
+          )}
         </div>
         {msg && <div style={S.msg(msg.kind)}>{msg.text}</div>}
       </div>
@@ -127,7 +150,24 @@ export default function Home() {
 
       <div style={{ marginTop: 20 }}>
         <SheetTabs sheets={SHEETS} active={tab} onSelect={setTab} status={status} />
-        <SheetView sheetId={tab} data={data} facilities={facilities} />
+        {/*
+          모든 시트를 항상 마운트해 둔다.
+          엑셀 내보내기가 각 시트의 증빙 카드를 캡쳐하는데,
+          display:none 이면 html-to-image 가 빈 이미지를 만든다.
+          그래서 비활성 시트는 화면 밖으로 밀어 두되 레이아웃은 살려둔다.
+        */}
+        {SHEETS.map(s => (
+          <div
+            key={s.id}
+            aria-hidden={s.id !== tab}
+            style={s.id === tab ? undefined : {
+              position: 'absolute', left: -99999, top: 0, width: 1100,
+              pointerEvents: 'none',
+            }}
+          >
+            <SheetView sheetId={s.id} data={data} facilities={facilities} />
+          </div>
+        ))}
       </div>
     </main>
   );

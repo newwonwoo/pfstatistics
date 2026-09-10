@@ -111,6 +111,7 @@ export async function collect(indicator, { region, period }) {
       org: s.org, citation: s.citation, url,
       queryParams: { orgId: t.orgId, tblId: t.tblId, prdSe: indicator.period, period, itmId: s.itmId ?? null, objL1: objL1 || null },
       dataUpdatedAt: hit.LST_CHN_DE ?? null,
+      viewUrl: s.viewUrl ?? null,
       autoResolved: !s.tblId ? t.tblNm ?? t.tblId : null,
     },
     raw: hit,

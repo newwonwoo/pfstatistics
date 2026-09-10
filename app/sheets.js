@@ -8,14 +8,11 @@
  * 집계는 이번 범위가 아니다. 수집된 값과 증빙만 채운다.
  */
 
+/** 이 앱이 실제로 수집하는 시트만 남긴다. 수기입력 시트(표지·종합·규모및배치·평형구성)는 제외. */
 export const SHEETS = [
-  { id: '표지',        label: '표지',        tone: 'cover' },
-  { id: '종합',        label: '종합',        tone: 'summary' },
   { id: '교통환경',     label: '교통환경',     kind: 'poi' },
   { id: '주거편의',     label: '주거편의',     kind: 'poi' },
   { id: '교육환경',     label: '교육환경',     kind: 'poi' },
-  { id: '규모 및 배치', label: '규모 및 배치', kind: 'manual' },
-  { id: '평형구성',     label: '평형구성',     kind: 'manual' },
   { id: '지역미분양',   label: '지역미분양',   kind: 'stat' },
   { id: '지역수요',     label: '지역수요',     kind: 'stat' },
   { id: '지역경쟁력',   label: '지역경쟁력',   kind: 'stat' },

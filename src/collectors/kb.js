@@ -74,6 +74,7 @@ export async function collect(indicator, { region, period }) {
       org: indicator.source.org, citation: indicator.source.citation, url,
       queryParams: { 매매전세코드: '01', 월간주간구분코드: '01', 메뉴코드: '1', 지역코드: SIDO_CODE[normSido(sido)] },
       dataUpdatedAt: updatedAt,
+      viewUrl: indicator.source.viewUrl ?? null,
     },
     raw: { 지역코드: hit.지역코드, 지역명: hit.지역명, series: series.slice(-13) },
   });

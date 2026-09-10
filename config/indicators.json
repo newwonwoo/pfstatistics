@@ -18,7 +18,8 @@
         "endpoint": "https://stat.molit.go.kr/portal/stat/data.do?formId=2082&styleNum=128&apprYn=Y&startDate={YYYYMM}&endDate={YYYYMM}",
         "note": "✅ 키 불필요 직결 성공. statView doSearch() 역산. formId=2082(시·군·구별 미분양현황 200012~), styleNum=128은 캡쳐 \"양식128\"과 동일. 골든검증 통과(광주시 93호, 경기 17개 시군구 전량 일치)",
         "keyRequired": null,
-        "verified": true
+        "verified": true,
+        "viewUrl": "https://stat.molit.go.kr/portal/cate/statView.do?hRsId=32&hFormId=2082"
       },
       "golden": {
         "region": "경기도 광주시",
@@ -44,7 +45,8 @@
         "keyRequired": "KOSIS_API_KEY",
         "verified": true,
         "note": "✅ 골든검증 통과 (경기도 광주시 202607 = 178,187세대). orgId=101 / tblId=DT_1B040B3 / itmId=T1(세대수) / objL1=시군구코드. itmId·objL1 둘 다 없으면 err 20",
-        "itmId": "T1"
+        "itmId": "T1",
+        "viewUrl": "https://kosis.kr/statHtml/statHtml.do?orgId=101&tblId=DT_1B040B3"
       },
       "golden": {
         "region": "경기도 광주시",
@@ -71,7 +73,8 @@
         "verified": true,
         "note": "✅ 골든검증 통과 (경기 2024 = 99.4%). (新)주택보급률, 항목=보급률(다가구 구분거처 반영). 시도코드가 일반 행정코드가 아닌 통계표 전용코드라 objL1 고정 필요",
         "itmId": "13103871096T6",
-        "objL1": "13102871096A.0011"
+        "objL1": "13102871096A.0011",
+        "viewUrl": "https://kosis.kr/statHtml/statHtml.do?orgId=116&tblId=DT_MLTM_2100"
       },
       "golden": {
         "region": "경기도",
@@ -98,7 +101,8 @@
         "verified": true,
         "note": "✅ 골든검증 통과 (경기도 202607 = 125.1). 국토연구원 주택매매시장 소비심리지수. 지역코드 K0205=경기도",
         "itmId": "T1",
-        "objL1": "K0205"
+        "objL1": "K0205",
+        "viewUrl": "https://kosis.kr/statHtml/statHtml.do?orgId=390&tblId=DT_39002_04"
       },
       "golden": {
         "region": "경기도",
@@ -121,7 +125,8 @@
         "keyRequired": null,
         "verified": true,
         "note": "✅ 키 불필요 직결 성공. WebSquare+ProFrame 게이트웨이 역산. 골든검증 통과(3.12). ※주담대금리는 별도 수집대상이 아니라 CD금리에서 파생되는 값(사용자 확인). ⚠️ 과거일자 소급조회 미지원 — 최신 영업일 고시치만 반환",
-        "endpoint": "POST https://www.kofiabond.or.kr/proframeWeb/XMLSERVICES/ (BIS-KOFIABOND/BISCDPSrchSO/selectCdpMain)"
+        "endpoint": "POST https://www.kofiabond.or.kr/proframeWeb/XMLSERVICES/ (BIS-KOFIABOND/BISCDPSrchSO/selectCdpMain)",
+        "viewUrl": "https://www.kofiabond.or.kr/websquare/websquare.html?w2xPath=/xml/cdplus/BISCdpMain.xml"
       },
       "golden": {
         "region": "전국",
@@ -145,7 +150,8 @@
         "endpoint": "https://data-api.kbland.kr/bfmstat/weekMnthlyHuseTrnd/priceIndex?매매전세코드=01&월간주간구분코드=01&메뉴코드=1&지역코드={시도코드}",
         "keyRequired": null,
         "verified": true,
-        "note": "✅ 키 불필요 직결 성공. data.kbland.kr 번들에서 baseURL(data-api.kbland.kr) 역산. 증감률 전용 엔드포인트(prcIndxFlxblRt)는 서버측 SQL 오류 → 지수 원본에서 직접 계산. 골든검증 통과(캡쳐07 6개지역×8개월 전량 일치, 광주시 202608=0.341%)"
+        "note": "✅ 키 불필요 직결 성공. data.kbland.kr 번들에서 baseURL(data-api.kbland.kr) 역산. 증감률 전용 엔드포인트(prcIndxFlxblRt)는 서버측 SQL 오류 → 지수 원본에서 직접 계산. 골든검증 통과(캡쳐07 6개지역×8개월 전량 일치, 광주시 202608=0.341%)",
+        "viewUrl": "https://data.kbland.kr/kbstats/wmh"
       },
       "golden": {
         "region": "경기도 광주시",
@@ -168,7 +174,8 @@
         "keyRequired": null,
         "verified": false,
         "note": "✅ 엑셀 업로드 방식. 연 1회(8월) 공시라 실시간 API 불필요. 사내 GRU1119-06071 목록을 그대로 업로드. 헤더 별칭 흡수(상호/업체명/회사명…), 상호 표기차((주)/주식회사/공백) 정규화 매칭",
-        "endpoint": "엑셀 업로드 → data/constructor-rank.json"
+        "endpoint": "엑셀 업로드 → data/constructor-rank.json",
+        "viewUrl": "https://www.cak.or.kr/"
       },
       "golden": {
         "region": "제일건설(주)",
@@ -212,7 +219,8 @@
             500,
             1000
           ]
-        }
+        },
+        "viewUrl": "https://map.kakao.com/"
       },
       "golden": {
         "region": "경기도 광주시 탄벌동 203-4",

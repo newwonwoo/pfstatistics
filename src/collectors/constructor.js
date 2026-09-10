@@ -107,6 +107,7 @@ export async function collect(indicator, { region: company, period }) {
       url: null,
       queryParams: { 업종: hit.업종, 지역: hit.지역, 등록번호: hit.등록번호 },
       dataUpdatedAt: year,
+      viewUrl: indicator.source.viewUrl ?? null,
       uploadedFile: sourceFile,
     },
     raw: hit,
