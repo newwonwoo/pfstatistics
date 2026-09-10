@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { geocode, collectFacilities, FACILITY_SPEC, ROAD_NOTE } from '../../../src/collectors/kakao.js';
+import { collectMedical } from '../../../src/collectors/hira.js';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -17,7 +18,18 @@ export async function GET(req) {
   try { polygon = JSON.parse(req.nextUrl.searchParams.get('polygon') ?? 'null'); } catch {}
   try {
     const coord = await geocode(addr);
+    const point = { lat: Number(coord.y), lng: Number(coord.x) };
     const facilities = await collectFacilities(coord, null, polygon);
+
+    // 의료시설만 심평원(법정 종별)으로 대체한다. 실패해도 나머지는 살린다.
+    try {
+      facilities['의료시설'] = await collectMedical({ point, polygon, radius: 1500 });
+    } catch (e) {
+      facilities['의료시설'] = {
+        sheet: '주거편의', radius: 1500, count: 0, nearest: null, items: [],
+        error: `심평원 조회 실패: ${e.message}`,
+      };
+    }
     return NextResponse.json({
       address: addr, coord, polygon, facilities,
       basis: polygon?.length >= 3 ? 'polygon' : 'point',
