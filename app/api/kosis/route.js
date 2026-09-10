@@ -36,7 +36,8 @@ export async function GET(req) {
     const { rows, url } = await fetchData({
       orgId, tblId,
       prdSe: q.get('prd') ?? 'M',
-      startPrdDe: period, endPrdDe: period,
+      startPrdDe: q.get('start') ?? period,
+      endPrdDe: q.get('end') ?? period,
       itmId: q.get('itmId') ?? '',
       objL1: q.get('objL1') ?? '',
     });
