@@ -1,5 +1,6 @@
 import { requireKey } from '../lib/env.js';
 import { getJson } from '../lib/http.js';
+import { centroid, circumradius, distanceToPolygon } from '../lib/geo.js';
 
 const BASE = 'https://dapi.kakao.com/v2/local';
 const H = () => ({ Authorization: `KakaoAK ${requireKey('KAKAO_REST_KEY')}` });
@@ -27,9 +28,14 @@ export const FACILITY_SPEC = {
    * 의료시설: HP8(병원)에는 동물병원도 들어간다("송정동물의료센터" 확인).
    * 사람 대상 의료기관만 남긴다.
    */
+  /*
+   * 의료시설: 캡쳐가 "1.5km 이내 부재"로 판정했는데 실제 조회하면 의원·치과가 15건 나온다.
+   * 즉 심사에서 말하는 의료시설은 **병원급**(입원시설)이지 의원급이 아니다.
+   * 카카오 분류 말단(의료,건강 > 병원 > OO)이 종합병원/병원인 것만 남긴다.
+   */
   의료시설: {
     sheet: '주거편의', category: 'HP8', radius: 1500,
-    categoryFilter: /병원|의원|종합병원|치과|한의원|보건소/,
+    categoryLeaf: /^(종합병원|대학병원|병원)$/,
     excludeName: /동물|반려|펫|애견/,
   },
   // 공원도 카테고리가 없어 키워드로 잡는다. "물놀이장·주차장" 같은 부속시설이 섞이므로
@@ -69,12 +75,28 @@ async function searchAll(path, params) {
   return out;
 }
 
-/** 좌표 기준 반경내 시설 수집. 거리 오름차순으로 반환한다(가장 가까운 1건이 증빙 대상). */
-export async function collectFacilities({ x, y }, only = null) {
+/**
+ * 반경내 시설 수집.
+ *
+ * 사업지가 폴리곤이면 "사업지 반경 N 이내"는 대표지번 한 점이 아니라 **경계 기준**이다.
+ * 카카오는 점+반경 검색만 되므로, 중심점에서 (반경 + 외접반경)만큼 넓게 훑은 뒤
+ * 폴리곤 경계까지의 실제 거리로 다시 걸러낸다. 폴리곤 안의 시설은 거리 0 이다.
+ *
+ * @param {{x:number,y:number}} point 대표지번 좌표 (폴리곤 없을 때 기준점)
+ * @param {Array<{lat:number,lng:number}>} [polygon] 사업지 경계
+ */
+export async function collectFacilities({ x, y }, only = null, polygon = null) {
+  const ring = Array.isArray(polygon) && polygon.length >= 3 ? polygon : null;
+  const origin = ring ? centroid(ring) : { lat: Number(y), lng: Number(x) };
+  const pad = ring ? Math.ceil(circumradius(ring, origin)) : 0;
+  const ox = String(origin.lng), oy = String(origin.lat);
+
   const result = {};
   for (const [label, spec] of Object.entries(FACILITY_SPEC)) {
     if (only && !only.includes(label)) continue;
-    const params = { x, y, radius: spec.radius, sort: 'distance' };
+    // 경계 기준이면 중심에서 더 넓게 훑어야 경계 근처 시설을 놓치지 않는다
+    const searchRadius = Math.min(20000, spec.radius + pad);
+    const params = { x: ox, y: oy, radius: searchRadius, sort: 'distance' };
     let docs = spec.category
       ? await searchAll('category', { ...params, category_group_code: spec.category })
       : await searchAll('keyword', { ...params, query: spec.keyword });
@@ -86,19 +108,32 @@ export async function collectFacilities({ x, y }, only = null) {
     }
     // 카카오가 붙인 분류(category_name)로 걸러야 상호에 낚이지 않는다
     if (spec.categoryFilter) docs = docs.filter(d => spec.categoryFilter.test(d.category_name ?? ''));
+    // 분류 말단만 본다: "의료,건강 > 병원 > 치과" → "치과"
+    if (spec.categoryLeaf) {
+      docs = docs.filter(d => spec.categoryLeaf.test(String(d.category_name ?? '').split('>').pop().trim()));
+    }
     if (spec.excludeName) docs = docs.filter(d => !spec.excludeName.test(d.place_name));
     if (spec.nameFilter) docs = docs.filter(d => spec.nameFilter.test(d.place_name));
+
+    // 거리 재계산: 폴리곤이 있으면 경계 최단거리, 없으면 카카오가 준 점 기준 거리
+    let items = docs.map(d => ({
+      name: d.place_name,
+      distance: ring
+        ? Math.round(distanceToPolygon({ lat: Number(d.y), lng: Number(d.x) }, ring))
+        : Number(d.distance),
+      address: d.road_address_name || d.address_name,
+      category: d.category_name ?? null,      // 판정 근거를 증빙에 남긴다
+      x: d.x, y: d.y,
+    }));
+    items = items.filter(i => i.distance <= spec.radius).sort((a, b) => a.distance - b.distance);
+
     result[label] = {
       sheet: spec.sheet,
       radius: spec.radius,
-      count: docs.length,
-      nearest: docs[0] ? { name: docs[0].place_name, distance: Number(docs[0].distance), x: docs[0].x, y: docs[0].y } : null,
-      items: docs.map(d => ({
-        name: d.place_name, distance: Number(d.distance),
-        address: d.road_address_name || d.address_name,
-        category: d.category_name ?? null,      // 판정 근거를 증빙에 남긴다
-        x: d.x, y: d.y,
-      })),
+      basis: ring ? 'polygon' : 'point',   // 무엇을 기준으로 쟀는지 증빙에 남긴다
+      count: items.length,
+      nearest: items[0] ?? null,
+      items,
     };
   }
   return result;

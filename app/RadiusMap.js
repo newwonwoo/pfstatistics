@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { T } from './theme';
+import { loadKakaoSdk } from './kakaoSdk';
 
 /**
  * 반경원 지도 — 캡쳐 01·02·05 의 그 그림.
@@ -10,27 +11,6 @@ import { T } from './theme';
  *
  * 필요한 것: NEXT_PUBLIC_KAKAO_JS_KEY + 카카오 콘솔 플랫폼>Web 에 이 도메인 등록.
  */
-let sdkPromise = null;
-function loadSdk() {
-  if (typeof window === 'undefined') return Promise.reject(new Error('브라우저 전용'));
-  if (window.kakao?.maps) return Promise.resolve(window.kakao);
-  if (sdkPromise) return sdkPromise;
-  sdkPromise = (async () => {
-    // 키는 서버에서 받아온다 — 환경변수 이름이 무엇이든 동작하도록
-    const cfg = await (await fetch('/api/config')).json();
-    const JS_KEY = cfg.kakaoJsKey;
-    return new Promise((resolve, reject) => {
-    if (!JS_KEY) return reject(new Error('카카오 JavaScript 키가 설정되지 않았습니다 (KAKAO_JS_KEY 또는 NEXT_PUBLIC_KAKAO_JS_KEY)'));
-    const s = document.createElement('script');
-    s.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${JS_KEY}&autoload=false`;
-    s.onload = () => window.kakao.maps.load(() => resolve(window.kakao));
-    s.onerror = () => reject(new Error('카카오맵 SDK 로드 실패 — 콘솔 > 플랫폼 > Web 에 이 도메인이 등록됐는지 확인하세요'));
-    document.head.appendChild(s);
-    });
-  })();
-  return sdkPromise;
-}
-
 const S = {
   box: { border: `1px solid ${T.line}`, borderRadius: 8, overflow: 'hidden', background: '#fff' },
   bar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 14px', borderBottom: `1px solid ${T.line}`, background: '#fafbfc' },
@@ -48,7 +28,7 @@ export default function RadiusMap({ title, center, radius, markers = [], caption
 
   useEffect(() => {
     let dead = false;
-    loadSdk().then((kakao) => {
+    loadKakaoSdk().then((kakao) => {
       if (dead || !el.current) return;
       const c = new kakao.maps.LatLng(center.lat, center.lng);
       const map = new kakao.maps.Map(el.current, { center: c, level: 6 });

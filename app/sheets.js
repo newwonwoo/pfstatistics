@@ -90,37 +90,65 @@ export function buildSheet(sheetId, { byId, region, period, company }) {
         ],
         evidence: ['cd_rate_91', 'consumer_sentiment'],
       };
+    /*
+     * 교통환경 (캡쳐 01) — 항목마다 독립 판정, 하단에 평균점수 행.
+     * 컬럼: 평가항목 | 평가기준 | 시설명 | 거리 | 점수 | 평가점수 및 평가
+     */
     case '교통환경':
       return {
-        title: '교통환경', subject: region, poi: true,
+        title: '교통환경', subject: region, poi: true, layout: 'flat',
         columns: ['평가항목', '평가기준', '시설명', '거리', '점수', '평가점수 및 평가'],
         facilities: [
           { label: '지하철역', criteria: '사업지 반경 1km 이내' },
           { label: '6차선 왕복도로', criteria: '사업지 반경 300m 이내', manual: true },
         ],
+        summaryRow: '평균점수',
       };
+
+    /*
+     * 주거편의 (캡쳐 02) — 두 그룹으로 묶어 그룹별 판정.
+     * 그룹1 상업/의료(1.5km), 그룹2 공원/문화/공공(1km).
+     * 각 그룹 아래에 묶음 라벨 행이 들어간다.
+     */
     case '주거편의':
       return {
-        title: '주거편의', subject: region, poi: true,
-        columns: ['평가항목', '평가기준', '시설명', '거리', '점수', '평가점수 및 평가'],
-        facilities: [
-          { label: '상업시설', criteria: '반경 1.5km 이내' },
-          { label: '의료시설', criteria: '반경 1.5km 이내' },
-          { label: '공원', criteria: '반경 1km 이내' },
-          { label: '문화시설', criteria: '반경 1km 이내' },
-          { label: '공공시설', criteria: '반경 1km 이내' },
+        title: '주거편의', subject: region, poi: true, layout: 'grouped',
+        columns: ['평가항목', '시설명', '거리', '평가조건', '점수', '평가점수 및 평가'],
+        groups: [
+          {
+            label: '상업시설 및 의료시설',
+            condition: '사업지 반경 1.5km이내 부재',
+            facilities: [
+              { label: '상업시설', radius: 1500 },
+              { label: '의료시설', radius: 1500 },
+            ],
+          },
+          {
+            label: '공원, 문화, 공공시설',
+            condition: '사업지 반경 1km이내 1개 존재',
+            facilities: [
+              { label: '공원', radius: 1000 },
+              { label: '문화시설', radius: 1000 },
+              { label: '공공시설', radius: 1000 },
+            ],
+          },
         ],
       };
+
+    /*
+     * 교육환경 (캡쳐 05) — 반경 500m / 1km 를 열로 나눈 2단 구조.
+     * 컬럼: 평가항목 | 반경 500m 이내 시설명 | 반경 1km 이내 시설명 | 점수 | 평가점수 및 평가
+     */
     case '교육환경':
       return {
-        title: '교육환경', subject: region, poi: true,
-        columns: ['평가항목', '평가기준', '시설명', '거리', '점수', '평가점수 및 평가'],
+        title: '교육환경', subject: region, poi: true, layout: 'dual',
+        columns: ['평가항목', '반경 500m 이내', '반경 1km 이내', '점수', '평가점수 및 평가'],
         facilities: [
-          { label: '초등학교', criteria: '반경 500m / 1km' },
-          { label: '중학교', criteria: '반경 500m / 1km' },
-          { label: '고등학교', criteria: '반경 500m / 1km' },
+          { label: '초등학교' }, { label: '중학교' }, { label: '고등학교' },
         ],
+        summaryRow: '계',
       };
+
     default:
       return null;
   }

@@ -8,6 +8,7 @@ import SheetView from './SheetView';
 import Overview from './Overview';
 import SavedList from './SavedList';
 import SourceHealth from './SourceHealth';
+import PolygonDrawer from './PolygonDrawer';
 import * as store from './storage';
 
 const S = {
@@ -48,6 +49,8 @@ export default function Home() {
   const [busy, setBusy] = useState(null);
   const [msg, setMsg] = useState(null);
   const [savedKey, setSavedKey] = useState(0);
+  const [polygon, setPolygon] = useState(null);   // 사업지 경계 (3점 이상일 때만 값이 들어온다)
+  const [coord, setCoord] = useState(null);       // 대표지번 좌표 — 지도 초기 중심
 
   /** 조회 결과를 이 브라우저에 보관 — 같은 사업장은 덮어쓴다 */
   function saveRecord() {
@@ -64,6 +67,8 @@ export default function Home() {
     if (!rec) return;
     setData(rec.data);
     setFacilities(rec.facilities ?? null);
+    setPolygon(rec.facilities?.polygon ?? null);
+    setCoord(rec.facilities?.coord ?? null);
     setForm(f => ({
       ...f,
       addr: rec.addr ?? f.addr,
@@ -105,14 +110,29 @@ export default function Home() {
     finally { setBusy(null); }
   }
 
+  /** 주소 → 좌표만 먼저 잡아 지도를 띄운다 (경계를 그린 뒤 수집하기 위해) */
+  async function locate() {
+    setBusy('geo'); setMsg(null);
+    try {
+      const res = await fetch(`/api/facilities?addr=${encodeURIComponent(form.addr)}&only=none`);
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error ?? '주소 조회 실패');
+      setCoord(j.coord);
+    } catch (e) { setMsg({ kind: 'warn', text: e.message }); }
+    finally { setBusy(null); }
+  }
+
   async function collectPoi() {
     setBusy('poi'); setMsg(null);
     try {
-      const res = await fetch(`/api/facilities?addr=${encodeURIComponent(form.addr)}`);
+      const qs = new URLSearchParams({ addr: form.addr });
+      if (polygon?.length >= 3) qs.set('polygon', JSON.stringify(polygon));
+      const res = await fetch(`/api/facilities?${qs}`);
       const j = await res.json();
       if (res.status === 428) throw new Error(`${j.needKey} 미설정 — 베르셀 환경변수에 카카오 키를 넣고 Redeploy 하세요.`);
       if (!res.ok) throw new Error(j.error ?? '시설 수집 실패');
       setFacilities(j);
+      setCoord(j.coord);
       setTab('교통환경');
     } catch (e) { setMsg({ kind: 'warn', text: e.message }); }
     finally { setBusy(null); }
@@ -164,6 +184,9 @@ export default function Home() {
           <button style={S.btn(busy === 'collect', true)} onClick={collect} disabled={!!busy}>
             {busy === 'collect' ? '수집 중…' : '통계 수집'}
           </button>
+          <button style={S.btn(busy === 'geo', false)} onClick={locate} disabled={!!busy}>
+            {busy === 'geo' ? '조회 중…' : '사업지 경계 지정'}
+          </button>
           <button style={S.btn(busy === 'poi', false)} onClick={collectPoi} disabled={!!busy}>
             {busy === 'poi' ? '수집 중…' : '반경시설 수집'}
           </button>
@@ -182,6 +205,14 @@ export default function Home() {
       </div>
 
       <SavedList onOpen={openRecord} refreshKey={savedKey} />
+
+      {coord && (
+        <PolygonDrawer
+          center={{ lat: Number(coord.y), lng: Number(coord.x) }}
+          polygon={polygon}
+          onChange={setPolygon}
+        />
+      )}
 
       {data && <Overview data={data} onJump={setTab} />}
 

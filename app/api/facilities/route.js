@@ -12,10 +12,17 @@ export const maxDuration = 60;
 export async function GET(req) {
   const addr = req.nextUrl.searchParams.get('addr');
   if (!addr) return NextResponse.json({ error: 'addr 파라미터가 필요합니다' }, { status: 400 });
+  // 사업지 폴리곤(있으면 경계 기준으로 판정). lat,lng 쌍의 JSON 배열
+  let polygon = null;
+  try { polygon = JSON.parse(req.nextUrl.searchParams.get('polygon') ?? 'null'); } catch {}
   try {
     const coord = await geocode(addr);
-    const facilities = await collectFacilities(coord);
-    return NextResponse.json({ address: addr, coord, facilities, spec: FACILITY_SPEC, note: ROAD_NOTE });
+    const facilities = await collectFacilities(coord, null, polygon);
+    return NextResponse.json({
+      address: addr, coord, polygon, facilities,
+      basis: polygon?.length >= 3 ? 'polygon' : 'point',
+      spec: FACILITY_SPEC, note: ROAD_NOTE,
+    });
   } catch (e) {
     const noKey = e.code === 'NO_KEY';
     return NextResponse.json({ error: e.message, needKey: noKey ? e.keyName : null }, { status: noKey ? 428 : 500 });

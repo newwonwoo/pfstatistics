@@ -1,4 +1,5 @@
 'use client';
+import { Fragment } from 'react';
 import { buildSheet } from './sheets';
 import { T, mono } from './theme';
 import EvidenceCard from './EvidenceCard';
@@ -45,79 +46,149 @@ export default function SheetView({ sheetId, data, facilities }) {
     );
   }
 
-  // 반경시설 시트 — /api/facilities 결과로 시설명·거리를 채운다
+  // 반경시설 시트 — 캡쳐마다 표 구조가 달라 레이아웃별로 나눠 그린다
   if (spec.poi) {
+    const near = (label) => facilities?.facilities?.[label]?.nearest ?? null;
+    const hit  = (label) => facilities?.facilities?.[label] ?? null;
+    const pend = <span style={S.pend}>수집 대기</span>;
+
+    /** 시설명 셀 — 수집 전이면 대기, 수집 후 없으면 '부재' */
+    const NameCell = ({ label }) => {
+      const n = near(label);
+      if (!facilities) return <td style={S.td}>{pend}</td>;
+      return n ? <td style={S.tdVal}>{n.name}</td> : <td style={S.td}>부재</td>;
+    };
+    const DistCell = ({ label }) => {
+      const n = near(label);
+      if (!facilities) return <td style={S.td}>{pend}</td>;
+      return <td style={S.td}>{n ? `${n.distance}m` : '-'}</td>;
+    };
+
     return (
       <div style={S.page}>
         <h2 style={S.h2}>{spec.title}</h2>
         <p style={S.subject}>▶ 사업지 : {facilities?.address ?? spec.subject}</p>
+
         <div style={S.scroll}>
           <table style={S.table}>
             <thead><tr>{spec.columns.map(c => <th key={c} style={S.th}>{c}</th>)}</tr></thead>
             <tbody>
-              {spec.facilities.map((f) => {
-                const hit = facilities?.facilities?.[f.label];
-                const near = hit?.nearest;
-                return (
+              {/* 교통환경 — 항목별 독립 판정 */}
+              {spec.layout === 'flat' && (<>
+                {spec.facilities.map(f => (
                   <tr key={f.label}>
                     <td style={S.tdL}>{f.label}</td>
                     <td style={S.td}>{f.criteria}</td>
                     {f.manual
-                      ? <><td style={S.td} colSpan={2}><span style={S.pend}>도로 데이터 연계 전 — 수기입력</span></td></>
-                      : <>
-                          <Cell v={near ? near.name : (facilities ? '부재' : null)} highlight={!!near} />
-                          <Cell v={near ? `${near.distance}m` : (facilities ? '-' : null)} />
-                        </>}
-                    <td style={S.blank} />
-                    <td style={S.blank} />
+                      ? <td style={S.td} colSpan={2}><span style={S.pend}>도로 데이터 연계 전 — 수기입력</span></td>
+                      : <><NameCell label={f.label} /><DistCell label={f.label} /></>}
+                    <td style={S.blank} /><td style={S.blank} />
                   </tr>
-                );
-              })}
+                ))}
+                {spec.summaryRow && (
+                  <tr>
+                    <td style={S.tdL} colSpan={4}>{spec.summaryRow}</td>
+                    <td style={S.blank} /><td style={S.blank} />
+                  </tr>
+                )}
+              </>)}
+
+              {/* 주거편의 — 그룹별 판정, 그룹 아래 묶음 라벨 행 */}
+              {spec.layout === 'grouped' && spec.groups.map(g => (
+                <Fragment key={g.label}>
+                  {g.facilities.map((f, i) => (
+                    <tr key={f.label}>
+                      <td style={S.tdL}>{f.label}</td>
+                      <NameCell label={f.label} />
+                      <DistCell label={f.label} />
+                      {i === 0 && <td style={S.td} rowSpan={g.facilities.length}>{g.condition}</td>}
+                      {i === 0 && <td style={S.blank} rowSpan={g.facilities.length} />}
+                      {i === 0 && <td style={S.blank} rowSpan={g.facilities.length} />}
+                    </tr>
+                  ))}
+                  <tr>
+                    <td style={{ ...S.td, background: '#eef2f7', fontWeight: 600 }} colSpan={spec.columns.length}>
+                      {g.label}
+                    </td>
+                  </tr>
+                </Fragment>
+              ))}
+
+              {/* 교육환경 — 500m / 1km 2단 판정 */}
+              {spec.layout === 'dual' && (<>
+                {spec.facilities.map(f => {
+                  const h = hit(f.label);
+                  const n = h?.nearest;
+                  const in500 = n && n.distance <= 500;
+                  const in1k  = n && n.distance > 500 && n.distance <= 1000;
+                  return (
+                    <tr key={f.label}>
+                      <td style={S.tdL}>{f.label}</td>
+                      <td style={in500 ? S.tdVal : S.td}>
+                        {!facilities ? pend : (in500 ? `${n.name} (${n.distance}m)` : '')}
+                      </td>
+                      <td style={in1k ? S.tdVal : S.td}>
+                        {!facilities ? pend : (in1k ? `${n.name} (${n.distance}m)` : '')}
+                      </td>
+                      <td style={S.blank} /><td style={S.blank} />
+                    </tr>
+                  );
+                })}
+                {spec.summaryRow && (
+                  <tr>
+                    <td style={S.tdL} colSpan={3}>{spec.summaryRow}</td>
+                    <td style={S.blank} /><td style={S.blank} />
+                  </tr>
+                )}
+              </>)}
             </tbody>
           </table>
         </div>
+
         {!facilities && <div style={S.formula}>사업지 주소를 입력하고 [반경시설 수집]을 누르면 채워집니다.</div>}
 
         {facilities && (
           <>
             <div style={S.secTitle}>증빙 — 반경원 지도</div>
             <div style={{ display: 'grid', gap: 14, marginBottom: 6 }}>
-              {spec.facilities.filter(f => !f.manual).map(f => {
-                const hit = facilities.facilities?.[f.label];
-                if (!hit) return null;
-                const near = hit.nearest;
+              {(spec.groups ? spec.groups.flatMap(g => g.facilities) : spec.facilities)
+                .filter(f => !f.manual).map(f => {
+                const h = hit(f.label);
+                if (!h) return null;
+                const n = h.nearest;
                 return (
                   <RadiusMap
                     key={f.label}
                     title={f.label}
                     center={{ lat: Number(facilities.coord.y), lng: Number(facilities.coord.x) }}
-                    radius={hit.radius}
-                    markers={near ? [{ lat: Number(near.y), lng: Number(near.x), name: near.name }] : []}
-                    caption={near
-                      ? `최근접 ${near.name} · ${near.distance}m · 반경 내 ${hit.count}건`
-                      : `반경 ${hit.radius}m 이내 부재`}
+                    radius={h.radius}
+                    markers={n ? [{ lat: Number(n.y), lng: Number(n.x), name: n.name }] : []}
+                    caption={n ? `최근접 ${n.name} · ${n.distance}m · 반경 내 ${h.count}건`
+                               : `반경 ${h.radius}m 이내 부재`}
                   />
                 );
               })}
             </div>
 
             <div style={S.secTitle}>증빙 — 반경내 시설 목록</div>
-            {spec.facilities.filter(f => !f.manual).map(f => {
-              const hit = facilities.facilities?.[f.label];
-              if (!hit?.items?.length) return null;
+            {(spec.groups ? spec.groups.flatMap(g => g.facilities) : spec.facilities)
+              .filter(f => !f.manual).map(f => {
+              const h = hit(f.label);
+              if (!h?.items?.length) return null;
               return (
                 <div key={f.label} style={{ marginBottom: 14 }}>
                   <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>
-                    {f.label} <span style={{ color: T.muted, fontWeight: 400 }}>· 반경 {hit.radius}m · {hit.count}건</span>
+                    {f.label} <span style={{ color: T.muted, fontWeight: 400 }}>· 반경 {h.radius}m · {h.count}건</span>
                   </div>
                   <div style={S.scroll}>
                     <table style={S.table}>
-                      <thead><tr>{['시설명', '거리', '주소'].map(c => <th key={c} style={S.th}>{c}</th>)}</tr></thead>
+                      <thead><tr>{['시설명', '거리', '분류', '주소'].map(c => <th key={c} style={S.th}>{c}</th>)}</tr></thead>
                       <tbody>
-                        {hit.items.slice(0, 5).map((it, i) => (
+                        {h.items.slice(0, 5).map((it, i) => (
                           <tr key={i}>
                             <td style={{ ...S.td, textAlign: 'left' }}>{it.name}</td>
                             <td style={i === 0 ? S.tdVal : S.td}>{it.distance}m</td>
+                            <td style={{ ...S.td, textAlign: 'left', color: T.muted, fontSize: 11.5 }}>{it.category ?? '-'}</td>
                             <td style={{ ...S.td, textAlign: 'left', color: T.ink2 }}>{it.address}</td>
                           </tr>
                         ))}
