@@ -1,0 +1,245 @@
+{
+  "_설명": "PF 보증심사 로데이터 수집 명세. 캡쳐 11장에서 역산한 지표 카탈로그.",
+  "_기준사례": "경기도 광주시 탄벌동 203-4 외 57필지 (2026.07~09)",
+  "indicators": [
+    {
+      "id": "unsold_housing",
+      "name": "미분양주택수",
+      "sheet": "지역미분양",
+      "unit": "호",
+      "regionLevel": "sgg",
+      "period": "M",
+      "source": {
+        "org": "국토교통부",
+        "portal": "국토교통통계누리 정기통계",
+        "table": "미분양주택현황(종합)",
+        "citation": "국토교통통계누리(정기통계) 中 미분양주택현황(종합)의 미분양주택수",
+        "adapter": "molit",
+        "endpoint": "https://stat.molit.go.kr/portal/stat/data.do?formId=2082&styleNum=128&apprYn=Y&startDate={YYYYMM}&endDate={YYYYMM}",
+        "note": "✅ 키 불필요 직결 성공. statView doSearch() 역산. formId=2082(시·군·구별 미분양현황 200012~), styleNum=128은 캡쳐 \"양식128\"과 동일. 골든검증 통과(광주시 93호, 경기 17개 시군구 전량 일치)",
+        "keyRequired": null,
+        "verified": true
+      },
+      "golden": {
+        "region": "경기도 광주시",
+        "period": "202607",
+        "value": 93
+      }
+    },
+    {
+      "id": "resident_households",
+      "name": "주민등록세대수",
+      "sheet": "지역미분양",
+      "unit": "세대",
+      "regionLevel": "sgg",
+      "period": "M",
+      "source": {
+        "org": "행정안전부",
+        "portal": "KOSIS 국가통계포털",
+        "table": "행정구역(시군구)별 주민등록세대수",
+        "citation": "KOSIS 국가통계포털 주민등록세대수",
+        "adapter": "kosis",
+        "orgId": "101",
+        "tblId": "DT_1B040B3",
+        "keyRequired": "KOSIS_API_KEY",
+        "verified": false,
+        "note": "tblId 실호출 검증 필요. 캡쳐상 수록기간 1992~2026.07, 자료갱신일 2026-08-05"
+      },
+      "golden": {
+        "region": "경기도 광주시",
+        "period": "202607",
+        "value": 178187
+      }
+    },
+    {
+      "id": "housing_supply_ratio",
+      "name": "주택보급률",
+      "sheet": "지역수요",
+      "unit": "%",
+      "regionLevel": "sido",
+      "period": "Y",
+      "source": {
+        "org": "국토교통부",
+        "portal": "KOSIS 국가통계포털",
+        "table": "(新)주택보급률",
+        "citation": "KOSIS-국내통계-주제별통계-주거-주택보급률",
+        "adapter": "kosis",
+        "orgId": "116",
+        "tblId": "DT_MLTM_5403",
+        "keyRequired": "KOSIS_API_KEY",
+        "verified": false,
+        "note": "다가구 구분거처 반영 컬럼 사용. 최신치 2024년(2년 지연), 자료갱신일 2026-01-07"
+      },
+      "golden": {
+        "region": "경기도",
+        "period": "2024",
+        "value": 99.4
+      }
+    },
+    {
+      "id": "consumer_sentiment",
+      "name": "주택매매시장 소비심리지수",
+      "sheet": "부동산시장",
+      "unit": "지수",
+      "regionLevel": "sido",
+      "period": "M",
+      "source": {
+        "org": "국토연구원 부동산시장연구센터",
+        "portal": "KOSIS 국가통계포털",
+        "table": "부동산시장 소비자심리조사 - 주택매매시장 소비심리지수",
+        "citation": "국토연구원 부동산시장연구센터 주택매매시장 소비심리지수",
+        "adapter": "kosis",
+        "orgId": "390",
+        "tblId": null,
+        "keyRequired": "KOSIS_API_KEY",
+        "verified": false,
+        "note": "캡쳐 화면에 OPENAPI 버튼 확인됨 → KOSIS OpenAPI 직결 가능. 수록 2011.07~, 자료갱신일 2026-08-27"
+      },
+      "golden": {
+        "region": "경기도",
+        "period": "202607",
+        "value": 125.1
+      }
+    },
+    {
+      "id": "cd_rate_91",
+      "name": "CD(91일) 금리",
+      "sheet": "부동산시장",
+      "unit": "%",
+      "regionLevel": "nation",
+      "period": "D",
+      "source": {
+        "org": "금융투자협회",
+        "portal": "한국은행 ECOS (동일 계열, API 제공)",
+        "citation": "금융투자협회 CD금리",
+        "adapter": "ecos",
+        "statCode": "721Y001",
+        "itemCode": "2010000",
+        "cycle": "D",
+        "keyRequired": "ECOS_API_KEY",
+        "verified": true,
+        "note": "ECOS 항목코드 실호출로 확인 완료(721Y001/2010000=CD(91일)). 금투협 원본은 WebSquare SPA라 스크래핑 난이도 높음 → ECOS 대체 권장"
+      },
+      "golden": {
+        "region": "전국",
+        "period": "20260904",
+        "value": 3.12
+      }
+    },
+    {
+      "id": "mortgage_rate",
+      "name": "주택담보대출금리",
+      "sheet": "부동산시장",
+      "unit": "%",
+      "regionLevel": "nation",
+      "period": "M",
+      "source": {
+        "org": "한국은행",
+        "portal": "ECOS 예금은행 가중평균금리(신규취급액기준)",
+        "citation": "(캡쳐 미제공 - 출처 확인 필요)",
+        "adapter": "ecos",
+        "statCode": "121Y002",
+        "itemCode": null,
+        "cycle": "M",
+        "keyRequired": "ECOS_API_KEY",
+        "verified": false,
+        "note": "⚠️ 캡쳐에 출처화면 없음. 121Y002 통계표는 확인했으나 주택담보대출 항목코드 미확정(샘플키 페이징 불가). 실무 사용 출처 확인 필요"
+      },
+      "golden": {
+        "region": "전국",
+        "period": null,
+        "value": 4.69
+      }
+    },
+    {
+      "id": "kb_apt_price_index",
+      "name": "아파트 매매가격지수 전월대비 증감률",
+      "sheet": "지역경쟁력",
+      "unit": "%",
+      "regionLevel": "sgg",
+      "period": "M",
+      "source": {
+        "org": "KB국민은행",
+        "portal": "KB부동산 월간KB주택가격동향",
+        "table": "아파트 매매가격지수",
+        "citation": "KB부동산 월간KB주택가격동향 통계표 - 아파트 매매가격지수",
+        "adapter": "kb",
+        "endpoint": "https://api.kbland.kr",
+        "keyRequired": null,
+        "verified": false,
+        "note": "공식 OpenAPI 없음. api.kbland.kr 게이트웨이 응답 확인(dataHeader/dataBody 구조) — 경로 탐색 필요. 대안: 월간 통계표 엑셀 공개배포분 파싱"
+      },
+      "golden": {
+        "region": "경기도 광주시",
+        "period": "202608",
+        "value": 0.341
+      }
+    },
+    {
+      "id": "construction_capability_rank",
+      "name": "시공능력평가순위",
+      "sheet": "브랜드경쟁력",
+      "unit": "위",
+      "regionLevel": "company",
+      "period": "Y",
+      "source": {
+        "org": "대한건설협회",
+        "portal": "사내 GRU1119-06071 / 건설협회 공시",
+        "citation": "시공능력평가순위",
+        "adapter": "manual",
+        "keyRequired": null,
+        "verified": false,
+        "note": "cak.or.kr 직접접속 차단(000). 연 1회(8월) 공시 → 연간 표 적재 방식이 현실적. 업종코드 03 토목건축공사업 기준"
+      },
+      "golden": {
+        "region": "제일건설(주)",
+        "period": "2025",
+        "value": 17
+      }
+    },
+    {
+      "id": "poi_radius",
+      "name": "반경내 시설 (지하철역/도로/상업/의료/공원/문화/공공/학교)",
+      "sheet": "교통환경·주거편의·교육환경",
+      "unit": "건",
+      "regionLevel": "point",
+      "period": null,
+      "source": {
+        "org": "카카오",
+        "portal": "Kakao Local API + Static Map",
+        "citation": "카카오맵",
+        "adapter": "kakao",
+        "endpoint": "https://dapi.kakao.com/v2/local/search/category.json",
+        "keyRequired": "KAKAO_REST_KEY",
+        "verified": true,
+        "note": "도달성 확인 완료(401=키만 필요). 반경 300m/500m/1km/1.5km 검색 + 정적지도 반경원 이미지 자동생성 가능",
+        "radiusSpec": {
+          "지하철역": 1000,
+          "6차선왕복도로": 300,
+          "상업시설": 1500,
+          "의료시설": 1500,
+          "공원": 1000,
+          "문화시설": 1000,
+          "공공시설": 1000,
+          "초등학교": [
+            500,
+            1000
+          ],
+          "중학교": [
+            500,
+            1000
+          ],
+          "고등학교": [
+            500,
+            1000
+          ]
+        }
+      },
+      "golden": {
+        "region": "경기도 광주시 탄벌동 203-4",
+        "period": null,
+        "value": "광주중앙공원/탄벌초/탄벌중/이배재로"
+      }
+    }
+  ]
+}

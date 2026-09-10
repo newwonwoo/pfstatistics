@@ -1,0 +1,12 @@
+{
+  "name": "pf-statistics",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "PF 보증심사 통계 로데이터 자동수집",
+  "scripts": {
+    "doctor": "node scripts/doctor.js",
+    "collect": "node scripts/collect.js",
+    "verify": "node scripts/verify.js"
+  },
+  "engines": { "node": ">=20" }
+}
