@@ -73,6 +73,7 @@ export async function GET() {
   const env = {
     KOSIS_API_KEY: process.env.KOSIS_API_KEY,
     KAKAO_REST_KEY: process.env.KAKAO_REST_KEY,
+    DATA_GO_KR_KEY: process.env.DATA_GO_KR_KEY,
     NEXT_PUBLIC_KAKAO_JS_KEY: process.env.NEXT_PUBLIC_KAKAO_JS_KEY,
     ECOS_API_KEY: process.env.ECOS_API_KEY,
   };
@@ -88,6 +89,10 @@ export async function GET() {
       KAKAO_REST: kakao,
       // JS 키는 브라우저 전용이라 서버에서 검증 불가 — 존재 여부만 본다
       KAKAO_JS: env.NEXT_PUBLIC_KAKAO_JS_KEY ? { status: 'present', note: '브라우저에서만 검증 가능 (지도 렌더시 확인)' } : { status: 'missing' },
+      // KOSIS 가 계속 막히면 세대수는 이쪽으로 우회할 수 있다
+      DATA_GO_KR: env.DATA_GO_KR_KEY
+        ? { status: 'present', note: '행정안전부 주민등록 세대현황 우회경로로 사용 가능' }
+        : { status: 'missing', note: 'KOSIS 대안 — data.go.kr 활용신청 시 세대수 우회수집 가능' },
     },
     keylessSources: { 통계누리: 'ok', KB부동산: 'ok', 금융투자협회: 'ok' },
   });
