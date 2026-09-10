@@ -6,6 +6,8 @@ import { T } from './theme';
 import SheetTabs from './SheetTabs';
 import SheetView from './SheetView';
 import Overview from './Overview';
+import SavedList from './SavedList';
+import * as store from './storage';
 
 const S = {
   shell: { maxWidth: 1200, margin: '0 auto', padding: '26px 20px 90px' },
@@ -44,6 +46,32 @@ export default function Home() {
   const [tab, setTab] = useState('지역미분양');
   const [busy, setBusy] = useState(null);
   const [msg, setMsg] = useState(null);
+  const [savedKey, setSavedKey] = useState(0);
+
+  /** 조회 결과를 이 브라우저에 보관 — 같은 사업장은 덮어쓴다 */
+  function saveRecord() {
+    if (!data) return;
+    const ok = store.save({ data, facilities, addr: form.addr });
+    setSavedKey(k => k + 1);
+    setMsg(ok
+      ? { kind: 'warn', text: `저장했습니다 — ${data.region} · ${data.period}` }
+      : { kind: 'err', text: '저장 실패 (브라우저 저장소 사용 불가)' });
+  }
+
+  /** 저장된 건 열기 — 재조회 없이 그때 수치를 그대로 본다 */
+  function openRecord(rec) {
+    if (!rec) return;
+    setData(rec.data);
+    setFacilities(rec.facilities ?? null);
+    setForm(f => ({
+      ...f,
+      addr: rec.addr ?? f.addr,
+      sgg: rec.region ?? f.sgg,
+      ym: rec.period ?? f.ym,
+      company: rec.company ?? f.company,
+    }));
+    setMsg({ kind: 'warn', text: `저장본을 불러왔습니다 (${new Date(rec.savedAt).toLocaleString('ko-KR')} 저장)` });
+  }
 
   /** 엑셀 내보내기 — 화면에 그려진 증빙 카드를 그대로 캡쳐해 넣는다 */
   async function exportXlsx() {
@@ -137,14 +165,20 @@ export default function Home() {
             {busy === 'poi' ? '수집 중…' : '반경시설 수집'}
           </button>
           {data && (
-            <button style={{ ...S.btn(busy === 'xlsx', false), marginLeft: 'auto' }}
-                    onClick={exportXlsx} disabled={!!busy}>
-              {busy === 'xlsx' ? '생성 중…' : '엑셀 다운로드'}
-            </button>
+            <>
+              <button style={{ ...S.btn(false, false), marginLeft: 'auto' }}
+                      onClick={saveRecord} disabled={!!busy}>저장</button>
+              <button style={S.btn(busy === 'xlsx', false)}
+                      onClick={exportXlsx} disabled={!!busy}>
+                {busy === 'xlsx' ? '생성 중…' : '엑셀 다운로드'}
+              </button>
+            </>
           )}
         </div>
         {msg && <div style={S.msg(msg.kind)}>{msg.text}</div>}
       </div>
+
+      <SavedList onOpen={openRecord} refreshKey={savedKey} />
 
       {data && <Overview data={data} onJump={setTab} />}
 
