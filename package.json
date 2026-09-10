@@ -4,19 +4,25 @@
   "type": "module",
   "description": "PF 보증심사 통계 로데이터 자동수집",
   "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
     "doctor": "node scripts/doctor.js",
     "collect": "node scripts/collect.js",
     "resolve": "node scripts/resolve-kosis.js",
-    "ingest-rank": "node scripts/ingest-rank.js",
-    "capture": "node scripts/capture-demo.mjs"
+    "ingest-rank": "node scripts/ingest-rank.js"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
+    "html-to-image": "^1.11.13",
     "playwright": "^1.63.0"
   },
   "dependencies": {
+    "next": "^16.3.4",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "xlsx": "^0.18.5"
   }
 }

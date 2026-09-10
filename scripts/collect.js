@@ -65,9 +65,11 @@ const results = [], failures = [];
 for (const ind of cat.indicators) {
   const a = ADAPTERS[ind.source.adapter];
   if (!a?.collect) { failures.push({ name: ind.name, reason: `${ind.source.adapter} 어댑터 미지원 (수기/탐색필요)` }); continue; }
-  const p = ind.regionLevel === 'sido' ? region.split(' ')[0] : region;
+  const target = ind.regionLevel === 'sido' ? region.split(' ')[0] : region;
+  // 시공능력평가는 연 단위 — 조회월(YYYYMM)이 아니라 평가연도를 넘긴다
+  const p = ind.regionLevel === 'company' ? (arg('year') ?? '2025') : period;
   try {
-    const r = await a.collect(ind, { region: p, period });
+    const r = await a.collect(ind, { region: target, period: p });
     results.push(r);
     const g = ind.golden;
     const match = g && g.period === period && Number(g.value) === Number(r.value);
