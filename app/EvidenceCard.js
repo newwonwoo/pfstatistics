@@ -1,5 +1,6 @@
 'use client';
 import { useRef, useState } from 'react';
+import { T } from './theme';
 
 /**
  * 증빙 캡쳐 카드.
@@ -9,19 +10,19 @@ import { useRef, useState } from 'react';
  * 결과물은 동일하고, 오히려 실무자가 화면에서 눈으로 확인한 뒤 저장할 수 있어 낫다.
  */
 const S = {
-  card: { background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 10, marginBottom: 16, overflow: 'hidden' },
-  bar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid var(--line)', background: '#fafbfc' },
-  name: { fontSize: 13, fontWeight: 700 },
+  card: { background: '#fff', border: `1px solid ${T.line}`, borderRadius: 8, marginBottom: 14, overflow: 'hidden' },
+  bar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 14px', borderBottom: `1px solid ${T.line}`, background: '#fafbfc' },
+  name: { fontSize: 12.5, fontWeight: 700, color: T.ink2 },
   btns: { display: 'flex', gap: 8 },
-  btn: { padding: '6px 13px', fontSize: 12, fontWeight: 600, border: '1px solid var(--line)', background: '#fff', borderRadius: 5, cursor: 'pointer', color: 'var(--ink)' },
+  btn: { padding: '5px 12px', fontSize: 11.5, fontWeight: 700, border: `1px solid ${T.line}`, background: '#fff', borderRadius: 5, cursor: 'pointer', color: T.ink2 },
   // ↓ 이 영역이 그대로 PNG 가 된다. 엑셀 붙여넣기용이라 흰 배경 고정.
   shot: { background: '#fff', padding: '16px 18px', color: '#111' },
   title: { fontSize: 15, fontWeight: 700, margin: '0 0 3px' },
   sub: { fontSize: 11.5, color: '#555', marginBottom: 11 },
   table: { borderCollapse: 'collapse', fontSize: 12.5 },
-  th: { border: '1px solid #9aa', padding: '5px 11px', background: '#dce6f1', fontWeight: 600, whiteSpace: 'nowrap' },
-  td: { border: '1px solid #9aa', padding: '5px 11px', textAlign: 'center', whiteSpace: 'nowrap' },
-  tdMark: { border: '2px solid var(--mark)', padding: '5px 11px', textAlign: 'center', fontWeight: 700, background: '#fffde7' },
+  th: { border: `1px solid ${T.sheetLine}`, padding: '5px 11px', background: T.sheetHead, fontWeight: 600, whiteSpace: 'nowrap' },
+  td: { border: `1px solid ${T.sheetLine}`, padding: '5px 11px', textAlign: 'center', whiteSpace: 'nowrap' },
+  tdMark: { border: `2px solid ${T.mark}`, padding: '5px 11px', textAlign: 'center', fontWeight: 700, background: '#fffdf0' },
   cite: { marginTop: 10, fontSize: 11.5, color: '#333' },
   meta: { marginTop: 3, fontSize: 10.5, color: '#777', wordBreak: 'break-all' },
 };
@@ -92,7 +93,7 @@ export default function EvidenceCard({ row, region }) {
   return (
     <div style={S.card}>
       <div style={S.bar}>
-        <span style={S.name}>[{row.sheet}] {row.name}</span>
+        <span style={S.name}>{row.name}</span>
         <div style={S.btns}>
           <button style={S.btn} onClick={copyImage} disabled={busy}>엑셀로 복사</button>
           <button style={S.btn} onClick={download} disabled={busy}>PNG 저장</button>
