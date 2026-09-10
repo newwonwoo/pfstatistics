@@ -95,18 +95,34 @@ export async function collect(indicator, { region, period }) {
     objL1 = known(region) ?? await toSggCode(region, { kakaoKey: process.env.KAKAO_REST_KEY });
   }
 
-  // 연 단위 지표에 조회월(YYYYMM)을 그대로 넘기면 조회가 깨진다.
-  // 주택보급률처럼 공표가 2년 지연되는 통계도 있어, 최근 몇 해를 훑고 최신치를 쓴다.
+  /*
+   * 연 단위 지표는 조회월(YYYYMM)을 그대로 넘기면 안 되고,
+   * 아직 공표되지 않은 연도를 물으면 KOSIS 가 err 30("활용신청을 하지 않았습니다")을 준다.
+   * 메시지와 달리 실제 뜻은 "그 시점 자료가 없다" 이다. 범위 조회도 이 통계표는 거부한다.
+   * → 최근 연도부터 한 해씩 되짚으며 처음 잡히는 시점을 쓴다.
+   *   (주택보급률은 공표가 2년 지연되어 2026년에도 최신치가 2024)
+   */
   const annual = indicator.period === 'Y';
-  const year = Number(String(period).slice(0, 4));
-  const startPrdDe = annual ? String(year - 3) : period;
-  const endPrdDe = annual ? String(year) : period;
+  const attempts = annual
+    ? Array.from({ length: 5 }, (_, i) => String(Number(String(period).slice(0, 4)) - i))
+    : [period];
 
-  const { rows, url } = await fetchData({
-    orgId: t.orgId, tblId: t.tblId, prdSe: indicator.period,
-    startPrdDe, endPrdDe,
-    itmId: s.itmId ?? '', objL1,
-  });
+  let rows = [], url = '', lastErr = null;
+  for (const prd of attempts) {
+    try {
+      const res = await fetchData({
+        orgId: t.orgId, tblId: t.tblId, prdSe: indicator.period,
+        startPrdDe: prd, endPrdDe: prd,
+        itmId: s.itmId ?? '', objL1,
+      });
+      if (res.rows.length) { rows = res.rows; url = res.url; break; }
+    } catch (e) {
+      lastErr = e;
+      // err 20/30 은 "그 시점 자료 없음" 이므로 이전 연도로 계속 되짚는다
+      if (!['20', '30'].includes(e.kosisErr)) throw e;
+    }
+  }
+  if (!rows.length) throw lastErr ?? new Error(`${indicator.name}: 조회 결과 없음`);
   const short = region.trim().split(/\s+/).at(-1);   // "경기도 광주시" → "광주시"
   const matched = rows.filter(r => nameOf(r).includes(short));
   const pool = matched.length ? matched : (rows.length === 1 ? rows : []);
