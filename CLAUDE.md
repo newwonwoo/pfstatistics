@@ -66,10 +66,27 @@ CD(91일)       POST kofiabond.or.kr/proframeWeb/XMLSERVICES/  (Content-Type: ap
 
 ### 카카오 (KAKAO_REST_KEY / JS키)
 ```
-지하철역 SW8 1km · 의료 HP8 1.5km · 상업 MT1+"백화점"키워드 1.5km
+지하철역 SW8 1km · 상업 MT1+"백화점"키워드 1.5km
 문화 CT1 1km · 공공 PO3 1km · 공원 키워드"공원" 1km · 학교 SC4 500m/1km(이름필터)
 6차선 왕복도로는 POI 가 아님 → 도로명주소 도로구간DB(차로수) 필요. 현재 수기입력.
 ```
+**상호가 아니라 카카오 분류(category_name)로 걸러야 한다.** 상호로 거르면
+"밧데리백화점"이 상업시설로, 동물병원이 의료시설로 잡힌다(실제 광주시 조회에서 확인).
+
+### 의료시설 — 카카오 아님. 심평원 (DATA_GO_KR_KEY 필요)
+카카오 카테고리 말단은 **진료과목**("의료,건강 > 병원 > 정형외과")이라 의료법상 종별을 못 가린다.
+30병상 넘는 전문병원이 걸러지고 의원이 병원으로 잡힌다.
+```
+GET apis.data.go.kr/B551182/hospInfoServicev2/getHospBasisList
+    ?serviceKey=&xPos=경도&yPos=위도&radius=미터(최대5000)&_type=json
+```
+**심사 기준은 병원급 이상**(사용자 확정). 의료법 제3조:
+- 병원급 = 종합병원·병원·요양병원·정신병원·치과병원·한방병원·상급종합병원 (30병상 이상)
+- 의원급 = 의원·치과의원·한의원 (30병상 미만) → 제외
+
+판정은 코드표가 아니라 **종별명(clCdNm) 말미**로 한다 — "병원"으로 끝나면 병원급,
+"의원"으로 끝나면 의원급. 코드 체계가 바뀌어도 안 깨진다.
+캡쳐가 1.5km "부재"인데 의원·치과가 15건 잡혔던 것이 이 기준의 근거다.
 
 ### 시공능력평가순위
 연 1회(8월) 공시라 API 불필요. 엑셀을 `data/constructor-rank.json` 으로 적재해 커밋한다.
@@ -86,29 +103,49 @@ CD(91일)       POST kofiabond.or.kr/proframeWeb/XMLSERVICES/  (Content-Type: ap
 | curl 은 되는데 노드는 안 됨 (반대도) | 이 샌드박스의 curl 이 일부 국내 호스트에서 프록시 문제를 일으킨다. **판정은 Node `fetch` 로 할 것** |
 | 로컬에서 새 빌드가 안 보임 | 옛 `next start` 프로세스가 포트를 잡고 있었다. 다른 포트로 띄워 확인 |
 | 배포 직후 옛 응답 | Vercel 전파에 ~1분. 바로 검증하지 말 것 |
+| **베르셀 배포가 조용히 멈춤** | `.gitignore` 에 `.next/` `node_modules/` 가 빠져 빌드산출물이 커밋되고 있었다(추적 304개, 195MB). 낡은 `.next`·`BUILD_ID` 가 섞여 빌드가 깨진다. **로컬 빌드는 멀쩡한데 배포만 안 되면 이걸 먼저 의심할 것** |
+| 배포본이 최신인지 모르겠음 | `/api/config` 의 `commit` 필드로 확인한다. 같은 검증을 반복하지 말 것 |
+| KOSIS `err 30` "활용신청 안 함" | **거짓말이다. 실제 뜻은 "해당 시점 자료 없음".** 같은 키로 2024는 되고 2025/2026만 실패하는 걸로 확인. 연 단위 지표는 최근 연도부터 되짚어 조회한다. 이 통계표는 범위조회(start≠end)도 거부한다 |
+| 카카오 403 이 안 풀림 | **앱이 여러 개였다.** 에러 본문의 `App(이름)` 이 실제 판정 대상이다. 도메인·제품설정을 다른 앱에 해두면 소용없다 |
+| 공공데이터포털 `SERVICE_KEY_IS_NOT_REGISTERED` | 키 문제가 아니라 **그 API 를 활용신청 안 한 것**. 포털 키는 API 마다 따로 신청해야 한다 |
+| 한글이 든 `git commit -m` 실패 | 괄호·특수문자가 셸에서 깨진다. `git commit -F 파일` 로 넘길 것 |
 
 ## 구조
 
 ```
 config/indicators.json   지표 카탈로그 (원천·파라미터·골든값·원문링크) — 단일 진실공급원
-src/collectors/          molit · kb · kofia · kosis · constructor · kakao
+src/collectors/          molit · kb · kofia · kosis · constructor · kakao · hira(의료시설)
 src/lib/                 http(재시도·표준봉투) · env · region(시군구코드) · geo(폴리곤거리)
-app/api/                 collect · facilities · kosis(탐색) · health(키진단) · config(JS키)
+app/api/                 collect · facilities · kosis(탐색) · health(키진단) · config(JS키·배포커밋)
+                         selftest(골든 재현 감시, 매일 09시 cron, 실패시 503)
 app/                     page · SheetTabs · SheetView · EvidenceCard · RadiusMap · Overview
+                         PolygonDrawer(사업지 경계) · kakaoSdk · storage/SavedList(브라우저 보관)
+                         exportExcel(ExcelJS, 시트별 표+캡쳐이미지) · SourceHealth(원천 상태배지)
+tools/                   헤드리스 캡쳐/지도 — 로컬 배치 전용. 웹앱 번들에 넣지 말 것
 docs/evidence-samples/   골든 캡쳐 11장
 ```
 
 수집 결과는 **표준 봉투**로 통일한다 — 값만이 아니라 `citation`(엑셀에 넣을 출처문구) ·
 `queryParams`(재현용 조회조건) · `dataUpdatedAt`(원천 갱신일) · `viewUrl`(원문화면) 을 항상 동반한다.
 
+## 완료 (되돌리지 말 것)
+
+- **사업지 폴리곤** — 지도에서 직접 그리고 **경계 최단거리**로 판정(사용자 확정).
+  실측 차이: 초등학교 457m→343m, 공원 183m→71m, 공공시설 280m→149m. 100m 넘게 벌어진다.
+  경계 미지정이면 대표지번 중심점 기준. 결과의 `basis`(polygon/point)로 구분된다.
+- **POI 시트 3종은 표 구조가 다르다**(캡쳐대로). 하나로 합치지 말 것.
+  교통환경 `flat` · 주거편의 `grouped`(2개 그룹+묶음라벨) · 교육환경 `dual`(500m/1km 2단)
+- 브라우저 보관(localStorage, 서버 저장 없음) · 엑셀 내보내기 · 원천 감시 배지
+
 ## 미결 사항
 
-- **사업지 기준점**: 현재 대표지번 1점. 확정 방침은 **폴리곤 경계 최단거리**(사용자 승인).
-  `src/lib/geo.js` 에 계산 로직 완성·검증됨(경계 333.6m vs 중심 433.5m). 지도 그리기 UI 미구현.
-  ※ 교육환경 캡쳐에서 탄벌초가 500m 열에 있는 것이 경계기준의 근거로 보인다.
+- **심평원 활용신청 대기** — `SERVICE_KEY_IS_NOT_REGISTERED`.
+  data.go.kr/data/15001698 활용신청만 하면 코드 수정 없이 동작한다.
+  실패해도 나머지 시설은 살고 의료시설 칸에 사유가 표시되므로 오판은 안 난다.
 - **평가기준 구간표 미수령** → 평가점수/평가 칸은 빗금 처리. 집계는 범위 밖(사용자 지시).
 - **인근초기분양률 시트는 범위에서 제외**(사용자 결정).
 - 6차선 왕복도로 자동판정 (도로명주소 전자지도 SHP, data.go.kr/data/15050413).
+- CD금리 과거 소급조회 (필요해지면 ECOS 721Y001/2010000 로 백필).
 
 ## 작업 원칙
 
@@ -116,3 +153,6 @@ docs/evidence-samples/   골든 캡쳐 11장
 2. 추측한 코드/ID 를 config 에 넣지 않는다. 넣으려면 골든값으로 실제 검증하고 `verified: true` 를 단다.
 3. 커밋 전 `npx next build` 로 컴파일 확인. 푸시 후 `/api/collect` 로 실제 검증.
 4. 사용자에게 터미널 명령을 시키지 않는다.
+5. **"찾았다" 와 "실제로 된다" 를 구분해서 말한다.** 매핑을 찾은 것과 호출이 성공한 것은 다르다.
+6. 원천이 이상한 값을 주면 **캡쳐(정답지)와 대조해 해석을 의심한다.**
+   의료시설 15건은 버그가 아니라 "의원급은 의료시설이 아니다" 라는 신호였다.
