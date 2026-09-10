@@ -3,69 +3,104 @@ import { getJson, envelope } from '../lib/http.js';
 
 const BASE = 'https://kosis.kr/openapi';
 
-/**
- * 통계표 검색 — tblId 를 모를 때 이름으로 찾는다.
- * 캡쳐만 보고 tblId 를 추측하면 틀린다. 반드시 이걸로 확인하고 config 에 박을 것.
- */
-export async function searchTable(keyword) {
-  const key = requireKey('KOSIS_API_KEY');
-  const url = `${BASE}/statisticsSearch.do?method=getList&apiKey=${key}`
-    + `&searchNm=${encodeURIComponent(keyword)}&format=json&jsonVD=Y`;
-  const rows = await getJson(url);
-  if (!Array.isArray(rows)) throw new Error(`KOSIS 검색 실패: ${JSON.stringify(rows).slice(0, 300)}`);
-  return rows.map(r => ({
-    orgId: r.ORG_ID, tblId: r.TBL_ID, tblNm: r.TBL_NM,
-    org: r.ORG_NM, prdSe: r.PRD_SE,
-    from: r.PRD_DE_STRT, to: r.PRD_DE_END,
-  }));
-}
+/** KOSIS 오류코드 해설 — "왜 안 되는지"를 화면에서 바로 읽을 수 있어야 한다 */
+const ERR_HINT = {
+  '10': '인증키가 전달되지 않았습니다',
+  '11': '유효하지 않은 인증키입니다 (오탈자·공백 혼입이거나 아직 활성화 전)',
+  '20': '해당 자료가 없습니다',
+  '30': 'KOSIS에서 오픈API 활용신청을 하지 않았습니다',
+  '31': '인증키 기간이 만료되었습니다',
+  '32': '일일 호출 한도를 초과했습니다',
+};
 
-/**
- * 통계자료 조회.
- * @param {object} p
- * @param {string} p.orgId  기관코드 (예: 101 통계청)
- * @param {string} p.tblId  통계표ID
- * @param {'M'|'Y'|'Q'} p.prdSe  수록주기
- * @param {string} p.startPrdDe  시작시점 (202607 / 2024)
- * @param {string} p.endPrdDe
- * @param {string} [p.objL1]  분류1 (지역코드). 미지정시 전체
- * @param {string} [p.itmId]  항목코드
- */
-export async function fetchData({ orgId, tblId, prdSe, startPrdDe, endPrdDe, objL1 = '', itmId = '' }) {
-  const key = requireKey('KOSIS_API_KEY');
-  const qs = new URLSearchParams({
-    method: 'getList', apiKey: key, orgId, tblId, prdSe,
-    startPrdDe, endPrdDe, itmId, objL1,
-    format: 'json', jsonVD: 'Y',
-  });
-  const url = `${BASE}/Param/statisticsParameterData.do?${qs}`;
-  const rows = await getJson(url);
-  if (!Array.isArray(rows)) throw new Error(`KOSIS 조회 실패: ${JSON.stringify(rows).slice(0, 300)}`);
-  return { rows, url };
-}
-
-/** 지표 카탈로그 1건을 수집해 표준 봉투로 반환 */
-export async function collect(indicator, { region, period }) {
-  const s = indicator.source;
-  if (!s.tblId) {
-    const e = new Error(`${indicator.name}: tblId 미확정 — 'npm run collect -- --discover "${indicator.name}"' 로 먼저 확인 필요`);
-    e.code = 'NO_TBLID';
+function check(r) {
+  if (r && !Array.isArray(r) && r.err) {
+    const e = new Error(`KOSIS(${r.err}): ${ERR_HINT[String(r.err)] ?? r.errMsg}`);
+    e.kosisErr = String(r.err);
     throw e;
   }
+  return r;
+}
+
+const key = () => requireKey('KOSIS_API_KEY').trim();   // 복붙 공백 방어
+
+export async function searchTable(keyword) {
+  const url = `${BASE}/statisticsSearch.do?method=getList&apiKey=${encodeURIComponent(key())}`
+    + `&searchNm=${encodeURIComponent(keyword)}&format=json&jsonVD=Y`;
+  const r = check(await getJson(url));
+  return (Array.isArray(r) ? r : []).map(x => ({
+    orgId: x.ORG_ID, tblId: x.TBL_ID, tblNm: x.TBL_NM ?? x.STAT_NM, prdSe: x.PRD_SE,
+  })).filter(x => x.orgId && x.tblId);
+}
+
+export async function fetchData({ orgId, tblId, prdSe, startPrdDe, endPrdDe, objL1 = '', itmId = '' }) {
+  const qs = new URLSearchParams({
+    method: 'getList', apiKey: key(), orgId, tblId, prdSe,
+    startPrdDe, endPrdDe, itmId, objL1, format: 'json', jsonVD: 'Y',
+  });
+  const url = `${BASE}/Param/statisticsParameterData.do?${qs}`;
+  const r = check(await getJson(url));
+  return { rows: Array.isArray(r) ? r : [], url };
+}
+
+const num = v => Number(String(v ?? '').replace(/,/g, ''));
+const nameOf = row => [row.C1_NM, row.C2_NM, row.C3_NM].filter(Boolean).join(' ');
+
+/**
+ * tblId 자동 결선 — 캐시.
+ *
+ * 통계표 ID 를 사람이 눈으로 고르는 단계를 없앤다.
+ * 지표명으로 후보를 찾고, 골든 시점에서 정답값이 나오는 통계표만 채택한다.
+ * 서버리스 인스턴스 메모리에 캐시하므로 첫 호출만 느리다.
+ */
+const resolved = new Map();
+
+async function resolveTable(indicator) {
+  const cached = resolved.get(indicator.id);
+  if (cached) return cached;
+
+  const g = indicator.golden;
+  const candidates = await searchTable(indicator.name);
+  if (!candidates.length) throw new Error(`"${indicator.name}" 통계표를 찾지 못했습니다`);
+
+  for (const c of candidates.slice(0, 8)) {
+    try {
+      const { rows } = await fetchData({
+        orgId: c.orgId, tblId: c.tblId, prdSe: indicator.period,
+        startPrdDe: g.period, endPrdDe: g.period,
+      });
+      const hit = rows.find(r => nameOf(r).includes(g.region) && Math.abs(num(r.DT) - Number(g.value)) < 0.05);
+      if (hit) {
+        const picked = { orgId: c.orgId, tblId: c.tblId, tblNm: c.tblNm };
+        resolved.set(indicator.id, picked);
+        return picked;
+      }
+    } catch { /* 다음 후보 */ }
+  }
+  throw new Error(`"${indicator.name}" 통계표 자동확정 실패 — 후보 ${candidates.length}건 중 정답값(${g.region} ${g.period}=${g.value}) 일치 없음`);
+}
+
+export async function collect(indicator, { region, period }) {
+  const s = indicator.source;
+  // config 에 박혀 있으면 그걸 쓰고, 없으면 그 자리에서 찾아낸다
+  const t = s.tblId ? { orgId: s.orgId, tblId: s.tblId, tblNm: null } : await resolveTable(indicator);
+
   const { rows, url } = await fetchData({
-    orgId: s.orgId, tblId: s.tblId, prdSe: indicator.period,
+    orgId: t.orgId, tblId: t.tblId, prdSe: indicator.period,
     startPrdDe: period, endPrdDe: period,
   });
-  const hit = rows.find(r => (r.C1_NM ?? '').includes(region) || (r.C2_NM ?? '').includes(region));
+  const hit = rows.find(r => nameOf(r).includes(region));
+  if (!hit) throw new Error(`"${region}" 미발견 (${rows.length}행 조회됨)`);
+
   return envelope({
     indicatorId: indicator.id, name: indicator.name, region, period,
-    value: hit ? Number(hit.DT) : null,
-    unit: indicator.unit,
+    value: num(hit.DT), unit: indicator.unit,
     source: {
       org: s.org, citation: s.citation, url,
-      queryParams: { orgId: s.orgId, tblId: s.tblId, prdSe: indicator.period, period },
-      dataUpdatedAt: rows[0]?.LST_CHN_DE ?? null,
+      queryParams: { orgId: t.orgId, tblId: t.tblId, prdSe: indicator.period, period },
+      dataUpdatedAt: hit.LST_CHN_DE ?? null,
+      autoResolved: !s.tblId ? t.tblNm ?? t.tblId : null,
     },
-    raw: hit ?? rows.slice(0, 5),
+    raw: hit,
   });
 }
