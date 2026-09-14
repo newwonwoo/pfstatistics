@@ -1,7 +1,7 @@
 'use client';
 import { Fragment, useState } from 'react';
 import { buildSheet } from './sheets';
-import { scoreSheet, scoreFacility, hasTable } from '../src/lib/scoring';
+import { scoreSheet, scoreGroup, scoreFacility } from '../src/lib/scoring';
 import { T, mono } from './theme';
 import EvidenceCard from './EvidenceCard';
 import RadiusMap from './RadiusMap';
@@ -218,25 +218,40 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
               </>)}
 
               {/* 주거편의 — 그룹별 판정, 그룹 아래 묶음 라벨 행 */}
-              {spec.layout === 'grouped' && spec.groups.map(g => (
+              {spec.layout === 'grouped' && spec.groups.map(g => {
+                // 그룹 단위 점수 — 맞은 규칙의 구분 문구를 평가조건 칸에 그대로 쓴다
+                const sc = facilities ? scoreGroup(sheetId, g.label, facilities) : null;
+                const n = g.facilities.length;
+                return (
                 <Fragment key={g.label}>
                   {g.facilities.map((f, i) => (
                     <tr key={f.label}>
                       <td style={S.tdL}>{f.label}</td>
                       <NameCell label={f.label} />
                       <DistCell label={f.label} />
-                      {i === 0 && <td style={S.td} rowSpan={g.facilities.length}>{g.condition}</td>}
-                      {i === 0 && <td style={S.blank} rowSpan={g.facilities.length} />}
-                      {i === 0 && <td style={S.blank} rowSpan={g.facilities.length} />}
+                      {i === 0 && (
+                        <td style={S.td} rowSpan={n}>
+                          {sc?.text ?? g.condition}
+                        </td>
+                      )}
+                      {i === 0 && (sc && !sc.pending
+                        ? <td style={S.tdVal} rowSpan={n}>{sc.score}</td>
+                        : <td style={S.blank} rowSpan={n} />)}
+                      {i === 0 && (sc && !sc.pending
+                        ? <td style={S.td} rowSpan={n}>{sc.score}점{sc.label ? ` · ${sc.label}` : ''}</td>
+                        : <td style={S.blank} rowSpan={n} />)}
                     </tr>
                   ))}
                   <tr>
                     <td style={{ ...S.td, background: '#eef2f7', fontWeight: 600 }} colSpan={spec.columns.length}>
                       {g.label}
+                      {sc?.pending && (
+                        <span style={S.why}> · {sc.text}</span>
+                      )}
                     </td>
                   </tr>
                 </Fragment>
-              ))}
+              ); })}
 
               {/* 교육환경 — 500m / 1km 2단 판정 */}
               {spec.layout === 'dual' && (<>

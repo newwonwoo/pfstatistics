@@ -16,7 +16,7 @@ const MARK_FILL = 'FFFFFDF0';
 const BORDER = { style: 'thin', color: { argb: 'FF9AA5B1' } };
 const box = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
 
-import { scoreSheet, scoreFacility } from '../src/lib/scoring';
+import { scoreSheet, scoreGroup, scoreFacility } from '../src/lib/scoring';
 
 const fmt = (v) =>
   typeof v === 'number' ? v : (v == null || v === '' ? '' : String(v));
@@ -185,10 +185,16 @@ export async function exportWorkbook({ data, facilities, manual, sheets, buildSh
       let rows = [];
       if (spec.layout === 'grouped') {
         for (const g of spec.groups) {
-          for (const f of g.facilities) {
-            rows.push([f.label, cell(f.label), dist(f.label), g.condition, '', '']);
-          }
-          rows.push([g.label, '', '', '', '', '']);   // 묶음 라벨 행
+          const sc = facilities ? scoreGroup(s.id, g.label, facilities) : null;
+          const cond = sc?.text ?? g.condition;
+          const sco = sc && !sc.pending ? sc.score : '';
+          const ev = sc && !sc.pending ? `${sc.score}점${sc.label ? ` · ${sc.label}` : ''}` : '';
+          g.facilities.forEach((f, i) => {
+            // 그룹 점수는 첫 줄에만 적는다 (화면의 병합 셀과 같은 모양)
+            rows.push([f.label, cell(f.label), dist(f.label),
+                       i === 0 ? cond : '', i === 0 ? sco : '', i === 0 ? ev : '']);
+          });
+          rows.push([g.label + (sc?.pending ? ` · ${sc.text}` : ''), '', '', '', '', '']);
         }
       } else if (spec.layout === 'dual') {
         for (const f of spec.facilities) {

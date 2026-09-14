@@ -9,29 +9,194 @@
     "scope": "facility",
     "receivedAt": "2026-09-14",
     "source": "사용자 구두 확정 — 반경 100m/300m/500m/1km, 동시만족이면 최고점, 기본 1점",
-    "requires": { "lanesAtLeast": 6 },
+    "requires": {
+      "lanesAtLeast": 6
+    },
     "rules": [
-      { "score": 5, "label": "매우양호", "within": 100 },
-      { "score": 4, "label": "양호",     "within": 300 },
-      { "score": 3, "label": "보통",     "within": 500 },
-      { "score": 2, "label": "열악",     "within": 1000 }
+      {
+        "score": 5,
+        "label": "매우양호",
+        "within": 100
+      },
+      {
+        "score": 4,
+        "label": "양호",
+        "within": 300
+      },
+      {
+        "score": 3,
+        "label": "보통",
+        "within": 500
+      },
+      {
+        "score": 2,
+        "label": "열악",
+        "within": 1000
+      }
     ],
-    "base": { "score": 1, "label": "매우열악" }
+    "base": {
+      "score": 1,
+      "label": "매우열악"
+    }
   },
   "교육환경": {
     "scope": "sheet",
     "receivedAt": "2026-09-14",
     "source": "사용자 제공 구간표 캡쳐",
     "rules": [
-      { "score": 5, "label": "매우양호",
-        "all": { "1000": ["초등학교", "중학교", "고등학교"], "500": ["초등학교", "중학교"] } },
-      { "score": 4, "label": "양호",
-        "all": { "1000": ["초등학교", "중학교", "고등학교"], "500": ["초등학교"] } },
-      { "score": 3, "label": "보통",
-        "all": { "1000": ["초등학교", "중학교", "고등학교"] } },
-      { "score": 2, "label": "열악",
-        "all": { "1000": ["초등학교", "중학교"] } }
+      {
+        "score": 5,
+        "label": "매우양호",
+        "all": {
+          "1000": [
+            "초등학교",
+            "중학교",
+            "고등학교"
+          ],
+          "500": [
+            "초등학교",
+            "중학교"
+          ]
+        }
+      },
+      {
+        "score": 4,
+        "label": "양호",
+        "all": {
+          "1000": [
+            "초등학교",
+            "중학교",
+            "고등학교"
+          ],
+          "500": [
+            "초등학교"
+          ]
+        }
+      },
+      {
+        "score": 3,
+        "label": "보통",
+        "all": {
+          "1000": [
+            "초등학교",
+            "중학교",
+            "고등학교"
+          ]
+        }
+      },
+      {
+        "score": 2,
+        "label": "열악",
+        "all": {
+          "1000": [
+            "초등학교",
+            "중학교"
+          ]
+        }
+      }
     ],
-    "base": { "score": 1, "label": "매우열악" }
+    "base": {
+      "score": 1,
+      "label": "매우열악"
+    }
+  },
+  "주거편의:상업의료": {
+    "scope": "group",
+    "sheet": "주거편의",
+    "group": "상업시설 및 의료시설",
+    "members": [
+      "상업시설",
+      "의료시설"
+    ],
+    "receivedAt": "2026-09-14",
+    "source": "사용자 제공 구간표 캡쳐 (1.5km 계열 5행)",
+    "rules": [
+      {
+        "score": 7,
+        "label": "",
+        "text": "사업지 반경 1km이내 모두 존재",
+        "count": {
+          "radius": 1000,
+          "atLeast": 2
+        }
+      },
+      {
+        "score": 5,
+        "label": "매우양호",
+        "text": "사업지 반경 1.5km이내 모두 존재",
+        "count": {
+          "radius": 1500,
+          "atLeast": 2
+        }
+      },
+      {
+        "score": 4,
+        "label": "양호",
+        "text": "사업지 반경 1km이내 1개 존재",
+        "count": {
+          "radius": 1000,
+          "atLeast": 1
+        }
+      },
+      {
+        "score": 3,
+        "label": "보통",
+        "text": "사업지 반경 1.5km이내 1개 존재",
+        "count": {
+          "radius": 1500,
+          "atLeast": 1
+        }
+      }
+    ],
+    "base": {
+      "score": 1,
+      "label": "매우열악",
+      "text": "사업지 반경 1.5km이내 부재"
+    }
+  },
+  "주거편의:공원문화공공": {
+    "scope": "group",
+    "sheet": "주거편의",
+    "group": "공원, 문화, 공공시설",
+    "members": [
+      "공원",
+      "문화시설",
+      "공공시설"
+    ],
+    "receivedAt": "2026-09-14",
+    "source": "사용자 제공 구간표 캡쳐 (1km 계열 3행). 3개 모두 존재 행은 캡쳐가 잘려 미수령",
+    "rules": [
+      {
+        "pending": true,
+        "text": "사업지 반경 1km이내 3개 모두 존재 — 구간표 미수령",
+        "count": {
+          "radius": 1000,
+          "atLeast": 3
+        }
+      },
+      {
+        "score": 3,
+        "label": "",
+        "text": "사업지 반경 1km이내 2개 존재",
+        "count": {
+          "radius": 1000,
+          "atLeast": 2
+        }
+      },
+      {
+        "score": 2,
+        "label": "열악",
+        "text": "사업지 반경 1km이내 1개 존재",
+        "count": {
+          "radius": 1000,
+          "atLeast": 1
+        }
+      }
+    ],
+    "base": {
+      "score": 1,
+      "label": "",
+      "text": "사업지 반경 1km이내 부재"
+    }
   }
 }

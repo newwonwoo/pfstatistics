@@ -22,10 +22,27 @@ function allWithin(facilities, radius, labels) {
   });
 }
 
-/** 규칙 하나가 맞는지 — `all` 은 {반경: [시설명…]} 을 모두 만족해야 한다 */
-function matches(rule, facilities) {
-  if (!rule.all) return true;
-  return Object.entries(rule.all).every(([r, labels]) => allWithin(facilities, Number(r), labels));
+/** members 중 radius 안에 있는 것의 개수 */
+function countWithin(facilities, radius, members) {
+  return members.filter((l) => {
+    const d = distOf(facilities, l);
+    return d != null && d <= radius;
+  }).length;
+}
+
+/**
+ * 규칙 하나가 맞는지.
+ *   all   : {반경: [시설명…]} — 전부 그 반경 안에 있어야 한다 (교육환경)
+ *   count : {radius, atLeast} — members 중 몇 개가 그 반경 안에 있는가 (주거편의)
+ */
+function matches(rule, facilities, members) {
+  if (rule.all) {
+    return Object.entries(rule.all).every(([r, labels]) => allWithin(facilities, Number(r), labels));
+  }
+  if (rule.count) {
+    return countWithin(facilities, rule.count.radius, members ?? []) >= rule.count.atLeast;
+  }
+  return true;
 }
 
 /**
@@ -36,9 +53,27 @@ export function scoreSheet(sheetId, facilities) {
   const t = TABLE[sheetId];
   if (!t || t.scope !== 'sheet' || !facilities) return null;
   for (const rule of t.rules) {
-    if (matches(rule, facilities)) return { score: rule.score, label: rule.label, rule };
+    if (matches(rule, facilities)) return { score: rule.score, label: rule.label, text: rule.text, rule };
   }
-  return { score: t.base.score, label: t.base.label, rule: null };
+  return { score: t.base.score, label: t.base.label, text: t.base.text, rule: null };
+}
+
+/**
+ * 그룹 단위 점수 (주거편의의 두 묶음).
+ * 아직 구간표를 못 받은 경우는 `pending` 으로 돌려 화면에서 빗금을 유지한다 —
+ * 아래 구간 규칙이 대신 걸려 **더 낮은 점수가 조용히 매겨지는 것**을 막아야 한다.
+ */
+export function scoreGroup(sheetId, groupLabel, facilities) {
+  const key = Object.keys(TABLE).find(
+    (k) => TABLE[k].scope === 'group' && TABLE[k].sheet === sheetId && TABLE[k].group === groupLabel);
+  const t = key ? TABLE[key] : null;
+  if (!t || !facilities) return null;
+  for (const rule of t.rules) {
+    if (!matches(rule, facilities, t.members)) continue;
+    if (rule.pending) return { pending: true, text: rule.text };
+    return { score: rule.score, label: rule.label, text: rule.text, rule };
+  }
+  return { score: t.base.score, label: t.base.label, text: t.base.text, rule: null };
 }
 
 /**
