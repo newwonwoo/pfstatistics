@@ -124,14 +124,19 @@
         "adapter": "kofia",
         "keyRequired": null,
         "verified": true,
-        "note": "✅ 키 불필요 직결 성공. WebSquare+ProFrame 게이트웨이 역산. 골든검증 통과(3.12). ※주담대금리는 별도 수집대상이 아니라 CD금리에서 파생되는 값(사용자 확인). ⚠️ 과거일자 소급조회 미지원 — 최신 영업일 고시치만 반환",
+        "note": "✅ 키 불필요 직결 성공. WebSquare+ProFrame 게이트웨이 역산. 골든검증 통과(3.12). ※주담대금리는 별도 수집대상이 아니라 CD금리에서 파생되는 값(사용자 확인). ⚠️ 과거일자 소급조회 미지원 — 최신 영업일 고시치만 반환 ※ 자가진단은 고정값이 아니라 합리적 범위(0.5~10%)로 감시한다.",
         "endpoint": "POST https://www.kofiabond.or.kr/proframeWeb/XMLSERVICES/ (BIS-KOFIABOND/BISCDPSrchSO/selectCdpMain)",
         "viewUrl": "https://www.kofiabond.or.kr/websquare/websquare.html?w2xPath=/xml/cdplus/BISCdpMain.xml"
       },
       "golden": {
         "region": "전국",
-        "period": "20260904",
-        "value": 3.12
+        "period": null,
+        "value": null,
+        "sanityRange": [
+          0.5,
+          10.0
+        ],
+        "note": "매 영업일 변동. 고정 정답 대조 불가 — 범위 점검으로 대체"
       }
     },
     {

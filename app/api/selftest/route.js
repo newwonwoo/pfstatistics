@@ -25,24 +25,36 @@ const ADAPTERS = { molit, kb, kofia, kosis, constructor };
  *   skipped   골든값이 없는 지표(CD금리처럼 매일 변하는 값)
  */
 export async function GET() {
-  const targets = cat.indicators.filter(i => i.golden?.value != null && ADAPTERS[i.source.adapter]?.collect);
+  // 고정 정답이 있거나, 범위 점검 대상인 지표
+  const targets = cat.indicators.filter(i =>
+    (i.golden?.value != null || i.golden?.sanityRange) && ADAPTERS[i.source.adapter]?.collect);
 
   const checks = await Promise.all(targets.map(async (ind) => {
     const g = ind.golden;
     const base = { indicatorId: ind.id, name: ind.name, org: ind.source.org, expected: g.value, period: g.period };
 
-    // CD금리처럼 시점이 흘러가는 값은 고정 정답과 대조할 수 없다
-    if (!g.period) return { ...base, status: 'skipped', reason: '시점 고정값 아님' };
-
     try {
-      const r = await ADAPTERS[ind.source.adapter].collect(ind, { region: g.region, period: String(g.period) });
-      const ok = Math.abs(Number(r.value) - Number(g.value)) < 0.005;
-      return {
-        ...base, actual: r.value,
-        status: ok ? 'pass' : 'MISMATCH',
-        dataUpdatedAt: r.source?.dataUpdatedAt ?? null,
-        ...(ok ? {} : { reason: `정답 ${g.value} → 실제 ${r.value}. 원천 변경 의심` }),
-      };
+      const r = await ADAPTERS[ind.source.adapter].collect(ind, {
+        region: g.region, period: g.period ? String(g.period) : String(new Date().getFullYear()) + '01',
+      });
+      const v = Number(r.value);
+      const common = { ...base, actual: r.value, dataUpdatedAt: r.source?.dataUpdatedAt ?? null };
+
+      /*
+       * CD금리처럼 매 영업일 변하는 값은 고정 정답과 대조할 수 없다.
+       * 그대로 두면 매일 경고가 떠서 진짜 이상을 놓치게 되므로,
+       * "값이 살아있고 상식적인 범위인가"로 감시한다.
+       */
+      if (g.sanityRange) {
+        const [lo, hi] = g.sanityRange;
+        const ok = Number.isFinite(v) && v >= lo && v <= hi;
+        return { ...common, status: ok ? 'pass' : 'MISMATCH', mode: 'range', expected: `${lo}~${hi}`,
+          ...(ok ? {} : { reason: `범위(${lo}~${hi}) 밖 값 ${r.value}. 원천 변경 의심` }) };
+      }
+
+      const ok = Math.abs(v - Number(g.value)) < 0.005;
+      return { ...common, status: ok ? 'pass' : 'MISMATCH', mode: 'golden',
+        ...(ok ? {} : { reason: `정답 ${g.value} → 실제 ${r.value}. 원천 변경 의심` }) };
     } catch (e) {
       return { ...base, status: 'error', reason: String(e.message).split('\n')[0] };
     }
