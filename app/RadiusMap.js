@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { T } from './theme';
 import { loadKakaoSdk } from './kakaoSdk';
+import { captureMap } from './captureMap';
 
 /**
  * 반경원 지도 — 캡쳐 01·02·05 의 그 그림.
@@ -74,8 +75,8 @@ export default function RadiusMap({ title, center, radius, markers = [], caption
   }, [center.lat, center.lng, radius, markers]);
 
   async function savePng() {
-    const { toPng } = await import('html-to-image');
-    const url = await toPng(el.current, { pixelRatio: 2, backgroundColor: '#fff' });
+    const url = await captureMap(el.current);
+    if (!url) return;
     const a = document.createElement('a');
     a.href = url; a.download = `${title}_반경${radius}m.png`; a.click();
   }
@@ -105,7 +106,7 @@ export default function RadiusMap({ title, center, radius, markers = [], caption
         ? <div style={S.fallback}>
             지도를 불러오지 못했습니다.<br />{err}
           </div>
-        : <div ref={el} style={S.map} />}
+        : <div ref={el} data-map={title} style={S.map} />}
       {caption && <div style={S.cap}>{caption}</div>}
     </div>
   );

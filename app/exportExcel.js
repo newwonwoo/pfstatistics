@@ -19,6 +19,15 @@ const box = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
 const fmt = (v) =>
   typeof v === 'number' ? v : (v == null || v === '' ? '' : String(v));
 
+/** 지도 DOM → PNG dataURL (타일 CORS 때문에 전용 캡쳐를 쓴다) */
+async function shotMap(el) {
+  if (!el) return null;
+  try {
+    const { captureMap } = await import('./captureMap');
+    return await captureMap(el);
+  } catch { return null; }
+}
+
 /** 화면의 증빙 카드 DOM → PNG dataURL */
 async function shot(el) {
   if (!el) return null;
@@ -178,8 +187,40 @@ export async function exportWorkbook({ data, facilities, manual, sheets, buildSh
       }
     }
 
+    /** 캡쳐 이미지 한 장을 시트에 넣고 다음 행 번호를 돌려준다 */
+    const putImage = (png, el, atRow) => {
+      if (!png || !el) return atRow;
+      const h = Math.round(620 * (el.offsetHeight / el.offsetWidth));
+      const imgId = wb.addImage({ base64: png.split(',')[1], extension: 'png' });
+      ws.addImage(imgId, { tl: { col: 1, row: atRow - 1 }, ext: { width: 620, height: h } });
+      return atRow + Math.ceil(h / 19) + 2;
+    };
+
     // ── 증빙 캡쳐 삽입 ──
     let row = cursor.nextRow + 1;
+
+    // 반경시설 시트: 반경원 지도를 증빙으로 넣는다 (6차선 판정용 위성지도 포함)
+    if (spec.poi) {
+      const list = spec.groups ? spec.groups.flatMap(g => g.facilities) : spec.facilities;
+      for (const f of list) {
+        const el = document.querySelector(`[data-map="${f.label}"]`);
+        if (!el) continue;
+        onProgress?.(`${s.id} · ${f.label} 지도`);
+        const png = await shotMap(el);
+        if (!png) continue;
+        const label = ws.getCell(row, 2);
+        label.value = `[증빙] ${f.label} · ${f.criteria ?? ''}`;
+        label.font = { bold: true, size: 10 };
+        row = putImage(png, el, row + 1);
+        const hit = facilities?.facilities?.[f.label];
+        ws.getCell(row, 2).value = f.manual
+          ? `* 위성사진 육안 판정 · 반경 ${f.radius}m`
+          : `* 출처 : 카카오맵 · 반경 ${hit?.radius ?? ''}m · 반경 내 ${hit?.count ?? 0}건`
+            + (hit?.basis === 'polygon' ? ' · 사업지 경계 기준' : ' · 대표지번 기준');
+        ws.getCell(row, 2).font = { size: 9 };
+        row += 2;
+      }
+    }
     for (const id of spec.evidence ?? []) {
       const r = byId[id];
       if (!r?.ok) continue;
@@ -191,15 +232,7 @@ export async function exportWorkbook({ data, facilities, manual, sheets, buildSh
       label.font = { bold: true, size: 10 };
       row += 1;
 
-      if (png) {
-        const imgId = wb.addImage({ base64: png.split(',')[1], extension: 'png' });
-        // 캡쳐 비율을 유지하되 시트 폭을 넘지 않게
-        ws.addImage(imgId, {
-          tl: { col: 1, row: row - 1 },
-          ext: { width: 620, height: Math.round(620 * (el.offsetHeight / el.offsetWidth)) },
-        });
-        row += Math.ceil((620 * (el.offsetHeight / el.offsetWidth)) / 19) + 2;
-      }
+      row = putImage(png, el, row);
 
       ws.getCell(row, 2).value = `* 출처 : ${r.source?.citation ?? ''}`;
       ws.getCell(row, 2).font = { size: 9 };
