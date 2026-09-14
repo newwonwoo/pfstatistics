@@ -28,13 +28,14 @@ export async function GET(req) {
     return NextResponse.json({ error: 'sgg, ym 파라미터가 필요합니다' }, { status: 400 });
   }
 
-  const jobs = cat.indicators.map(async (ind) => {
+  /*
+   * 반경내 시설은 좌표가 있어야 하고 시트별로 따로 받는다(/api/facilities).
+   * 통계 목록에 섞어두면 언제나 "7/8 실패"로 보여 진짜 실패를 못 알아본다.
+   */
+  const stats = cat.indicators.filter(i => i.source.adapter !== 'kakao');
+
+  const jobs = stats.map(async (ind) => {
     const a = ADAPTERS[ind.source.adapter];
-    if (ind.source.adapter === 'kakao') {
-      // 반경내 시설은 주소(좌표)가 있어야 하므로 /api/facilities 에서 별도 수집한다
-      return { indicatorId: ind.id, name: ind.name, sheet: ind.sheet, ok: false,
-               reason: '사업장 주소 입력 후 [반경시설 수집] 사용' };
-    }
     if (!a?.collect) {
       return { indicatorId: ind.id, name: ind.name, sheet: ind.sheet, ok: false,
                reason: `${ind.source.adapter} 어댑터 미지원` };
