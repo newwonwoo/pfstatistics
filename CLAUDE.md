@@ -114,6 +114,9 @@ GET apis.data.go.kr/B551182/hospInfoServicev2/getHospBasisList
 | 공공데이터포털 `SERVICE_KEY_IS_NOT_REGISTERED` | 키 문제가 아니라 **그 API 를 활용신청 안 한 것**. 포털 키는 API 마다 따로 신청해야 한다 |
 | 한글이 든 `git commit -m` 실패 | 괄호·특수문자가 셸에서 깨진다. `git commit -F 파일` 로 넘길 것 |
 | 자가진단이 CD금리를 계속 실패로 표시 | 원천 이상이 아니라 **금리가 실제로 움직인 것**. 변동값은 범위 점검으로 감시한다 |
+| 지도가 빈 채로 캡쳐됨 | 카카오 타일에 CORS 헤더가 없다. `html-to-image` 는 SVG foreignObject 방식이라 타일 인라인에 실패하면 **통째로 빈 그림**이 되고 사유도 안 남는다. src 를 프록시로 바꿔치기해도 같은 경로를 타서 불안정. → **DOM 을 베끼지 말고 캔버스에 직접 합성**한다(`app/captureMap.js` `composeMap`) |
+| 지도가 두 번 만들어짐 | `markers` 를 `useEffect` 의존성에 그대로 넣으면 렌더마다 새 배열이라 재생성된다. JSON 비교로 고정할 것 |
+| 샌드박스 브라우저로 실사이트 확인 불가 | 브라우저의 외부 HTTPS 터널이 끊긴다(`ERR_CONNECTION_RESET`). 카카오 JS 키도 도메인 제한이라 localhost 불가. **같은 모양의 DOM 을 만들어 로직만 검증**하고, 카카오 DOM 은 화면 사유표시로 역추적한다 |
 
 ## 구조
 
@@ -143,6 +146,9 @@ docs/evidence-samples/   골든 캡쳐 11장
 - 브라우저 보관(localStorage, 서버 저장 없음) · 엑셀 내보내기 · 원천 감시 배지
 - **의료시설 심평원 연동 완료**(2026-09-14 활용승인). 광주시 검증: 22곳 수신 → 전부 의원급 → 부재.
   제외된 의원급 수를 `excludedClinics` 로 남겨 "왜 부재인가"를 증빙에 설명한다.
+- **지도 캡쳐는 캔버스 직접 합성**(2026-09-14). 타일만 `/api/tile` 로 같은 출처로 받아 찍고,
+  반경원·사업지 경계·마커·라벨은 `Projection.containerPointFromCoords` 로 좌표에서 다시 그린다.
+  반경 픽셀은 정북 radius m 지점을 투영해 재므로 축척 가정이 없다. 검증기록: `docs/QA-지도캡쳐.md`
 - **자가진단은 두 가지 모드**를 쓴다. 고정 정답(`golden.value`)과 범위(`golden.sanityRange`).
   매일 변하는 값을 고정 정답으로 감시하면 경고가 상시화되어 진짜 이상을 놓친다.
 
