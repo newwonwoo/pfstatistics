@@ -39,6 +39,27 @@ const S = {
   }),
   check: { fontSize: 11, fontWeight: 800 },
   dim: { color: T.muted },
+  /** 수집 전 기준 선택 관문 — 지나칠 수 없게 눈에 띄어야 한다 */
+  ask: {
+    marginTop: 12, padding: '14px 16px', borderRadius: 8,
+    border: `2px solid ${T.accent}`, background: T.accentSoft,
+  },
+  askQ: { fontSize: 13.5, fontWeight: 700, color: T.ink, marginBottom: 4 },
+  askSub: { fontSize: 11.5, color: T.ink2, marginBottom: 12, lineHeight: 1.6 },
+  askRow: { display: 'flex', gap: 10, flexWrap: 'wrap' },
+  askBtn: (primary) => ({
+    flex: '1 1 260px', textAlign: 'left', padding: '11px 14px', borderRadius: 7, cursor: 'pointer',
+    border: `1px solid ${primary ? T.accent : T.lineStrong}`,
+    background: primary ? T.accent : '#fff', color: primary ? '#fff' : T.ink,
+  }),
+  askBtnT: { fontSize: 13, fontWeight: 700, display: 'block' },
+  askBtnS: (primary) => ({ fontSize: 11, display: 'block', marginTop: 3, lineHeight: 1.5,
+    color: primary ? 'rgba(255,255,255,.85)' : T.muted }),
+  basisTag: {
+    display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 8,
+    fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 4,
+    background: T.okSoft, color: T.ok, border: `1px solid #c7e9d5`,
+  },
   /** 주소 매칭 확인 — 어디를 사업지로 잡았는지 말없이 넘어가면 안 된다 */
   match: (sure) => ({
     marginTop: 11, padding: '9px 12px', borderRadius: 6, fontSize: 12.5, lineHeight: 1.6,
@@ -95,6 +116,14 @@ export default function Home() {
   const [latest, setLatest] = useState(null);       // 원천이 가진 최신 조회월
   const [ymManual, setYmManual] = useState(false);  // 조회월 직접 지정
   const [rankMeta, setRankMeta] = useState(null);   // 시공능력평가 공시 연도·출처
+  /*
+   * 거리를 어디서부터 잴지는 **수집 전에** 정해야 한다.
+   * 나중에 지도에서 바꾸는 옵션으로 두니 아무도 안 건드렸고, 그러면 판정이 늘 중심점 기준이 된다.
+   * 수집 버튼을 누르면 먼저 묻고, 경계 기준이면 그리기를 켠 채 지도로 보낸다.
+   */
+  const [basisMode, setBasisMode] = useState(null);   // null=미정 · 'polygon' · 'point'
+  const [pending, setPending] = useState(undefined);  // 기준을 정하면 수집할 시트 (null=전체)
+  const [drawNow, setDrawNow] = useState(false);      // 지도를 그리기 모드로 열기
   const [geo, setGeo] = useState(null);             // 주소 매칭 결과 (후보 포함)
   const [pick, setPick] = useState(0);              // 고른 후보
   const [manual, setManual] = useState({});         // 위성 육안 판정(6차선 등)
@@ -103,6 +132,7 @@ export default function Home() {
    * 시트 상단으로 꺼내고, 경계가 없을 때도 왜 못 고르는지 보이게 한다.
    */
   const [radiusBasis, setRadiusBasis] = useState('polygon');
+  useEffect(() => { if (basisMode) setRadiusBasis(basisMode); }, [basisMode]);
   const [tab, setTab] = useState('지역미분양');
   const [busy, setBusy] = useState(null);
   const [msg, setMsg] = useState(null);
@@ -173,15 +203,30 @@ export default function Home() {
     finally { setBusy(null); }
   }
 
-  /** 반경시설 수집 — 시트 단위로 나눠 받는다 (sheet 가 null 이면 전부) */
-  async function collectPoi(sheet = null) {
+  /**
+   * 반경시설 수집 버튼 — 기준이 안 정해졌으면 먼저 묻는다.
+   * 경계 기준인데 경계가 없으면 지도를 그리기 모드로 열고 기다린다.
+   */
+  function collectPoi(sheet = null) {
     if (!fixed) return setMsg({ kind: 'warn', text: '사업지 주소를 먼저 확정하세요.' });
+    if (!basisMode) { setPending(sheet); setMsg(null); return; }
+    if (basisMode === 'polygon' && !(polygon?.length >= 3)) {
+      setPending(sheet); setDrawNow(true);
+      setMsg({ kind: 'warn', text: '지도에서 사업지 경계를 3점 이상 찍은 뒤 [이 경계로 수집] 을 누르세요.' });
+      return;
+    }
+    runPoi(sheet, basisMode === 'polygon' ? polygon : null);
+  }
+
+  /** 실제 수집 — sheet 가 null 이면 전부, poly 가 null 이면 대표지번 중심 기준 */
+  async function runPoi(sheet = null, poly = null) {
+    setPending(undefined); setDrawNow(false);
     setBusy(sheet ?? 'poi'); setMsg(null);
     try {
       const qs = new URLSearchParams({ addr });
       qs.set('region', region);
       if (sheet) qs.set('sheet', sheet);
-      if (polygon?.length >= 3) qs.set('polygon', JSON.stringify(polygon));
+      if (poly?.length >= 3) qs.set('polygon', JSON.stringify(poly));
       // 화면에서 확인·선택한 좌표를 그대로 쓴다 (서버가 다시 첫 결과를 고르지 않게)
       if (coord?.x && coord?.y) {
         qs.set('x', String(coord.x)); qs.set('y', String(coord.y));
@@ -211,6 +256,7 @@ export default function Home() {
   function resetSite() {
     setFixed(false); setGeo(null); setPick(0);
     setCoord(null); setPolygon(null); setFacilities(null); setData(null);
+    setBasisMode(null); setPending(undefined); setDrawNow(false);
     setMsg({ kind: 'warn', text: '사업지를 초기화했습니다. 시도·시군구부터 다시 지정하세요.' });
   }
 
@@ -232,6 +278,7 @@ export default function Home() {
     setCoord(rec.facilities?.coord ?? null);
     setGeo(rec.facilities?.geo ?? null); setPick(0);
     setFixed(Boolean(rec.facilities?.coord));
+    setBasisMode(rec.facilities?.basis ?? null); setPending(undefined); setDrawNow(false);
     setManual(rec.manual ?? {});
     setForm(f => ({
       ...f,
@@ -267,13 +314,15 @@ export default function Home() {
     Object.values(facilities?.facilities ?? {}).some(v => v.sheet === sheet);
   const allPoi = POI_SHEETS.every(poiDone);
 
+  // 기준이 정해졌으면(경계면 3점 이상까지) 2단계 완료로 본다
+  const basisReady = basisMode === 'point' || (basisMode === 'polygon' && polygon?.length >= 3);
   const done = [
     ...(fixed ? ['input'] : []),
-    ...(polygon?.length >= 3 ? ['boundary'] : []),
+    ...(basisReady ? ['boundary'] : []),
     ...(data && allPoi ? ['collect'] : []),
   ];
   const current = !fixed ? 'input'
-    : !coord && !data ? 'boundary'
+    : !basisReady ? 'boundary'
     : !data || !allPoi ? 'collect'
     : 'result';
 
@@ -426,6 +475,16 @@ export default function Home() {
 
               <span style={S.arrow}>›</span>
 
+              {basisMode && (
+                <span style={S.basisTag}>
+                  {basisMode === 'polygon' ? `경계 기준${polygon?.length >= 3 ? ` (${polygon.length}점)` : ' (미지정)'}` : '중심 기준'}
+                  <button
+                    style={{ border: 0, background: 'none', color: T.ok, fontWeight: 700, cursor: 'pointer', fontSize: 11, padding: 0, textDecoration: 'underline' }}
+                    onClick={() => { setBasisMode(null); setPending(null); setDrawNow(false); }}
+                  >변경</button>
+                </span>
+              )}
+
               {POI_SHEETS.map(sh => (
                 <button
                   key={sh}
@@ -451,6 +510,42 @@ export default function Home() {
           )}
         </div>
 
+        {/*
+          수집 직전 관문. 이걸 지나야 수집이 돈다 —
+          "거리를 어디서부터 쟀는가" 를 모른 채 나온 숫자는 증빙이 안 된다.
+        */}
+        {pending !== undefined && !basisMode && (
+          <div style={S.ask}>
+            <div style={S.askQ}>
+              {pending ?? '반경시설'} 수집 — 거리를 어디서부터 잴까요?
+            </div>
+            <div style={S.askSub}>
+              한 번 고르면 이후 시트도 같은 기준으로 수집합니다. 바꾸려면 [기준 변경].
+            </div>
+            <div style={S.askRow}>
+              <button
+                style={S.askBtn(true)}
+                onClick={() => { setBasisMode('polygon'); setDrawNow(true);
+                  setMsg({ kind: 'warn', text: '아래 지도에서 사업지 경계를 3점 이상 찍은 뒤 [이 경계로 수집] 을 누르세요.' }); }}
+              >
+                <span style={S.askBtnT}>사업지 경계 기준</span>
+                <span style={S.askBtnS(true)}>
+                  지도에 경계를 그려 경계 최단거리로 잽니다. 실측 100m 넘게 차이납니다.
+                </span>
+              </button>
+              <button
+                style={S.askBtn(false)}
+                onClick={() => { setBasisMode('point'); runPoi(pending ?? null, null); }}
+              >
+                <span style={S.askBtnT}>대표지번 중심 기준</span>
+                <span style={S.askBtnS(false)}>
+                  경계를 그리지 않고 바로 수집합니다. {coord?.jibunAddress ?? addr} 한 점 기준.
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {msg && <div style={S.msg(msg.kind)}>{msg.text}</div>}
       </div>
 
@@ -463,7 +558,9 @@ export default function Home() {
           center={{ lat: Number(coord.y), lng: Number(coord.x) }}
           polygon={polygon}
           onChange={setPolygon}
-          onConfirm={() => collectPoi(null)}
+          autoDraw={drawNow}
+          pendingSheet={pending}
+          onConfirm={() => runPoi(pending ?? null, polygon?.length >= 3 ? polygon : null)}
           confirmed={!!facilities}
           busy={busy === 'poi' || POI_SHEETS.includes(busy)}
         />

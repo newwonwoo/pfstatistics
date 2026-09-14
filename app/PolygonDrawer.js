@@ -28,14 +28,14 @@ const S = {
     padding: '10px 14px', borderTop: `1px solid ${T.line}`, background: '#fafbfc',
   },
   foot2: { fontSize: 11.5, color: T.muted, flex: 1, minWidth: 220 },
-  cta: (busy) => ({
+  cta: (off) => ({
     padding: '8px 16px', borderRadius: 6, border: 0, fontSize: 12.5, fontWeight: 700,
-    background: busy ? '#9aa1ab' : T.accent, color: '#fff', cursor: busy ? 'wait' : 'pointer',
+    background: off ? '#9aa1ab' : T.accent, color: '#fff', cursor: off ? 'not-allowed' : 'pointer',
     whiteSpace: 'nowrap',
   }),
 };
 
-export default function PolygonDrawer({ center, polygon, onChange, onConfirm, confirmed, busy }) {
+export default function PolygonDrawer({ center, polygon, onChange, onConfirm, confirmed, busy, autoDraw = false, pendingSheet }) {
   const el = useRef(null);
   const state = useRef({ map: null, poly: null, dots: [] });
   const [pts, setPts] = useState(polygon ?? []);
@@ -64,6 +64,16 @@ export default function PolygonDrawer({ center, polygon, onChange, onConfirm, co
 
   // drawing 플래그를 리스너가 읽을 수 있게 ref 로도 들고 있는다
   useEffect(() => { state.current.drawing = drawing; }, [drawing]);
+
+  /*
+   * "경계 기준" 을 고르고 왔으면 바로 그릴 수 있어야 한다.
+   * [그리기 시작] 을 한 번 더 누르게 하면 거기서 흐름이 끊긴다.
+   */
+  useEffect(() => {
+    if (!autoDraw) return;
+    setDrawing(true);
+    el.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [autoDraw]);
 
   // 꼭짓점이 바뀔 때마다 다시 그린다
   useEffect(() => {
@@ -122,12 +132,14 @@ export default function PolygonDrawer({ center, polygon, onChange, onConfirm, co
         <span style={S.foot2}>
           {pts.length >= 3
             ? `경계 ${pts.length}점 지정됨 — 경계 최단거리로 판정합니다 (사업지 안의 시설은 0m)`
-            : '경계를 안 그리면 대표지번 중심점 기준으로 판정합니다'}
+            : drawing
+              ? '지도를 클릭해 사업지 모서리를 찍으세요 (3점 이상)'
+              : '[그리기 시작] 을 누르고 지도에서 사업지 모서리를 찍으세요'}
         </span>
-        <button style={S.cta(busy)} onClick={onConfirm} disabled={busy}>
+        <button style={S.cta(busy || pts.length < 3)} onClick={onConfirm} disabled={busy || pts.length < 3}>
           {busy ? '수집 중…'
-            : pts.length >= 3 ? '이 경계로 반경시설 수집'
-            : '중심점 기준으로 반경시설 수집'}
+            : pts.length < 3 ? `경계를 ${3 - pts.length}점 더 찍으세요`
+            : `이 경계로 ${pendingSheet ?? '반경시설'} 수집`}
         </button>
       </div>
     </div>

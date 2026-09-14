@@ -41,15 +41,17 @@ export async function GET(req) {
       itmId: q.get('itmId') ?? '',
       objL1: q.get('objL1') ?? '',
     });
+    // 코드(C1_ID)가 없으면 탐색이 소용없다 — objL1 에 넣을 값이 바로 이것이다
     const named = rows.map(r => ({
-      C1: r.C1_NM, C2: r.C2_NM, ITM: r.ITM_NM, ITM_ID: r.ITM_ID,
+      C1_ID: r.C1, C1: r.C1_NM, C2_ID: r.C2, C2: r.C2_NM,
+      ITM_ID: r.ITM_ID, ITM: r.ITM_NM,
       PRD: r.PRD_DE, DT: r.DT, UNIT: r.UNIT_NM, UPD: r.LST_CHN_DE,
     }));
     const find = q.get('find');
     return NextResponse.json({
       url, total: rows.length,
       matched: find ? named.filter(r => [r.C1, r.C2].some(v => v?.includes(find))) : undefined,
-      sample: named.slice(0, 25),
+      sample: named.slice(0, Number(q.get('limit')) || 25),
     });
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });
