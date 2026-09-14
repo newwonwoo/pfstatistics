@@ -85,3 +85,45 @@ export function distanceToPolygon(point, ring) {
   }
   return min;
 }
+
+/** 로컬 평면 오프셋 → 위경도 */
+function offset(c, dist, theta, k) {
+  const dx = dist * Math.cos(theta);
+  const dy = dist * Math.sin(theta);
+  return {
+    lat: c.lat + (dy / R) * (180 / Math.PI),
+    lng: c.lng + (dx / (k * R)) * (180 / Math.PI),
+  };
+}
+
+/**
+ * 사업지 경계에서 radius m 떨어진 선(버퍼).
+ *
+ * "사업지 반경 1km" 를 대표지번 중심의 원으로 그리면 **판정선과 그림이 다르다**.
+ * 판정은 경계 최단거리로 하는데 그림은 중심 기준이니, 원 밖에 있는 시설이
+ * 반경 내로 잡히는 일이 생긴다. 증빙으로 못 쓴다.
+ *
+ * 그래서 판정에 쓰는 distanceToPolygon 을 그대로 역산한다 —
+ * 중심에서 각 방향으로 이분탐색해 거리가 정확히 radius 가 되는 점을 찾는다.
+ * 그린 선이 곧 판정선이므로 해석 차이가 생길 수 없다.
+ *
+ * 사업지(수백 m)보다 반경(수백~1500m)이 크므로 중심에서 별모양(star-shaped)이
+ * 보장되어 이분탐색이 유일해를 준다.
+ */
+export function bufferPolygon(ring, radius, steps = 180) {
+  if (!ring?.length || !(radius > 0)) return null;
+  const c = centroid(ring);
+  const k = Math.cos(rad(c.lat));
+  const far = (circumradius(ring, c) + radius) * 1.5;
+  const out = [];
+  for (let i = 0; i < steps; i++) {
+    const th = (i / steps) * 2 * Math.PI;
+    let lo = 0, hi = far;
+    for (let n = 0; n < 24; n++) {
+      const mid = (lo + hi) / 2;
+      if (distanceToPolygon(offset(c, mid, th, k), ring) < radius) lo = mid; else hi = mid;
+    }
+    out.push(offset(c, (lo + hi) / 2, th, k));
+  }
+  return out;
+}

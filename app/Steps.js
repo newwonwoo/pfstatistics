@@ -26,9 +26,9 @@ const S = {
 
 export default function Steps({ current, done }) {
   const steps = [
-    { id: 'input', label: '사업지 입력', hint: '주소 · 시군구 · 조회월 · 시공사' },
+    { id: 'input', label: '사업지 확정', hint: '시도·시군구 선택 후 [주소 확정] — 바꾸려면 초기화' },
     { id: 'boundary', label: '사업지 경계', hint: '지도에 그리면 경계 최단거리로 판정 (생략 가능)' },
-    { id: 'collect', label: '통계 · 반경시설 수집', hint: '통계 7종 → 반경시설 9종 순으로' },
+    { id: 'collect', label: '통계 · 시설 수집', hint: '통계 → 주거편의 · 교통환경 · 교육환경' },
     { id: 'result', label: '확인 · 내보내기', hint: '시트별 검토 후 엑셀 다운로드' },
   ];
   return (

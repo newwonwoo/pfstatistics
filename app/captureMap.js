@@ -132,7 +132,7 @@ const rLabel = (r) => (r >= 1000 ? `${r / 1000}km` : `${r}m`);
  * @returns {Promise<string>} PNG dataURL
  */
 export async function composeMap(el, spec = {}) {
-  const { map, kakao, center, radius, markers = [], polygon = null, title = '' } = spec;
+  const { map, kakao, center, radius, markers = [], polygon = null, radiusRing = null, title = '' } = spec;
   const ratio = spec.pixelRatio ?? 2;
   const w = el.offsetWidth;
   const h = el.offsetHeight;
@@ -174,8 +174,21 @@ export async function composeMap(el, spec = {}) {
   if (proj && center) {
     const c = pt(center.lat, center.lng);
 
-    if (radius) {
-      // 반경 픽셀은 정북으로 radius m 떨어진 점을 투영해 잰다 (배율 가정 없이)
+    if (radiusRing?.length) {
+      // 경계 기준 — 판정에 쓰는 거리로 역산한 선이라 그린 선이 곧 판정선이다
+      ctx.beginPath();
+      radiusRing.forEach((p, i) => {
+        const q = pt(p.lat, p.lng);
+        if (i) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y);
+      });
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(206,147,216,0.18)';
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#FFEB3B';
+      ctx.stroke();
+    } else if (radius) {
+      // 중심 기준 — 반경 픽셀은 정북으로 radius m 떨어진 점을 투영해 잰다 (배율 가정 없이)
       const n = pt(center.lat + radius / 111320, center.lng);
       const rpx = Math.hypot(n.x - c.x, n.y - c.y);
       ctx.beginPath();
@@ -213,7 +226,7 @@ export async function composeMap(el, spec = {}) {
   const cap = [
     title,
     radius ? `반경 ${rLabel(radius)}` : null,
-    polygon?.length >= 3 ? '사업지 경계 기준' : '대표지번 중심 기준',
+    radiusRing?.length ? '사업지 경계 기준' : '대표지번 중심 기준',
     new Date().toLocaleString('ko-KR'),
   ].filter(Boolean).join('  ·  ');
   ctx.save();

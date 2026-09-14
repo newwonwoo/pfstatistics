@@ -49,16 +49,69 @@ export const FACILITY_SPEC = {
   고등학교:   { sheet: '교육환경', category: 'SC4', radius: 1000, nameFilter: /고등학교$/ },
 };
 
+/**
+ * 사업지 주소 표기를 카카오가 읽을 수 있게 다듬는다.
+ *
+ * 실무 주소는 "탄벌동 203-4 **외 57필지**" 처럼 필지 수가 붙어 오는데,
+ * 카카오 주소검색은 이걸 통째로 못 읽고 0건을 돌려준다.
+ * 대표지번만 남기고, 꼬리표(외 N필지 / 일원 / 일대 / 번지)를 떼어낸다.
+ */
+export function normalizeAddress(address) {
+  return String(address ?? '')
+    .replace(/\s*(?:외|외그)\s*\d+\s*(?:필지|번지).*$/, '')
+    .replace(/\s*(?:일원|일대)\s*$/, '')
+    .replace(/\s*번지\s*$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const asCandidate = (d) => ({
+  x: Number(d.x), y: Number(d.y),
+  roadAddress: d.road_address?.address_name ?? d.road_address_name ?? null,
+  jibunAddress: d.address?.address_name ?? d.address_name ?? null,
+  placeName: d.place_name ?? null,
+});
+
+/**
+ * 주소 → 좌표 후보들.
+ *
+ * 지금까지 첫 결과를 말없이 채택했다. 동명이동·오타·표기차가 있으면
+ * 엉뚱한 곳을 사업지로 잡고도 사용자가 알 방법이 없다 —
+ * 반경시설이 전부 틀어지는데 증빙만 그럴듯하게 나온다.
+ * 그래서 후보를 다 돌려주고 화면에서 확인·선택하게 한다.
+ *
+ * 주소검색(지번/도로명)이 0건이면 장소검색으로 한 번 더 시도한다
+ * (아파트명·현장명만 주는 경우가 있다).
+ */
+export async function geocodeCandidates(address) {
+  const query = normalizeAddress(address);
+  if (!query) throw new Error('사업지 주소가 비어 있습니다');
+
+  const addr = await getJson(
+    `${BASE}/search/address.json?query=${encodeURIComponent(query)}&size=10`, { headers: H() });
+  let docs = addr.documents ?? [];
+  let via = 'address';
+
+  if (!docs.length) {
+    const kw = await getJson(
+      `${BASE}/search/keyword.json?query=${encodeURIComponent(query)}&size=10`, { headers: H() });
+    docs = kw.documents ?? [];
+    via = 'keyword';
+  }
+  if (!docs.length) throw new Error(`주소를 찾지 못했습니다: ${query}`);
+
+  return {
+    query,
+    normalized: query !== String(address ?? '').trim(),
+    via,                                   // address = 주소검색 / keyword = 장소검색(정확도 낮음)
+    candidates: docs.map(asCandidate),
+  };
+}
+
 /** 주소 → 좌표 (사업지 주소가 입력이므로 이게 모든 지도 수집의 출발점) */
 export async function geocode(address) {
-  const d = await getJson(`${BASE}/search/address.json?query=${encodeURIComponent(address)}`, { headers: H() });
-  const doc = d.documents?.[0];
-  if (!doc) throw new Error(`주소 좌표변환 실패: ${address}`);
-  return {
-    x: Number(doc.x), y: Number(doc.y),
-    roadAddress: doc.road_address?.address_name ?? null,
-    jibunAddress: doc.address?.address_name ?? null,
-  };
+  const { candidates } = await geocodeCandidates(address);
+  return candidates[0];
 }
 
 async function searchAll(path, params) {
@@ -82,6 +135,7 @@ async function searchAll(path, params) {
  * @param {Array<{lat:number,lng:number}>} [polygon] 사업지 경계
  */
 export async function collectFacilities({ x, y }, only = null, polygon = null) {
+  // only 는 라벨 배열. 시트별로 나눠 수집할 때 쓴다.
   const ring = Array.isArray(polygon) && polygon.length >= 3 ? polygon : null;
   const origin = ring ? centroid(ring) : { lat: Number(y), lng: Number(x) };
   const pad = ring ? Math.ceil(circumradius(ring, origin)) : 0;

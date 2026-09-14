@@ -1,8 +1,9 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { T } from './theme';
 import { loadKakaoSdk } from './kakaoSdk';
 import { captureMap, composeMap } from './captureMap';
+import { bufferPolygon } from '../src/lib/geo';
 
 /**
  * 반경원 지도 — 캡쳐 01·02·05 의 그 그림.
@@ -43,16 +44,36 @@ const MAP_TYPES = [
 const MAX_LEVEL = { 300: 3, 500: 4, 1000: 5, 1500: 6 };
 const levelCapFor = (r) => MAX_LEVEL[r] ?? (r <= 300 ? 3 : r <= 500 ? 4 : r <= 1000 ? 5 : 6);
 
-export default function RadiusMap({ title, center, radius, markers = [], polygon = null, caption, defaultMapType = 'ROADMAP' }) {
+export default function RadiusMap({ title, center, radius, markers = [], polygon = null, caption, defaultMapType = 'ROADMAP', roadview = false }) {
   const el = useRef(null);
   const mapRef = useRef(null);
   const [err, setErr] = useState(null);
   const [ready, setReady] = useState(false);
   const [mapType, setMapType] = useState(defaultMapType);
   const [saving, setSaving] = useState(null);   // null | 'busy' | 실패사유
+  const rvEl = useRef(null);
+  const rvRef = useRef(null);
+  const [rvOn, setRvOn] = useState(false);
+  const [rvMsg, setRvMsg] = useState(null);
 
   const mkey = JSON.stringify(markers);
   const pkey = JSON.stringify(polygon);
+  const hasPoly = (polygon?.length ?? 0) >= 3;
+
+  /*
+   * 반경 기준.
+   * 판정은 경계 최단거리로 하는데 그림만 대표지번 중심의 원이면 둘이 어긋난다.
+   * (실측: 1km 기준에서 중심원이 모든 방향으로 100~181m 작았다)
+   * 경계가 있으면 경계에서 radius 만큼 떨어진 선을 그리는 것을 기본으로 한다.
+   */
+  const [radiusBasis, setRadiusBasis] = useState(hasPoly ? 'polygon' : 'point');
+  useEffect(() => { setRadiusBasis(hasPoly ? 'polygon' : 'point'); }, [hasPoly, pkey]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  const ring = useMemo(
+    () => (radiusBasis === 'polygon' && hasPoly ? bufferPolygon(polygon, radius) : null),
+    [radiusBasis, hasPoly, pkey, radius],   // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const rkey = ring ? `poly${radius}` : `pt${radius}`;
 
   useEffect(() => {
     let dead = false;
@@ -65,13 +86,19 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
         mapTypeId: kakao.maps.MapTypeId[defaultMapType] ?? kakao.maps.MapTypeId.ROADMAP,
       });
       mapRef.current = { map, kakao };
-      const circle = new kakao.maps.Circle({
-        center: c, radius,
-        // 위성 타일 위에서도 보이도록 선을 굵고 밝게, 채움은 옅게
-        strokeWeight: 3, strokeColor: '#FFEB3B', strokeOpacity: 1, strokeStyle: 'solid',
-        fillColor: '#CE93D8', fillOpacity: 0.18,
-      });
-      circle.setMap(map);
+      // 위성 타일 위에서도 보이도록 선을 굵고 밝게, 채움은 옅게
+      const paint = { strokeWeight: 3, strokeColor: '#FFEB3B', strokeOpacity: 1, strokeStyle: 'solid',
+                      fillColor: '#CE93D8', fillOpacity: 0.18 };
+      const area = ring
+        ? new kakao.maps.Polygon({ ...paint, path: ring.map(p => new kakao.maps.LatLng(p.lat, p.lng)) })
+        : new kakao.maps.Circle({ ...paint, center: c, radius });
+      area.setMap(map);
+      const areaBounds = () => {
+        if (!ring) return area.getBounds();
+        const b = new kakao.maps.LatLngBounds();
+        for (const p of ring) b.extend(new kakao.maps.LatLng(p.lat, p.lng));
+        return b;
+      };
       new kakao.maps.Marker({ position: c, map });   // 사업지
       if (polygon?.length >= 3) {
         // 판정 기준이 경계면 화면에도 경계를 보여야 한다 (캡쳐와 화면을 같게)
@@ -106,15 +133,22 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
         if (map.getLevel() > cap) map.setLevel(cap);
       } else {
         // 시설이 없으면(부재) 반경원 전체를 보여줘야 "이 범위에 없다" 가 증명된다
-        map.setBounds(circle.getBounds());
+        map.setBounds(areaBounds());
         if (map.getLevel() > cap + 1) map.setLevel(cap + 1);
       }
+      /*
+       * 차선 수는 위성사진으로 세기 어렵다 — 가로수·그림자·차량에 가린다.
+       * 로드뷰로 보면 바로 세진다. 지도를 클릭하면 그 지점 로드뷰로 옮긴다.
+       */
+      kakao.maps.event.addListener(map, 'click', (e) => {
+        if (rvRef.current) moveRoadview(kakao, e.latLng);
+      });
       setReady(true);
     }).catch(e => !dead && setErr(e.message));
     return () => { dead = true; };
   // markers/polygon 은 렌더마다 새 배열이라 그대로 넣으면 지도가 매번 다시 만들어진다.
   // 내용이 같으면 다시 만들지 않도록 문자열로 비교한다.
-  }, [center.lat, center.lng, radius, mkey, pkey, defaultMapType]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [center.lat, center.lng, radius, mkey, pkey, rkey, defaultMapType]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   /*
    * 캡쳐 등록.
@@ -127,11 +161,36 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
     node.__capture = (opts) => composeMap(node, {
       map: mapRef.current.map,
       kakao: mapRef.current.kakao,
-      center, radius, markers, polygon, title,
+      center, radius, markers, polygon, title, radiusRing: ring,
       ...opts,
     });
     return () => { if (node) delete node.__capture; };
-  }, [ready, center.lat, center.lng, radius, mkey, pkey, title, mapType]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, center.lat, center.lng, radius, mkey, pkey, rkey, title, mapType]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** 클릭 지점에서 가장 가까운 로드뷰로 옮긴다 */
+  function moveRoadview(kakao, position) {
+    const client = new kakao.maps.RoadviewClient();
+    client.getNearestPanoId(position, 120, (panoId) => {
+      if (!panoId) { setRvMsg('이 지점에는 로드뷰가 없습니다 — 도로 위를 클릭해 보세요'); return; }
+      setRvMsg(null);
+      rvRef.current.setPanoId(panoId, position);
+    });
+  }
+
+  function toggleRoadview() {
+    const m = mapRef.current;
+    if (!m) return;
+    if (rvOn) { setRvOn(false); rvRef.current = null; return; }
+    setRvOn(true);
+    setRvMsg('지도를 클릭하면 그 지점 로드뷰로 이동합니다. 차선 수를 세어 위 표에 입력하세요.');
+    // 로드뷰 DOM 이 붙은 뒤 생성해야 한다
+    setTimeout(() => {
+      if (!rvEl.current) return;
+      const { kakao } = m;
+      rvRef.current = new kakao.maps.Roadview(rvEl.current);
+      moveRoadview(kakao, new kakao.maps.LatLng(center.lat, center.lng));
+    }, 0);
+  }
 
   async function savePng() {
     setSaving('busy');
@@ -156,6 +215,13 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
             onClick={() => mapRef.current?.map.setLevel(mapRef.current.map.getLevel() - 1)}>＋</button>
           <button style={S.btn} title="축소"
             onClick={() => mapRef.current?.map.setLevel(mapRef.current.map.getLevel() + 1)}>－</button>
+          {hasPoly && (
+            <button
+              style={{ ...S.btn, ...(radiusBasis === 'polygon' ? S.btnOn : null) }}
+              title="반경을 어디서부터 잴지 — 판정은 항상 경계 기준입니다"
+              onClick={() => setRadiusBasis(b => (b === 'polygon' ? 'point' : 'polygon'))}
+            >{radiusBasis === 'polygon' ? '경계기준' : '중심기준'}</button>
+          )}
           {MAP_TYPES.map(t => (
             <button
               key={t.id}
@@ -169,6 +235,11 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
               }}
             >{t.label}</button>
           ))}
+          {ready && roadview && (
+            <button style={{ ...S.btn, ...(rvOn ? S.btnOn : null) }} onClick={toggleRoadview}>
+              {rvOn ? '로드뷰 닫기' : '로드뷰'}
+            </button>
+          )}
           {ready && (
             <button style={S.btn} onClick={savePng} disabled={saving === 'busy'}>
               {saving === 'busy' ? '캡쳐 중…' : 'PNG 저장'}
@@ -181,12 +252,29 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
             지도를 불러오지 못했습니다.<br />{err}
           </div>
         : <div ref={el} data-map={title} style={S.map} />}
+      {rvOn && (
+        <>
+          <div ref={rvEl} style={{ width: '100%', height: 340, borderTop: `1px solid ${T.line}` }} />
+          <div style={{ ...S.cap, background: T.accentSoft, color: T.accent }}>
+            {rvMsg ?? '로드뷰'}
+            {/* 로드뷰는 캔버스 렌더라 PNG 로 못 뜬다. 증빙은 위성 지도로 남긴다. */}
+            <span style={{ color: T.muted }}> · 증빙 캡쳐는 위성 지도로 남깁니다(로드뷰는 저장 불가)</span>
+          </div>
+        </>
+      )}
       {saving && saving !== 'busy' && (
         <div style={{ ...S.cap, background: T.errSoft, color: T.err }}>
           캡쳐 실패: {saving}
         </div>
       )}
       {caption && <div style={S.cap}>{caption}</div>}
+      {hasPoly && (
+        <div style={S.cap}>
+          {radiusBasis === 'polygon'
+            ? `노란 선 = 사업지 경계에서 ${radius >= 1000 ? `${radius / 1000}km` : `${radius}m`} — 판정선과 같은 선입니다`
+            : `노란 원 = 대표지번 중심 기준 — 판정(경계 최단거리)과 다릅니다. [경계기준] 을 누르세요`}
+        </div>
+      )}
     </div>
   );
 }

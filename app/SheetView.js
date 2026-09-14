@@ -79,13 +79,19 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual 
     return (
       <div style={S.page}>
         <h2 style={S.h2}>{spec.title}</h2>
-        <p style={S.subject}>▶ 사업지 : {facilities?.address ?? spec.subject}</p>
+        <p style={S.subject}>
+          ▶ 사업지 : {facilities?.address ?? spec.subject}
+          {/* 입력 주소와 실제 매칭 주소가 다르면 증빙에 그대로 드러나야 한다 */}
+          {facilities?.matched && facilities.matched !== facilities.address && (
+            <span style={{ color: T.muted }}> · 좌표매칭 {facilities.matched}</span>
+          )}
+        </p>
 
         {/* 경계를 그려도 적용됐는지 화면에서 안 보이면 안 쓴 것과 같다 */}
         {facilities && (
           <div style={S.basis(facilities.basis === 'polygon')}>
             {facilities.basis === 'polygon'
-              ? `판정 기준 : 사업지 경계 최단거리 (경계 ${facilities.polygon?.length ?? 0}점 · 사업지 안의 시설은 0m)`
+              ? `판정 기준 : 사업지 경계 최단거리 (경계 ${facilities.polygon?.length ?? 0}점 · 사업지 안의 시설은 0m) — 지도의 노란 선이 이 판정선입니다`
               : '판정 기준 : 대표지번 중심점 — 경계를 그리면 실제 사업지 경계로 다시 잽니다'}
           </div>
         )}
@@ -202,9 +208,10 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual 
                     radius={h.radius}
                     polygon={facilities.basis === 'polygon' ? facilities.polygon : null}
                     defaultMapType={f.manual ? 'HYBRID' : 'ROADMAP'}
+                    roadview={Boolean(f.manual)}
                     markers={n ? [{ lat: Number(n.y), lng: Number(n.x), name: n.name, distance: n.distance }] : []}
                     caption={f.manual
-                      ? `지도를 보고 6차선 왕복도로 여부를 판정한 뒤 위 표에 입력하세요 (반경 ${h.radius}m)`
+                      ? `위성 또는 로드뷰로 차선 수를 센 뒤 위 표에 입력하세요 (반경 ${h.radius}m · 왕복 6차선 = 편도 3차로)`
                       : (n ? `최근접 ${n.name} · ${n.distance}m · 반경 내 ${h.count}건`
                            : `반경 ${h.radius}m 이내 부재`)}
                   />
