@@ -11,6 +11,7 @@ import SavedList from './SavedList';
 import SourceHealth from './SourceHealth';
 import PolygonDrawer from './PolygonDrawer';
 import RegionPicker from './RegionPicker';
+import { matchRegion } from '../src/lib/sido';
 import CompanyPicker from './CompanyPicker';
 import * as store from './storage';
 
@@ -162,6 +163,13 @@ export default function Home() {
   // ── 수집 ─────────────────────────────────────────────────
   async function collect() {
     if (!region) return setMsg({ kind: 'warn', text: '시도·시군구를 먼저 고르세요.' });
+    /*
+     * 미분양·주민등록세대수·매매지수는 전부 시군구 단위다.
+     * 시도만으로 조회하면 그 셋이 통째로 비고, 시도 단위 지표만 채워진 표가 나온다.
+     */
+    if (!form.sgg && form.sido !== '세종특별자치시') {
+      return setMsg({ kind: 'warn', text: `시군구를 골라야 합니다 — 미분양·세대수·매매지수는 시군구 단위 통계입니다 (지금: ${form.sido})` });
+    }
     // [직접] 로 바꾼 뒤 칸을 비우면 빈 값이 그대로 나갔다 — 여기서 막는다
     if (!/^\d{6}$/.test(String(form.ym).trim())) {
       return setMsg({
@@ -192,12 +200,24 @@ export default function Home() {
       setGeo(j.geo); setPick(0);
       setCoord(j.coord);
       setFixed(true);
+
+      /*
+       * 확정된 주소에서 시군구를 되짚어 채운다.
+       * 시도만 고르고 지번을 치면 region 이 "인천광역시" 로 남아
+       * 미분양·세대수·매매지수(전부 시군구 단위)가 통째로 실패했다.
+       * 좌표가 연수구인데 통계는 인천 전체로 도는 상태를 만들면 안 된다.
+       */
+      const hit = matchRegion(j.coord?.jibunAddress ?? j.coord?.roadAddress);
+      const filled = hit?.sgg && hit.sgg !== form.sgg;
+      if (hit?.sido) setForm(f => ({ ...f, sido: hit.sido, sgg: hit.sgg || f.sgg }));
+
       const n = j.geo?.candidates?.length ?? 1;
       setMsg({
         kind: j.geo?.via === 'keyword' ? 'warn' : 'ok',
         text: j.geo?.via === 'keyword'
-          ? '주소검색으로는 못 찾아 장소검색으로 잡았습니다 — 매칭이 맞는지 먼저 확인하세요.'
-          : `주소 매칭 완료${n > 1 ? ` (후보 ${n}건 — 다르면 아래에서 고르세요)` : ''}. 지도에서 경계를 그린 뒤 수집하세요.`,
+          ? `주소검색으로는 못 찾아 장소검색으로 잡았습니다 — 매칭이 맞는지 먼저 확인하세요.${filled ? ` (시군구를 ${hit.sgg} 로 맞췄습니다)` : ''}`
+          : `주소 매칭 완료${n > 1 ? ` (후보 ${n}건 — 다르면 아래에서 고르세요)` : ''}.`
+            + (filled ? ` 시군구를 ${hit.sgg} 로 맞췄습니다.` : ''),
       });
     } catch (e) { setMsg({ kind: 'warn', text: e.message }); }
     finally { setBusy(null); }
@@ -430,7 +450,11 @@ export default function Home() {
                 value={pick}
                 onChange={(e) => {
                   const i = Number(e.target.value);
-                  setPick(i); setCoord(geo.candidates[i]);
+                  const c = geo.candidates[i];
+                  setPick(i); setCoord(c);
+                  // 후보를 바꾸면 시군구도 따라가야 한다 — 안 그러면 좌표와 통계가 딴 곳을 가리킨다
+                  const h = matchRegion(c.jibunAddress ?? c.roadAddress);
+                  if (h?.sido) setForm(f => ({ ...f, sido: h.sido, sgg: h.sgg || f.sgg }));
                   setPolygon(null); setFacilities(null);   // 기준점이 바뀌면 경계·수집결과는 무효
                 }}
               >

@@ -1,6 +1,7 @@
 import { requireKey } from '../lib/env.js';
 import { getJson, envelope } from '../lib/http.js';
 import { toSggCode, known } from '../lib/region.js';
+import { sidoShort } from '../lib/sido.js';
 
 const BASE = 'https://kosis.kr/openapi';
 
@@ -91,6 +92,19 @@ export async function collect(indicator, { region, period }) {
   //  - 시군구 표(DT_1B040B3): 법정동코드 앞5자리
   //  - 시도 표(주택보급률·소비심리): 통계표 전용코드 → config 에 고정
   let objL1 = s.objL1 ?? '';
+  /*
+   * 시도 단위 통계표는 지역코드가 통계표 전용이라(13102871096A.0007 · K0204)
+   * 행정코드로 못 만든다. 시도별 표를 config 에 들고 있다가 고른다.
+   *
+   * 예전에는 경기 코드가 박혀 있어서 **인천을 조회해도 경기 값이 나왔다.**
+   * 그것도 "검증" 배지를 달고. 지역이 안 맞으면 값을 내지 말고 실패시킨다.
+   */
+  if (!objL1 && s.objL1BySido) {
+    const short = sidoShort(region);
+    if (!short) throw new Error(`시도를 알 수 없습니다: ${region}`);
+    objL1 = s.objL1BySido[short];
+    if (!objL1) throw new Error(`이 통계표에 ${short} 지역코드가 없습니다`);
+  }
   if (!objL1 && indicator.regionLevel === 'sgg') {
     objL1 = known(region) ?? await toSggCode(region, { kakaoKey: process.env.KAKAO_REST_KEY });
   }
