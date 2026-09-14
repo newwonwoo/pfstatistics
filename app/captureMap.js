@@ -79,39 +79,49 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-/** 마커 핀 — 카카오 기본 마커 이미지도 CORS 대상이라 직접 그린다 */
-function drawPin(ctx, x, y, color) {
+/**
+ * 마커 핀 — 카카오 기본 마커 이미지도 CORS 대상이라 직접 그린다.
+ * 번호를 주면 머리에 새긴다(표의 # 와 같은 번호).
+ */
+function drawPin(ctx, x, y, color, no = null) {
   ctx.save();
   ctx.fillStyle = color;
   ctx.strokeStyle = '#ffffff';
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(x, y);
-  ctx.bezierCurveTo(x - 3.5, y - 10, x - 9, y - 13, x - 9, y - 20);
-  ctx.arc(x, y - 20, 9, Math.PI, 0);          // 머리 (위쪽 반원)
-  ctx.bezierCurveTo(x + 9, y - 13, x + 3.5, y - 10, x, y);
+  ctx.bezierCurveTo(x - 3.5, y - 10, x - 10, y - 13, x - 10, y - 21);
+  ctx.arc(x, y - 21, 10, Math.PI, 0);          // 머리 (위쪽 반원)
+  ctx.bezierCurveTo(x + 10, y - 13, x + 3.5, y - 10, x, y);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(x, y - 20, 3.4, 0, Math.PI * 2);
-  ctx.fillStyle = '#ffffff';
-  ctx.fill();
+  if (no == null) {
+    ctx.beginPath();
+    ctx.arc(x, y - 21, 3.6, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+  } else {
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '700 12px "Malgun Gothic","맑은 고딕",sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(no), x, y - 21 + 0.5);
+  }
   ctx.restore();
 }
 
-/** 시설 라벨 — 화면의 CustomOverlay 와 같은 모양 */
-function drawLabel(ctx, x, y, text) {
+const LABEL_FONT = '700 13px "Malgun Gothic","맑은 고딕",sans-serif';
+const hits = (a, b) => !(a.x2 < b.x1 || a.x1 > b.x2 || a.y2 < b.y1 || a.y1 > b.y2);
+
+/** 시설 라벨 한 장 그리기 */
+function paintLabel(ctx, box, text) {
   ctx.save();
-  ctx.font = '700 13px "Malgun Gothic","맑은 고딕",sans-serif';
-  const w = Math.ceil(ctx.measureText(text).width) + 18;
-  const h = 24;
-  const bx = x - w / 2;
-  const by = y - h;
+  ctx.font = LABEL_FONT;
   ctx.shadowColor = 'rgba(0,0,0,.35)';
   ctx.shadowBlur = 4;
   ctx.shadowOffsetY = 1;
-  roundRect(ctx, bx, by, w, h, 5);
+  roundRect(ctx, box.x1, box.y1, box.x2 - box.x1, box.y2 - box.y1, 5);
   ctx.fillStyle = '#ffffff';
   ctx.fill();
   ctx.shadowColor = 'transparent';
@@ -121,11 +131,39 @@ function drawLabel(ctx, x, y, text) {
   ctx.fillStyle = '#111111';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(text, x, by + h / 2 + 0.5);
+  ctx.fillText(text, (box.x1 + box.x2) / 2, (box.y1 + box.y2) / 2 + 0.5);
   ctx.restore();
 }
 
+/**
+ * 겹치지 않는 자리를 찾아 라벨을 놓는다.
+ *
+ * 시설을 전부 찍으면 라벨이 서로 덮어 아무것도 못 읽는다 — 증빙으로 못 쓴다.
+ * 핀 위/아래로 자리를 옮겨보고, 그래도 안 되면 라벨을 포기한다(번호 핀은 남으므로
+ * 표의 # 로 찾을 수 있다).
+ */
+function placeLabel(ctx, placed, x, y, text, bounds) {
+  ctx.font = LABEL_FONT;
+  const w = Math.ceil(ctx.measureText(text).width) + 18;
+  const h = 24;
+  for (const dy of [0, -27, 27, -54, 54, -81, 81, -108, 108, -135, 135]) {
+    let cx = x;
+    // 화면 밖으로 나가면 안쪽으로 당긴다
+    cx = Math.max(w / 2 + 4, Math.min(bounds.w - w / 2 - 4, cx));
+    const box = { x1: cx - w / 2, y1: y - h + dy, x2: cx + w / 2, y2: y + dy };
+    if (box.y1 < 2 || box.y2 > bounds.h - 26) continue;      // 각주 띠도 피한다
+    if (placed.some(q => hits(box, q))) continue;
+    placed.push(box);
+    paintLabel(ctx, box, text);
+    return true;
+  }
+  return false;
+}
+
 const rLabel = (r) => (r >= 1000 ? `${r / 1000}km` : `${r}m`);
+
+/** 이름표를 다는 최대 개수 — RadiusMap 과 같게 유지할 것 */
+const LABEL_MAX = 8;
 
 /**
  * 타일 + 오버레이를 캔버스에 합성한다.
@@ -214,12 +252,29 @@ export async function composeMap(el, spec = {}) {
       ctx.stroke();
     }
 
-    for (const m of markers) {
+    /*
+     * 표에 있는 시설을 전부 찍는다. 번호는 표의 # 와 같다.
+     * 핀을 먼저 다 그리고, 라벨은 가까운 것부터 겹치지 않는 자리에 놓는다.
+     */
+    markers.forEach((m, i) => {
       const q = pt(m.lat, m.lng);
-      drawPin(ctx, q.x, q.y, '#EA4335');
-      drawLabel(ctx, q.x, q.y - 30, `${m.name}${m.distance != null ? ` · ${m.distance}m` : ''}`);
-    }
-    drawPin(ctx, c.x, c.y, '#1b4fd8');       // 사업지
+      drawPin(ctx, q.x, q.y, i === 0 ? '#1b4fd8' : '#EA4335', m.no ?? i + 1);
+    });
+    drawPin(ctx, c.x, c.y, '#111111');       // 사업지
+
+    /*
+     * 라벨은 핀도 가리면 안 된다 — 어느 핀의 이름인지 알 수 없게 된다.
+     * 사업지와 모든 시설 핀의 자리를 먼저 막아두고 라벨 자리를 찾는다.
+     */
+    const pinBox = (q) => ({ x1: q.x - 12, y1: q.y - 33, x2: q.x + 12, y2: q.y + 3 });
+    const placed = [pinBox(c), ...markers.map(m => pinBox(pt(m.lat, m.lng)))];
+
+    markers.slice(0, LABEL_MAX).forEach((m, i) => {
+      const q = pt(m.lat, m.lng);
+      const no = m.no ?? i + 1;
+      placeLabel(ctx, placed, q.x, q.y - 36,
+        `${no}. ${m.name}${m.distance != null ? ` · ${m.distance}m` : ''}`, { w, h });
+    });
   }
 
   // 3) 증빙용 각주 — 캡쳐만 떼어놔도 무엇을 찍은 것인지 알 수 있게

@@ -42,6 +42,9 @@ const MAP_TYPES = [
  * 그래서 사업지와 판정 대상 시설이 들어올 만큼만 확대하고, 그보다 멀어지지 않게 막는다.
  */
 const MAX_LEVEL = { 300: 3, 500: 4, 1000: 5, 1500: 6 };
+/** 이름표를 다는 최대 개수 — 넘으면 서로 겹쳐 못 읽는다 */
+const LABEL_MAX = 8;
+
 const levelCapFor = (r) => MAX_LEVEL[r] ?? (r <= 300 ? 3 : r <= 500 ? 4 : r <= 1000 ? 5 : 6);
 
 export default function RadiusMap({ title, center, radius, markers = [], polygon = null, caption, defaultMapType = 'ROADMAP', roadview = false, roadviewOpen = false, radiusBasis }) {
@@ -108,17 +111,30 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
           fillColor: '#1b4fd8', fillOpacity: 0.22,
         });
       }
-      for (const m of markers) {
+      /*
+       * 표에 있는 시설은 지도에도 전부 찍는다. 번호는 표의 # 와 같게 맞춘다.
+       * 다만 라벨을 전부 띄우면 서로 겹쳐 아무것도 못 읽는다 —
+       * 가까운 것부터 LABEL_MAX 개만 이름을 달고, 나머지는 번호로 표에서 찾게 한다.
+       */
+      markers.forEach((m, i) => {
         const p = new kakao.maps.LatLng(m.lat, m.lng);
-        new kakao.maps.Marker({ position: p, map });
+        const no = m.no ?? i + 1;
         new kakao.maps.CustomOverlay({
-          position: p, map, yAnchor: 2.2,
-          // 축소 상태에서도 무엇인지 읽혀야 한다. 거리까지 같이 박는다.
-          content: `<div style="background:#fff;border:2px solid #111;padding:3px 9px;border-radius:4px;
-            font:700 13px 'Malgun Gothic',sans-serif;white-space:nowrap;
-            box-shadow:0 1px 4px rgba(0,0,0,.35)">${m.name}${m.distance != null ? ` · ${m.distance}m` : ''}</div>`,
+          position: p, map, yAnchor: 1, zIndex: 3,
+          content: `<div style="width:24px;height:24px;border-radius:24px;background:${i === 0 ? '#1b4fd8' : '#EA4335'};
+            border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);color:#fff;
+            font:700 12px 'Malgun Gothic',sans-serif;display:flex;align-items:center;justify-content:center">${no}</div>`,
         });
-      }
+        if (i < LABEL_MAX) {
+          // 같은 높이에 다 걸면 서로 덮는다. 높이를 엇갈려 겹침을 줄인다.
+          new kakao.maps.CustomOverlay({
+            position: p, map, yAnchor: 2.4 + (i % 3) * 0.95, zIndex: 4,
+            content: `<div style="background:#fff;border:2px solid #111;padding:2px 8px;border-radius:4px;
+              font:700 12px 'Malgun Gothic',sans-serif;white-space:nowrap;
+              box-shadow:0 1px 4px rgba(0,0,0,.35)">${no}. ${m.name}${m.distance != null ? ` · ${m.distance}m` : ''}</div>`,
+          });
+        }
+      });
       /*
        * 확대 결정.
        * 판정 대상(사업지 + 최근접 시설)이 들어오게 맞추되,
@@ -130,7 +146,8 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
         bounds.extend(c);
         for (const m of markers) bounds.extend(new kakao.maps.LatLng(m.lat, m.lng));
         map.setBounds(bounds, 60, 60, 60, 60);       // 여백을 줘서 라벨이 잘리지 않게
-        if (map.getLevel() > cap) map.setLevel(cap);
+        // 한 곳뿐이면 라벨이 보이게 확대를 당기고, 여러 곳이면 다 담기는 쪽을 택한다
+        if (markers.length <= 1 && map.getLevel() > cap) map.setLevel(cap);
       } else {
         // 시설이 없으면(부재) 반경원 전체를 보여줘야 "이 범위에 없다" 가 증명된다
         map.setBounds(areaBounds());

@@ -305,7 +305,11 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                       defaultMapType={f.manual ? 'HYBRID' : 'ROADMAP'}
                       roadview
                       roadviewOpen={Boolean(f.manual)}
-                      markers={n ? [{ lat: Number(n.y), lng: Number(n.x), name: n.name, distance: n.distance }] : []}
+                      /* 표에 있는 것은 지도에도 전부 있어야 한다 — 번호는 표의 # 와 같다 */
+                      markers={items.map((it, i) => ({
+                        no: i + 1, lat: Number(it.y), lng: Number(it.x),
+                        name: it.name, distance: it.distance,
+                      }))}
                       caption={f.manual
                         ? `위성 또는 로드뷰로 차선 수를 센 뒤 위 평가표에 입력하세요 (반경 ${rLabel(h.radius)} · 왕복 6차선 = 편도 3차로)`
                         : (n ? `최근접 ${n.name} · ${n.distance}m · 반경 ${rLabel(h.radius)} 내 ${h.count}건`
