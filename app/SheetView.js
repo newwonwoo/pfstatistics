@@ -21,6 +21,13 @@ const S = {
   secTitle: { fontSize: 12, fontWeight: 700, color: T.muted, letterSpacing: '.04em', margin: '26px 0 12px', paddingTop: 18, borderTop: `1px solid ${T.line}` },
   empty: { padding: '44px 20px', textAlign: 'center', color: T.muted, fontSize: 13 },
   scroll: { overflowX: 'auto' },
+  basis: (poly) => ({
+    display: 'inline-block', marginBottom: 12, padding: '5px 11px', borderRadius: 5,
+    fontSize: 11.5, fontWeight: 700,
+    background: poly ? T.okSoft : T.warnSoft,
+    color: poly ? T.ok : T.warn,
+    border: `1px solid ${poly ? '#c7e9d5' : '#f0dcb4'}`,
+  }),
   input: {
     width: '100%', minWidth: 150, padding: '4px 7px', fontSize: 12.5,
     border: `1px solid ${T.line}`, borderRadius: 4, background: '#fffdf0',
@@ -73,6 +80,15 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual 
       <div style={S.page}>
         <h2 style={S.h2}>{spec.title}</h2>
         <p style={S.subject}>▶ 사업지 : {facilities?.address ?? spec.subject}</p>
+
+        {/* 경계를 그려도 적용됐는지 화면에서 안 보이면 안 쓴 것과 같다 */}
+        {facilities && (
+          <div style={S.basis(facilities.basis === 'polygon')}>
+            {facilities.basis === 'polygon'
+              ? `판정 기준 : 사업지 경계 최단거리 (경계 ${facilities.polygon?.length ?? 0}점 · 사업지 안의 시설은 0m)`
+              : '판정 기준 : 대표지번 중심점 — 경계를 그리면 실제 사업지 경계로 다시 잽니다'}
+          </div>
+        )}
 
         <div style={S.scroll}>
           <table style={S.table}>
@@ -185,7 +201,7 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual 
                     center={{ lat: Number(facilities.coord.y), lng: Number(facilities.coord.x) }}
                     radius={h.radius}
                     defaultMapType={f.manual ? 'HYBRID' : 'ROADMAP'}
-                    markers={n ? [{ lat: Number(n.y), lng: Number(n.x), name: n.name }] : []}
+                    markers={n ? [{ lat: Number(n.y), lng: Number(n.x), name: n.name, distance: n.distance }] : []}
                     caption={f.manual
                       ? `지도를 보고 6차선 왕복도로 여부를 판정한 뒤 위 표에 입력하세요 (반경 ${h.radius}m)`
                       : (n ? `최근접 ${n.name} · ${n.distance}m · 반경 내 ${h.count}건`

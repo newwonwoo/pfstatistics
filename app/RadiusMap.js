@@ -34,6 +34,15 @@ const MAP_TYPES = [
   { id: 'SKYVIEW', label: '위성' },
 ];
 
+/**
+ * 반경별 최대 축소 한계.
+ * 카카오는 축소하면 상호 라벨을 감춘다. 반경원 전체를 맞추면 너무 멀어져
+ * "무슨 시설인지" 가 안 보인다 — 증빙으로 못 쓴다.
+ * 그래서 사업지와 판정 대상 시설이 들어올 만큼만 확대하고, 그보다 멀어지지 않게 막는다.
+ */
+const MAX_LEVEL = { 300: 3, 500: 4, 1000: 5, 1500: 6 };
+const levelCapFor = (r) => MAX_LEVEL[r] ?? (r <= 300 ? 3 : r <= 500 ? 4 : r <= 1000 ? 5 : 6);
+
 export default function RadiusMap({ title, center, radius, markers = [], caption, defaultMapType = 'ROADMAP' }) {
   const el = useRef(null);
   const mapRef = useRef(null);
@@ -64,12 +73,30 @@ export default function RadiusMap({ title, center, radius, markers = [], caption
         const p = new kakao.maps.LatLng(m.lat, m.lng);
         new kakao.maps.Marker({ position: p, map });
         new kakao.maps.CustomOverlay({
-          position: p, map, yAnchor: 2.1,
-          content: `<div style="background:#fff;border:2px solid #333;padding:2px 7px;border-radius:3px;
-            font:600 12px 'Malgun Gothic',sans-serif;white-space:nowrap">${m.name}</div>`,
+          position: p, map, yAnchor: 2.2,
+          // 축소 상태에서도 무엇인지 읽혀야 한다. 거리까지 같이 박는다.
+          content: `<div style="background:#fff;border:2px solid #111;padding:3px 9px;border-radius:4px;
+            font:700 13px 'Malgun Gothic',sans-serif;white-space:nowrap;
+            box-shadow:0 1px 4px rgba(0,0,0,.35)">${m.name}${m.distance != null ? ` · ${m.distance}m` : ''}</div>`,
         });
       }
-      map.setBounds(circle.getBounds());
+      /*
+       * 확대 결정.
+       * 판정 대상(사업지 + 최근접 시설)이 들어오게 맞추되,
+       * 라벨이 보이는 수준보다 더 멀어지지 않게 한계를 건다.
+       */
+      const cap = levelCapFor(radius);
+      if (markers.length) {
+        const bounds = new kakao.maps.LatLngBounds();
+        bounds.extend(c);
+        for (const m of markers) bounds.extend(new kakao.maps.LatLng(m.lat, m.lng));
+        map.setBounds(bounds, 60, 60, 60, 60);       // 여백을 줘서 라벨이 잘리지 않게
+        if (map.getLevel() > cap) map.setLevel(cap);
+      } else {
+        // 시설이 없으면(부재) 반경원 전체를 보여줘야 "이 범위에 없다" 가 증명된다
+        map.setBounds(circle.getBounds());
+        if (map.getLevel() > cap + 1) map.setLevel(cap + 1);
+      }
       setReady(true);
     }).catch(e => !dead && setErr(e.message));
     return () => { dead = true; };
@@ -93,7 +120,11 @@ export default function RadiusMap({ title, center, radius, markers = [], caption
     <div style={S.box}>
       <div style={S.bar}>
         <span style={S.name}>{title} · 반경 {radius >= 1000 ? `${radius / 1000}km` : `${radius}m`}</span>
-        <span style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+        <span style={{ display: 'flex', gap: 4, marginLeft: 'auto', alignItems: 'center' }}>
+          <button style={S.btn} title="확대"
+            onClick={() => mapRef.current?.map.setLevel(mapRef.current.map.getLevel() - 1)}>＋</button>
+          <button style={S.btn} title="축소"
+            onClick={() => mapRef.current?.map.setLevel(mapRef.current.map.getLevel() + 1)}>－</button>
           {MAP_TYPES.map(t => (
             <button
               key={t.id}
