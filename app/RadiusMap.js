@@ -184,35 +184,60 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
     return () => { if (node) delete node.__capture; };
   }, [ready, center.lat, center.lng, radius, mkey, pkey, rkey, title, mapType]);   // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** 클릭 지점에서 가장 가까운 로드뷰로 옮긴다 */
-  function moveRoadview(kakao, position) {
+  /**
+   * 클릭 지점에서 가장 가까운 로드뷰로 옮긴다.
+   * 반경을 넓혀가며 찾는다 — 사업지가 도로에서 떨어져 있으면 가까운 곳엔 파노라마가 없다.
+   */
+  function moveRoadview(kakao, position, radii = [60, 150, 350, 800]) {
+    if (!rvRef.current) return;
     const client = new kakao.maps.RoadviewClient();
-    client.getNearestPanoId(position, 120, (panoId) => {
-      if (!panoId) { setRvMsg('이 지점에는 로드뷰가 없습니다 — 도로 위를 클릭해 보세요'); return; }
-      setRvMsg(null);
-      rvRef.current.setPanoId(panoId, position);
-    });
+    const tryAt = (i) => {
+      if (i >= radii.length) {
+        setRvMsg(`반경 ${radii.at(-1)}m 안에 로드뷰가 없습니다 — 지도에서 도로 위를 클릭해 보세요`);
+        return;
+      }
+      client.getNearestPanoId(position, radii[i], (panoId) => {
+        if (!panoId) { tryAt(i + 1); return; }
+        setRvMsg('지도를 클릭하면 그 지점 로드뷰로 이동합니다. 왕복 6차선 = 편도 3차로입니다.');
+        try { rvRef.current.setPanoId(panoId, position); }
+        catch (e) { setRvMsg(`로드뷰 표시 실패: ${e.message}`); }
+      });
+    };
+    tryAt(0);
   }
 
   function toggleRoadview() {
-    const m = mapRef.current;
-    if (!m) return;
-    if (rvOn) { setRvOn(false); rvRef.current = null; return; }
+    if (rvOn) { setRvOn(false); rvRef.current = null; setRvMsg(null); return; }
     setRvOn(true);
-    setRvMsg('지도를 클릭하면 그 지점 로드뷰로 이동합니다. 차선 수를 세어 위 표에 입력하세요.');
-    // 로드뷰 DOM 이 붙은 뒤 생성해야 한다
-    setTimeout(() => {
-      if (!rvEl.current) return;
-      const { kakao } = m;
+    setRvMsg('로드뷰를 불러오는 중…');
+  }
+
+  /*
+   * 로드뷰 생성은 **DOM 이 붙은 뒤** 해야 한다.
+   * setTimeout(0) 으로 맞추던 것이 React 커밋보다 먼저 돌아 조용히 실패하곤 했다.
+   * rvOn 이 true 가 된 뒤의 이 효과에서 만들면 순서가 보장된다.
+   */
+  useEffect(() => {
+    if (!rvOn) return;
+    const m = mapRef.current;
+    if (!m || !rvEl.current) { setRvMsg('지도가 아직 준비되지 않았습니다'); return; }
+    const { kakao } = m;
+    if (!kakao?.maps?.Roadview) {
+      setRvMsg('이 카카오맵 SDK 빌드에 로드뷰가 없습니다 (콘솔에서 카카오맵 제품 사용을 확인하세요)');
+      return;
+    }
+    try {
       rvRef.current = new kakao.maps.Roadview(rvEl.current);
       moveRoadview(kakao, new kakao.maps.LatLng(center.lat, center.lng));
-    }, 0);
-  }
+    } catch (e) {
+      setRvMsg(`로드뷰 생성 실패: ${e.message}`);
+    }
+  }, [rvOn, center.lat, center.lng]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // 차선 판정용 지도는 로드뷰가 본체다 — 눌러야 보이면 못 쓴다
   useEffect(() => {
-    if (ready && roadview && roadviewOpen && !rvOn) toggleRoadview();
-  }, [ready, roadview, roadviewOpen]);   // eslint-disable-line react-hooks/exhaustive-deps
+    if (ready && roadview && roadviewOpen) setRvOn(true);
+  }, [ready, roadview, roadviewOpen]);
 
   /** 로드뷰 PNG — 되는지 안 되는지 앱이 직접 시도해서 알린다 */
   function saveRoadviewPng() {
