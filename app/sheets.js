@@ -108,7 +108,11 @@ export function buildSheet(sheetId, { byId, region, period, company }) {
            * 실무도 지도를 보고 판정하므로(사용자 확인), 반경원 지도를 띄워
            * 눈으로 확인한 도로명을 그 자리에서 입력받는다.
            */
-          { label: '6차선 왕복도로', criteria: '사업지 반경 300m 이내', manual: true, radius: 300 },
+          /*
+           * 구간표를 받았다(2026-09-14): 100m/300m/500m/1km = 5/4/3/2점, 그 밖은 기본 1점.
+           * 그래서 후보 탐색도 1km 까지 봐야 한다 — 300m 만 보면 2~3점 구간을 통째로 놓친다.
+           */
+          { label: '6차선 왕복도로', criteria: '반경 100m/300m/500m/1km', manual: true, radius: 1000 },
         ],
         summaryRow: '평균점수',
       };

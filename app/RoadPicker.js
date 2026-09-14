@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { T } from './theme';
+import { scoreFacility } from '../src/lib/scoring';
 
 /**
  * 6차선 왕복도로 — 주변 도로 후보에서 고른다.
@@ -45,9 +46,8 @@ const S = {
   }),
 };
 
-/** 왕복 6차선 이상이고 기준 반경 안이면 "존재" */
-export const judgeRoad = (m, radius) =>
-  (m?.lanes ?? 0) >= 6 && m?.distance != null && m.distance <= radius;
+/** 구간표(config/scoring.json)로 점수를 낸다 */
+export const roadScore = (m) => scoreFacility('6차선 왕복도로', m);
 
 export default function RoadPicker({ coord, radius = 300, value, onChange }) {
   const [rows, setRows] = useState(null);
@@ -58,8 +58,8 @@ export default function RoadPicker({ coord, radius = 300, value, onChange }) {
     if (!coord?.x || !coord?.y) return;
     let dead = false;
     setRows(null); setErr(null);
-    // 기준 반경보다 조금 넓게 훑는다 — 경계 바로 밖의 큰 도로도 보여야 판단이 된다
-    fetch(`/api/roads?x=${coord.x}&y=${coord.y}&radius=${Math.round(radius * 1.7)}`)
+    // 구간표의 가장 먼 구간(1km)까지 훑는다. 조금 더 봐야 경계 밖도 눈에 들어온다
+    fetch(`/api/roads?x=${coord.x}&y=${coord.y}&radius=${Math.round(radius * 1.2)}`)
       .then(r => r.json())
       .then(j => { if (!dead) (j.error ? setErr(j.error) : setRows(j.roads ?? [])); })
       .catch(e => !dead && setErr(e.message));
@@ -69,12 +69,12 @@ export default function RoadPicker({ coord, radius = 300, value, onChange }) {
   const set = (patch) => onChange?.({ ...(value ?? {}), ...patch });
   const visible = (rows ?? []).filter(r => !dismissed.includes(r.name));
   const lanes = value?.lanes ?? 0;
-  const inRadius = value?.distance != null && value.distance <= radius;
+  const verdict = scoreFacility('6차선 왕복도로', value);
 
   return (
     <div style={S.box}>
       <div style={S.head}>
-        반경 {Math.round(radius * 1.7)}m 도로 후보 — 판정 대상을 고르세요
+        반경 {Math.round(radius * 1.2)}m 도로 후보 — 판정 대상을 고르세요
         <span style={S.note}>
           법정 도로 유형 기준 (도로명주소법 시행령 §3) — 대로 = 폭 40m↑ <b>또는</b> 왕복 8차로↑ ·
           로 = 폭 12~40m <b>또는</b> 왕복 2~7차로 · 길 = 그 밖의 도로.
@@ -90,7 +90,8 @@ export default function RoadPicker({ coord, radius = 300, value, onChange }) {
 
       {visible.map(r => {
         const on = value?.name === r.name;
-        const far = r.distance > radius;
+        // 어느 점수 구간에 드는지 미리 보여준다 (6차선이라고 가정한 값)
+        const band = scoreFacility('6차선 왕복도로', { distance: r.distance, lanes: 6 });
         return (
           <div key={r.name} style={S.row(on)}>
             <button
@@ -104,8 +105,8 @@ export default function RoadPicker({ coord, radius = 300, value, onChange }) {
               <span style={S.name}>{r.name}</span>
               <span style={S.badge(r.rank)}>{r.grade}</span>
               <span style={S.hint}>{r.hint ?? ''}</span>
-              <span style={{ ...S.dist, color: far ? T.muted : T.ink2 }}>
-                {r.distance}m{far ? ` · 기준 ${radius}m 밖` : ''}
+              <span style={{ ...S.dist, color: band.score > 1 ? T.ink2 : T.muted }}>
+                {r.distance}m · 6차선이면 {band.score}점
               </span>
             </button>
             <button
@@ -135,11 +136,9 @@ export default function RoadPicker({ coord, radius = 300, value, onChange }) {
           <button style={S.step} onClick={() => set({ lanes: lanes + 1 })}>＋</button>
           <span style={S.lbl}>차선</span>
           <span style={{ fontSize: 11, color: T.muted }}>로드뷰로 세어 넣으세요</span>
-          <span style={S.verdict(judgeRoad(value, radius))}>
-            {lanes === 0 ? '차선 수 미입력'
-              : judgeRoad(value, radius) ? '존재'
-              : !inRadius ? `부재 (기준 ${radius}m 밖)`
-              : '부재 (6차선 미만)'}
+          <span style={S.verdict(verdict.score > 1)}>
+            {verdict.score}점 · {verdict.label}
+            <span style={{ fontWeight: 400, marginLeft: 6, opacity: 0.85 }}>({verdict.reason})</span>
           </span>
         </div>
       )}

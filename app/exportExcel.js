@@ -16,6 +16,8 @@ const MARK_FILL = 'FFFFFDF0';
 const BORDER = { style: 'thin', color: { argb: 'FF9AA5B1' } };
 const box = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
 
+import { scoreSheet, scoreFacility } from '../src/lib/scoring';
+
 const fmt = (v) =>
   typeof v === 'number' ? v : (v == null || v === '' ? '' : String(v));
 
@@ -170,13 +172,13 @@ export async function exportWorkbook({ data, facilities, manual, sheets, buildSh
        */
       const manualRow = (f) => {
         const m = manual?.[f.label];
-        if (!m?.name) return [f.label, f.criteria, '(도로 미선택)', '', '', ''];
-        const ok = (m.lanes ?? 0) >= 6 && m.distance != null && m.distance <= f.radius;
+        const sc = scoreFacility(f.label, m);
         return [
           f.label, f.criteria,
-          `${m.name}${m.lanes ? ` (왕복 ${m.lanes}차선)` : ''}`,
-          `${m.distance != null ? `${m.distance}m` : '-'}${m.lanes ? ` · ${ok ? '존재' : '부재'}` : ''}`,
-          '', '',
+          m?.name ? `${m.name}${m.lanes ? ` (왕복 ${m.lanes}차선)` : ''}` : '(도로 미선택)',
+          m?.distance != null ? `${m.distance}m` : '',
+          sc ? sc.score : '',
+          sc ? `${sc.score}점 · ${sc.label}${sc.reason ? ` (${sc.reason})` : ''}` : '',
         ];
       };
 
@@ -200,7 +202,11 @@ export async function exportWorkbook({ data, facilities, manual, sheets, buildSh
             '', '',
           ]);
         }
-        if (spec.summaryRow) rows.push([spec.summaryRow, '', '', '', '']);
+        if (spec.summaryRow) {
+          // 교육환경은 시트 단위로 점수가 난다 — 계 행에 넣는다
+          const sc = facilities ? scoreSheet(s.id, facilities) : null;
+          rows.push([spec.summaryRow, '', '', sc ? sc.score : '', sc ? `${sc.score}점 · ${sc.label}` : '']);
+        }
       } else {
         for (const f of spec.facilities) {
           rows.push(f.manual

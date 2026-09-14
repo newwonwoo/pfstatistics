@@ -1,10 +1,11 @@
 'use client';
 import { Fragment, useState } from 'react';
 import { buildSheet } from './sheets';
+import { scoreSheet, scoreFacility, hasTable } from '../src/lib/scoring';
 import { T, mono } from './theme';
 import EvidenceCard from './EvidenceCard';
 import RadiusMap from './RadiusMap';
-import RoadPicker, { judgeRoad } from './RoadPicker';
+import RoadPicker from './RoadPicker';
 
 const S = {
   page: { background: T.panel, border: `1px solid ${T.lineStrong}`, borderTop: 0, borderRadius: `0 0 ${T.radius}px ${T.radius}px`, padding: '22px 24px 26px' },
@@ -18,6 +19,7 @@ const S = {
   pend: { color: T.muted, fontWeight: 400, fontStyle: 'italic' },
   blank: { border: `1px solid ${T.sheetLine}`, padding: '8px 12px', background: 'repeating-linear-gradient(45deg,#fafbfc,#fafbfc 5px,#f1f3f5 5px,#f1f3f5 10px)' },
   formula: { marginTop: 9, fontSize: 11.5, color: T.muted },
+  why: { color: T.muted, fontWeight: 400, fontSize: 11 },
   block: { marginTop: 18, paddingTop: 14, borderTop: `2px solid ${T.line}` },
   blockHead: { fontSize: 13, marginBottom: 8, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' },
   crit: { marginLeft: 'auto', fontSize: 11.5, color: T.ink2, background: '#f1f3f5', padding: '3px 9px', borderRadius: 4 },
@@ -161,21 +163,29 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                     {f.manual
                       ? (() => {
                           const m = manual?.[f.label];
-                          const ok = judgeRoad(m, f.radius);
                           return (<>
                             <td style={m?.name ? S.tdVal : S.td}>
                               {m?.name
                                 ? `${m.name}${m.lanes ? ` (왕복 ${m.lanes}차선)` : ''}`
                                 : <span style={S.pend}>아래에서 도로 선택</span>}
                             </td>
-                            <td style={S.td}>
-                              {m?.distance != null ? `${m.distance}m` : '-'}
-                              {m?.name && m?.lanes ? ` · ${ok ? '존재' : '부재'}` : ''}
-                            </td>
+                            <td style={S.td}>{m?.distance != null ? `${m.distance}m` : '-'}</td>
                           </>);
                         })()
                       : <><NameCell label={f.label} /><DistCell label={f.label} /></>}
-                    <td style={S.blank} /><td style={S.blank} />
+                    {/* 구간표가 들어온 항목만 점수를 낸다 — 없으면 빗금 그대로 */}
+                    {(() => {
+                      const sc = f.manual ? scoreFacility(f.label, manual?.[f.label]) : null;
+                      return sc
+                        ? (<>
+                            <td style={S.tdVal}>{sc.score}</td>
+                            <td style={S.td}>
+                              {sc.score}점 · {sc.label}
+                              {sc.reason ? <span style={S.why}> ({sc.reason})</span> : null}
+                            </td>
+                          </>)
+                        : (<><td style={S.blank} /><td style={S.blank} /></>);
+                    })()}
                   </tr>
                 ))}
                 {spec.summaryRow && (
@@ -227,12 +237,20 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                     </tr>
                   );
                 })}
-                {spec.summaryRow && (
-                  <tr>
-                    <td style={S.tdL} colSpan={3}>{spec.summaryRow}</td>
-                    <td style={S.blank} /><td style={S.blank} />
-                  </tr>
-                )}
+                {spec.summaryRow && (() => {
+                  const sc = facilities ? scoreSheet(sheetId, facilities) : null;
+                  return (
+                    <tr>
+                      <td style={S.tdL} colSpan={3}>{spec.summaryRow}</td>
+                      {sc
+                        ? (<>
+                            <td style={S.tdVal}>{sc.score}</td>
+                            <td style={S.td}>{sc.score}점 · {sc.label}</td>
+                          </>)
+                        : (<><td style={S.blank} /><td style={S.blank} /></>)}
+                    </tr>
+                  );
+                })()}
               </>)}
             </tbody>
           </table>
