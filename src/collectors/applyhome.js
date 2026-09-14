@@ -175,7 +175,7 @@ const sggOf = (addr) => String(addr ?? '').split(/\s+/).slice(0, 2).join(' ');
  * @param {{x:number,y:number}} site  사업지 대표지번 좌표
  * @param {Array<{lat,lng}>} polygon  사업지 경계(있으면 경계 최단거리로 잰다 — 다른 시트와 같은 규칙)
  */
-export async function collectComparables({ site, region, radius = 2000, polygon = null, from = null }) {
+export async function collectComparables({ site, region, radius = 2000, polygon = null, from = null, probe = null }) {
   const sido = noticeSido(region);
   if (!sido) {
     const e = new Error('통합 시도는 시군구까지 골라야 분양정보를 가릅니다 (청약홈이 아직 광주/전남을 따로 집계합니다)');
@@ -218,6 +218,26 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
   });
 
   const inside = located.filter(v => v && v.d <= radius).sort((a, b) => a.d - b.d);
+
+  /*
+   * 진단창구 — "가까운 단지가 왜 안 나오나" 를 화면 밖에서 따질 수 있어야 한다.
+   * 이름·주소에 걸리는 공고를 반경과 무관하게 전부 보여준다(지오코딩 결과와 거리까지).
+   */
+  if (probe) {
+    const re = new RegExp(probe);
+    const hits = uniq.filter(r => re.test(r.HOUSE_NM ?? '') || re.test(r.HSSPLY_ADRES ?? ''));
+    const traced = await mapLimit(hits, 6, async (r) => {
+      const q = normalizeSupplyAddress(r.HSSPLY_ADRES);
+      const p = await geocodeOne(q);
+      return {
+        name: r.HOUSE_NM, address: r.HSSPLY_ADRES, query: q,
+        rent: r.RENT_SECD_NM, houseSecd: r.HOUSE_SECD_NM, notice: r.RCRIT_PBLANC_DE,
+        sggKept: near.has(sggOf(r.HSSPLY_ADRES)),
+        geocoded: p, distance: p ? Math.round(dist(p)) : null,
+      };
+    });
+    return { sido, radius, probe, matched: hits.length, traced };
+  }
 
   // 3차 — 반경 안의 단지만 주택형별 상세를 받는다 (호출 수를 최소로)
   const items = await mapLimit(inside, 5, async ({ r, q, p, d }) => {

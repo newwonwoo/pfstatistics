@@ -29,6 +29,7 @@ export async function GET(req) {
     const r = await collectComparables({
       site: { x, y }, region, radius, polygon,
       from: q.get('from') || null,
+      probe: q.get('probe') || null,
     });
     return NextResponse.json({ region, ...r });
   } catch (e) {
