@@ -101,7 +101,11 @@ export async function collectMedical({ point, polygon = null, radius = 1500 }) {
     count: items.length,
     nearest: items[0] ?? null,
     items,
-    // 의원급이 몇 곳인지도 남긴다 — "왜 부재인가"를 설명할 수 있어야 한다
+    // "왜 부재인가"를 설명할 수 있어야 한다 — 제외된 것들의 종별 내역까지 남긴다
     excludedClinics: all.length - hospitals.length,
+    excludedByGrade: Object.entries(
+      all.filter(r => !isHospitalGrade(r.grade))
+         .reduce((m, r) => ({ ...m, [r.grade ?? '?']: (m[r.grade ?? '?'] ?? 0) + 1 }), {}),
+    ).sort((a, b) => b[1] - a[1]).map(([grade, n]) => `${grade} ${n}`).join(' · ') || null,
   };
 }

@@ -298,7 +298,10 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                     <div style={S.absent}>
                       반경 {rLabel(h.radius)} 이내 부재
                       {/* 왜 부재인지 근거를 남긴다 — 의원급은 의료시설이 아니다 */}
-                      {h.excludedClinics ? ` — 의원급 ${h.excludedClinics}곳은 심사 대상(병원급 이상)이 아니라 제외했습니다` : ''}
+                      {h.excludedClinics
+                        ? ` — 심사 대상(병원급 이상)이 아닌 ${h.excludedClinics}곳을 제외했습니다`
+                          + (h.excludedByGrade ? ` (${h.excludedByGrade})` : '')
+                        : ''}
                       {h.error ? ` · ${h.error}` : ''}
                     </div>
                   )}
