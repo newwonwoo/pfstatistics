@@ -3,74 +3,146 @@ import { useEffect, useState } from 'react';
 import { T } from './theme';
 
 /**
- * 6차선 왕복도로 — 주변 도로명 후보.
+ * 6차선 왕복도로 — 주변 도로 후보에서 고른다.
  *
- * 도로는 POI 가 아니라 장소검색으로 안 나온다. 그래서 도로명까지 손으로 쳐야 했다.
- * 사업지 둘레를 훑어 도로명을 뽑아주고, 고르면 지도의 로드뷰가 그 지점으로 간다.
- * 차선 수는 여기서 안 나온다 — 로드뷰로 세는 것까지가 판정이다.
+ * 도로는 POI 가 아니라 장소검색으로 안 나와 도로명까지 손으로 쳐야 했다.
+ * 사업지 둘레를 훑어 후보를 주고, 고르면 지도가 그 지점 로드뷰로 간다.
+ * 상관없는 도로는 ×로 지운다 — 지우면 아래 것이 올라온다.
+ *
+ * 차로수는 어떤 원천에도 없다. 로드뷰로 세어 숫자만 넣으면 판정이 끝난다.
  */
 const S = {
   box: { border: `1px solid ${T.line}`, borderRadius: 8, background: '#fff', padding: '12px 14px', marginBottom: 10 },
-  head: { fontSize: 12.5, fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  note: { fontSize: 11, color: T.muted, fontWeight: 400, lineHeight: 1.5 },
+  head: { fontSize: 12.5, fontWeight: 700, marginBottom: 8 },
+  note: { fontSize: 11, color: T.muted, fontWeight: 400, lineHeight: 1.55, display: 'block', marginTop: 4 },
   row: (on) => ({
-    display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
-    padding: '8px 10px', marginBottom: 5, borderRadius: 6, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', gap: 10,
+    padding: '8px 10px', marginBottom: 5, borderRadius: 6,
     border: `1px solid ${on ? T.accent : T.line}`,
     background: on ? T.accentSoft : '#fff',
   }),
+  pick: { flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 0, cursor: 'pointer', textAlign: 'left', padding: 0 },
   name: { fontSize: 12.5, fontWeight: 700, color: T.ink },
   badge: (rank) => ({
     fontSize: 10.5, fontWeight: 700, padding: '2px 7px', borderRadius: 4, whiteSpace: 'nowrap',
     background: rank === 0 ? '#e7f0ff' : rank === 1 ? T.okSoft : '#f1f3f5',
     color: rank === 0 ? T.accent : rank === 1 ? T.ok : T.muted,
   }),
-  hint: { fontSize: 11, color: T.muted, flex: 1, minWidth: 120 },
+  hint: { fontSize: 11, color: T.muted, flex: 1, minWidth: 110 },
   dist: { fontSize: 11.5, fontWeight: 700, color: T.ink2, whiteSpace: 'nowrap' },
+  del: { border: 0, background: 'none', color: T.muted, cursor: 'pointer', fontSize: 15, lineHeight: 1, padding: '2px 4px' },
   msg: { fontSize: 11.5, color: T.muted, padding: '6px 0' },
+  undo: { border: 0, background: 'none', color: T.accent, cursor: 'pointer', fontSize: 11.5, textDecoration: 'underline', padding: 0 },
+
+  lanes: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, padding: '10px 12px', borderRadius: 6, background: '#f7f9fb', border: `1px solid ${T.line}`, flexWrap: 'wrap' },
+  lbl: { fontSize: 12, fontWeight: 700, color: T.ink2 },
+  step: { width: 28, height: 28, borderRadius: 5, border: `1px solid ${T.lineStrong}`, background: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 700, color: T.ink2 },
+  num: { width: 46, textAlign: 'center', fontSize: 15, fontWeight: 800, color: T.ink },
+  verdict: (ok) => ({
+    marginLeft: 'auto', fontSize: 12, fontWeight: 800, padding: '4px 12px', borderRadius: 5,
+    background: ok ? T.okSoft : T.warnSoft, color: ok ? T.ok : T.warn,
+    border: `1px solid ${ok ? '#c7e9d5' : '#f0dcb4'}`,
+  }),
 };
 
-export default function RoadPicker({ coord, radius = 300, value, onPick }) {
+/** 왕복 6차선 이상이고 기준 반경 안이면 "존재" */
+export const judgeRoad = (m, radius) =>
+  (m?.lanes ?? 0) >= 6 && m?.distance != null && m.distance <= radius;
+
+export default function RoadPicker({ coord, radius = 300, value, onChange }) {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
+  const dismissed = value?.dismissed ?? [];
 
   useEffect(() => {
     if (!coord?.x || !coord?.y) return;
     let dead = false;
     setRows(null); setErr(null);
-    fetch(`/api/roads?x=${coord.x}&y=${coord.y}&radius=${radius}`)
+    // 기준 반경보다 조금 넓게 훑는다 — 경계 바로 밖의 큰 도로도 보여야 판단이 된다
+    fetch(`/api/roads?x=${coord.x}&y=${coord.y}&radius=${Math.round(radius * 1.7)}`)
       .then(r => r.json())
       .then(j => { if (!dead) (j.error ? setErr(j.error) : setRows(j.roads ?? [])); })
       .catch(e => !dead && setErr(e.message));
     return () => { dead = true; };
   }, [coord?.x, coord?.y, radius]);
 
+  const set = (patch) => onChange?.({ ...(value ?? {}), ...patch });
+  const visible = (rows ?? []).filter(r => !dismissed.includes(r.name));
+  const lanes = value?.lanes ?? 0;
+  const inRadius = value?.distance != null && value.distance <= radius;
+
   return (
     <div style={S.box}>
       <div style={S.head}>
-        <span>반경 {radius}m 도로명 후보</span>
+        반경 {Math.round(radius * 1.7)}m 도로 후보 — 판정 대상을 고르세요
         <span style={S.note}>
           법정 도로 유형 기준 (도로명주소법 시행령 §3) — 대로 = 폭 40m↑ <b>또는</b> 왕복 8차로↑ ·
           로 = 폭 12~40m <b>또는</b> 왕복 2~7차로 · 길 = 그 밖의 도로.
-          <br />
-          다만 같은 영 §8②1 단서가 <b>대로↔로, 로↔길을 바꿔 쓸 수 있게</b> 열어두었고,
-          도로명은 구간 설정 시점 기준이라 뒤에 넓어져도 이름은 그대로입니다.
-          <b> 이름으로 차로수를 단정할 수 없으니 아래 로드뷰로 세어 확정하세요.</b>
+          다만 같은 영 §8②1 단서가 <b>대로↔로, 로↔길을 바꿔 쓸 수 있게</b> 열어두었고
+          도로명은 구간 설정 시점 기준이라, <b>이름으로 차로수를 단정할 수 없습니다.</b>
+          아래 로드뷰로 세어 차선 수만 넣으면 판정됩니다.
         </span>
       </div>
 
       {err && <div style={{ ...S.msg, color: T.warn }}>도로명 조회 실패: {err}</div>}
       {!rows && !err && <div style={S.msg}>주변 도로를 훑는 중…</div>}
-      {rows?.length === 0 && <div style={S.msg}>반경 {radius}m 안에서 도로명을 찾지 못했습니다.</div>}
+      {rows?.length === 0 && <div style={S.msg}>주변에서 도로명을 찾지 못했습니다.</div>}
 
-      {rows?.map(r => (
-        <button key={r.name} style={S.row(value === r.name)} onClick={() => onPick?.(r)}>
-          <span style={S.name}>{r.name}</span>
-          <span style={S.badge(r.rank)}>{r.grade}</span>
-          <span style={S.hint}>{r.hint ?? ''}</span>
-          <span style={S.dist}>{r.distance}m</span>
+      {visible.map(r => {
+        const on = value?.name === r.name;
+        const far = r.distance > radius;
+        return (
+          <div key={r.name} style={S.row(on)}>
+            <button
+              style={S.pick}
+              onClick={() => set({
+                name: r.name, distance: r.distance, x: r.x, y: r.y,
+                // 다른 도로를 고르면 차선 수는 다시 센다 — 앞 도로 값을 물려받으면 판정이 틀린다
+                ...(value?.name === r.name ? {} : { lanes: 0 }),
+              })}
+            >
+              <span style={S.name}>{r.name}</span>
+              <span style={S.badge(r.rank)}>{r.grade}</span>
+              <span style={S.hint}>{r.hint ?? ''}</span>
+              <span style={{ ...S.dist, color: far ? T.muted : T.ink2 }}>
+                {r.distance}m{far ? ` · 기준 ${radius}m 밖` : ''}
+              </span>
+            </button>
+            <button
+              style={S.del}
+              title="이 도로를 목록에서 지웁니다"
+              onClick={() => set({
+                dismissed: [...dismissed, r.name],
+                // 지운 것이 고른 것이면 선택도 푼다
+                ...(value?.name === r.name ? { name: null, distance: null } : {}),
+              })}
+            >×</button>
+          </div>
+        );
+      })}
+
+      {dismissed.length > 0 && (
+        <button style={S.undo} onClick={() => set({ dismissed: [] })}>
+          숨긴 도로 {dismissed.length}개 되돌리기
         </button>
-      ))}
+      )}
+
+      {value?.name && (
+        <div style={S.lanes}>
+          <span style={S.lbl}>{value.name} · 왕복</span>
+          <button style={S.step} onClick={() => set({ lanes: Math.max(0, lanes - 1) })}>−</button>
+          <span style={S.num}>{lanes || '?'}</span>
+          <button style={S.step} onClick={() => set({ lanes: lanes + 1 })}>＋</button>
+          <span style={S.lbl}>차선</span>
+          <span style={{ fontSize: 11, color: T.muted }}>로드뷰로 세어 넣으세요</span>
+          <span style={S.verdict(judgeRoad(value, radius))}>
+            {lanes === 0 ? '차선 수 미입력'
+              : judgeRoad(value, radius) ? '존재'
+              : !inRadius ? `부재 (기준 ${radius}m 밖)`
+              : '부재 (6차선 미만)'}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

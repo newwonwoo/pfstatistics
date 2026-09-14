@@ -164,10 +164,20 @@ export async function exportWorkbook({ data, facilities, manual, sheets, buildSh
         const n = near(label);
         return facilities ? (n ? `${n.distance}m` : '-') : '';
       };
-      /** 6차선 왕복도로처럼 위성사진으로 육안 판정하는 항목 */
+      /**
+       * 6차선 왕복도로 — 도로 후보에서 고르고 로드뷰로 센 차선 수로 판정한다.
+       * 화면 상태를 그대로 쓰므로 따로 저장하지 않아도 반영된다.
+       */
       const manualRow = (f) => {
         const m = manual?.[f.label];
-        return [f.label, f.criteria, m?.name ?? '(위성사진 판정 전)', m?.note ?? '', '', ''];
+        if (!m?.name) return [f.label, f.criteria, '(도로 미선택)', '', '', ''];
+        const ok = (m.lanes ?? 0) >= 6 && m.distance != null && m.distance <= f.radius;
+        return [
+          f.label, f.criteria,
+          `${m.name}${m.lanes ? ` (왕복 ${m.lanes}차선)` : ''}`,
+          `${m.distance != null ? `${m.distance}m` : '-'}${m.lanes ? ` · ${ok ? '존재' : '부재'}` : ''}`,
+          '', '',
+        ];
       };
 
       let rows = [];
@@ -253,7 +263,7 @@ export async function exportWorkbook({ data, facilities, manual, sheets, buildSh
         row = putImage(png, el, row + 1);
         const hit = facilities?.facilities?.[f.label];
         ws.getCell(row, 2).value = f.manual
-          ? `* 위성사진 육안 판정 · 반경 ${f.radius}m`
+          ? `* 도로명 = 카카오 좌표→주소 역산 · 차선 수 = 로드뷰 육안 판정 · 기준 반경 ${f.radius}m`
           : `* 출처 : 카카오맵 · 반경 ${hit?.radius ?? ''}m · 반경 내 ${hit?.count ?? 0}건`
             + (hit?.basis === 'polygon' ? ' · 사업지 경계 기준' : ' · 대표지번 기준');
         ws.getCell(row, 2).font = { size: 9 };

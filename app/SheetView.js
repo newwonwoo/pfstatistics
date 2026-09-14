@@ -4,7 +4,7 @@ import { buildSheet } from './sheets';
 import { T, mono } from './theme';
 import EvidenceCard from './EvidenceCard';
 import RadiusMap from './RadiusMap';
-import RoadPicker from './RoadPicker';
+import RoadPicker, { judgeRoad } from './RoadPicker';
 
 const S = {
   page: { background: T.panel, border: `1px solid ${T.lineStrong}`, borderTop: 0, borderRadius: `0 0 ${T.radius}px ${T.radius}px`, padding: '22px 24px 26px' },
@@ -154,25 +154,26 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                   <tr key={f.label}>
                     <td style={S.tdL}>{f.label}</td>
                     <td style={S.td}>{f.criteria}</td>
+                    {/*
+                      수기 입력칸을 없앴다. 아래 도로 후보에서 고르고 차선만 세면
+                      이름·거리·판정이 여기 그대로 채워진다.
+                    */}
                     {f.manual
-                      ? <>
-                          <td style={S.td}>
-                            <input
-                              value={manual?.[f.label]?.name ?? ''}
-                              onChange={e => onManual?.(f.label, { ...manual?.[f.label], name: e.target.value })}
-                              placeholder="지도에서 확인한 도로명"
-                              style={S.input}
-                            />
-                          </td>
-                          <td style={S.td}>
-                            <input
-                              value={manual?.[f.label]?.note ?? ''}
-                              onChange={e => onManual?.(f.label, { ...manual?.[f.label], note: e.target.value })}
-                              placeholder="존재 / 부재"
-                              style={{ ...S.input, width: 110 }}
-                            />
-                          </td>
-                        </>
+                      ? (() => {
+                          const m = manual?.[f.label];
+                          const ok = judgeRoad(m, f.radius);
+                          return (<>
+                            <td style={m?.name ? S.tdVal : S.td}>
+                              {m?.name
+                                ? `${m.name}${m.lanes ? ` (왕복 ${m.lanes}차선)` : ''}`
+                                : <span style={S.pend}>아래에서 도로 선택</span>}
+                            </td>
+                            <td style={S.td}>
+                              {m?.distance != null ? `${m.distance}m` : '-'}
+                              {m?.name && m?.lanes ? ` · ${ok ? '존재' : '부재'}` : ''}
+                            </td>
+                          </>);
+                        })()
                       : <><NameCell label={f.label} /><DistCell label={f.label} /></>}
                     <td style={S.blank} /><td style={S.blank} />
                   </tr>
@@ -270,11 +271,14 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                     <RoadPicker
                       coord={facilities.coord}
                       radius={h.radius}
-                      value={manual?.[f.label]?.name ?? ''}
-                      onPick={(r) => {
-                        // 고른 도로명을 평가표에 채우고, 그 지점을 로드뷰로 보낸다
-                        onManual?.(f.label, { ...manual?.[f.label], name: r.name });
-                        setRoadSpot({ ...roadSpot, [f.label]: { lat: Number(r.y), lng: Number(r.x), name: r.name, distance: r.distance } });
+                      value={manual?.[f.label]}
+                      onChange={(v) => {
+                        onManual?.(f.label, v);
+                        // 고른 도로 지점으로 지도를 옮겨 로드뷰를 띄운다
+                        if (v?.name && v?.y != null) {
+                          setRoadSpot(prev => ({ ...prev,
+                            [f.label]: { lat: Number(v.y), lng: Number(v.x), name: v.name, distance: v.distance } }));
+                        }
                       }}
                     />
                   ) : items.length ? (
@@ -326,7 +330,7 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                             name: it.name, distance: it.distance,
                           }))}
                       caption={f.manual
-                        ? `위성 또는 로드뷰로 차선 수를 센 뒤 위 평가표에 입력하세요 (반경 ${rLabel(h.radius)} · 왕복 6차선 = 편도 3차로)`
+                        ? `로드뷰에서 차선을 세어 위 [왕복 __ 차선] 에 넣으면 판정됩니다 (기준 ${rLabel(h.radius)} 이내 · 왕복 6차선 = 편도 3차로)`
                         : (n ? `최근접 ${n.name} · ${n.distance}m · 반경 ${rLabel(h.radius)} 내 ${h.count}건`
                              : `반경 ${rLabel(h.radius)} 이내 부재`)}
                     />
