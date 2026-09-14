@@ -124,7 +124,7 @@ export default function Home() {
     if (!region) return setMsg({ kind: 'warn', text: '시도·시군구를 먼저 고르세요.' });
     setBusy('geo'); setMsg(null);
     try {
-      const res = await fetch(`/api/facilities?addr=${encodeURIComponent(addr)}&only=none`);
+      const res = await fetch(`/api/facilities?addr=${encodeURIComponent(addr)}&region=${encodeURIComponent(region)}&only=none`);
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? '주소 조회 실패');
       setGeo(j.geo); setPick(0);
@@ -147,6 +147,7 @@ export default function Home() {
     setBusy(sheet ?? 'poi'); setMsg(null);
     try {
       const qs = new URLSearchParams({ addr });
+      qs.set('region', region);
       if (sheet) qs.set('sheet', sheet);
       if (polygon?.length >= 3) qs.set('polygon', JSON.stringify(polygon));
       // 화면에서 확인·선택한 좌표를 그대로 쓴다 (서버가 다시 첫 결과를 고르지 않게)
@@ -309,11 +310,15 @@ export default function Home() {
         </div>
 
         {geo && (
-          <div style={S.match(geo.via === 'address' && geo.candidates.length === 1)}>
+          <div style={S.match(geo.via === 'address' && !geo.outOfRegion && geo.candidates.length === 1)}>
             <span>
               사업지 매칭 : <b>{addrLabel(geo.candidates[pick])}</b>
               {geo.normalized && <span style={{ color: T.muted }}> · 조회어 「{geo.query}」로 정리</span>}
               {geo.via === 'keyword' && <span> · 주소검색 0건 → 장소검색 결과라 확인이 필요합니다</span>}
+              {geo.outOfRegion && <span> · <b>고른 시군구 밖 결과입니다</b> — 지번을 확인하세요</span>}
+              {geo.dropped > 0 && !geo.outOfRegion && (
+                <span style={{ color: T.muted }}> · 시군구 밖 후보 {geo.dropped}건 제외</span>
+              )}
             </span>
             {geo.candidates.length > 1 && (
               <select

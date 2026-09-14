@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { geocodeCandidates, collectFacilities, FACILITY_SPEC, ROAD_NOTE } from '../../../src/collectors/kakao.js';
 import { collectMedical } from '../../../src/collectors/hira.js';
+import REGIONS from '../../../data/regions.json' with { type: 'json' };
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -30,7 +31,13 @@ export async function GET(req) {
     if (picked) {
       coord = { x: px, y: py, roadAddress: sp.get('road') || null, jibunAddress: sp.get('jibun') || null };
     } else {
-      geo = await geocodeCandidates(addr);
+      // 화면에서 고른 행정구역을 함께 넘겨 시군구 밖 후보를 걸러낸다
+      const r = sp.get('region');
+      const entry = r ? REGIONS.sido.find(x => r.startsWith(x.name)) : null;
+      const region = entry
+        ? { sidoShort: entry.short, sgg: r.slice(entry.name.length).trim() }
+        : null;
+      geo = await geocodeCandidates(addr, region);
       coord = geo.candidates[0];
     }
     const point = { lat: Number(coord.y), lng: Number(coord.x) };
@@ -70,6 +77,8 @@ export async function GET(req) {
     });
   } catch (e) {
     const noKey = e.code === 'NO_KEY';
-    return NextResponse.json({ error: e.message, needKey: noKey ? e.keyName : null }, { status: noKey ? 428 : 500 });
+    // 입력이 안 맞는 것은 서버 오류가 아니다 — 사용자가 고칠 수 있게 구분해서 알린다
+    const status = noKey ? 428 : e.code === 'NO_MATCH' ? 404 : 500;
+    return NextResponse.json({ error: e.message, needKey: noKey ? e.keyName : null }, { status });
   }
 }

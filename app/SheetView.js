@@ -208,7 +208,8 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual 
                     radius={h.radius}
                     polygon={facilities.basis === 'polygon' ? facilities.polygon : null}
                     defaultMapType={f.manual ? 'HYBRID' : 'ROADMAP'}
-                    roadview={Boolean(f.manual)}
+                    roadview
+                    roadviewOpen={Boolean(f.manual)}
                     markers={n ? [{ lat: Number(n.y), lng: Number(n.x), name: n.name, distance: n.distance }] : []}
                     caption={f.manual
                       ? `위성 또는 로드뷰로 차선 수를 센 뒤 위 표에 입력하세요 (반경 ${h.radius}m · 왕복 6차선 = 편도 3차로)`

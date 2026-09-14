@@ -73,6 +73,18 @@ const asCandidate = (d) => ({
 });
 
 /**
+ * 후보가 고른 시군구 안에 있는지.
+ *
+ * 카카오는 시도를 축약해 준다("경기 광주시"). 강원·전북·제주는 정식명으로 오기도 한다
+ * ("강원특별자치도 고성군"). 그래서 시도는 축약형 접두로, 시군구는 정확히 본다.
+ */
+function inRegion(c, region) {
+  if (!region?.sgg) return true;                  // 세종처럼 하위 시군구가 없으면 거르지 않는다
+  const re = new RegExp(`^${region.sidoShort}\\S*\\s+${region.sgg}(\\s|$)`);
+  return re.test(c.jibunAddress ?? '') || re.test(c.roadAddress ?? '');
+}
+
+/**
  * 주소 → 좌표 후보들.
  *
  * 지금까지 첫 결과를 말없이 채택했다. 동명이동·오타·표기차가 있으면
@@ -81,9 +93,13 @@ const asCandidate = (d) => ({
  * 그래서 후보를 다 돌려주고 화면에서 확인·선택하게 한다.
  *
  * 주소검색(지번/도로명)이 0건이면 장소검색으로 한 번 더 시도한다
- * (아파트명·현장명만 주는 경우가 있다).
+ * (아파트명·현장명만 주는 경우가 있다). 다만 장소검색은 시군구를 넘어간다 —
+ * 실측: "경기도 광주시 롯데마트" 7건 중 6건이 성남시 분당구였다.
+ * 그래서 고른 시군구 밖 후보는 걸러낸다.
+ *
+ * @param {{sidoShort:string, sgg:string}} [region] 화면에서 고른 행정구역
  */
-export async function geocodeCandidates(address) {
+export async function geocodeCandidates(address, region = null) {
   const query = normalizeAddress(address);
   if (!query) throw new Error('사업지 주소가 비어 있습니다');
 
@@ -98,13 +114,27 @@ export async function geocodeCandidates(address) {
     docs = kw.documents ?? [];
     via = 'keyword';
   }
-  if (!docs.length) throw new Error(`주소를 찾지 못했습니다: ${query}`);
+  if (!docs.length) {
+    const e = new Error(
+      `주소를 찾지 못했습니다: ${query}`
+      + (region?.sgg ? ` — 지번·상세가 ${region.sidoShort} ${region.sgg} 에 없는 주소일 수 있습니다.` : '')
+      + ' 지번을 비우면 시군구 중심으로 잡습니다.');
+    e.code = 'NO_MATCH';
+    throw e;
+  }
+
+  const all = docs.map(asCandidate);
+  const inside = region ? all.filter(c => inRegion(c, region)) : all;
+  // 전부 시군구 밖이면 지우지 않고 넘기되, 화면에서 경고할 수 있게 표시한다
+  const outOfRegion = Boolean(region?.sgg) && inside.length === 0;
 
   return {
     query,
     normalized: query !== String(address ?? '').trim(),
     via,                                   // address = 주소검색 / keyword = 장소검색(정확도 낮음)
-    candidates: docs.map(asCandidate),
+    outOfRegion,
+    dropped: all.length - (outOfRegion ? all.length : inside.length),
+    candidates: outOfRegion ? all : inside,
   };
 }
 

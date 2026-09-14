@@ -44,7 +44,7 @@ const MAP_TYPES = [
 const MAX_LEVEL = { 300: 3, 500: 4, 1000: 5, 1500: 6 };
 const levelCapFor = (r) => MAX_LEVEL[r] ?? (r <= 300 ? 3 : r <= 500 ? 4 : r <= 1000 ? 5 : 6);
 
-export default function RadiusMap({ title, center, radius, markers = [], polygon = null, caption, defaultMapType = 'ROADMAP', roadview = false }) {
+export default function RadiusMap({ title, center, radius, markers = [], polygon = null, caption, defaultMapType = 'ROADMAP', roadview = false, roadviewOpen = false }) {
   const el = useRef(null);
   const mapRef = useRef(null);
   const [err, setErr] = useState(null);
@@ -191,6 +191,11 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
       moveRoadview(kakao, new kakao.maps.LatLng(center.lat, center.lng));
     }, 0);
   }
+
+  // 차선 판정용 지도는 로드뷰가 본체다 — 눌러야 보이면 못 쓴다
+  useEffect(() => {
+    if (ready && roadview && roadviewOpen && !rvOn) toggleRoadview();
+  }, [ready, roadview, roadviewOpen]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   async function savePng() {
     setSaving('busy');
