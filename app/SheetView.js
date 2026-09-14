@@ -200,6 +200,7 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual 
                     title={f.label}
                     center={{ lat: Number(facilities.coord.y), lng: Number(facilities.coord.x) }}
                     radius={h.radius}
+                    polygon={facilities.basis === 'polygon' ? facilities.polygon : null}
                     defaultMapType={f.manual ? 'HYBRID' : 'ROADMAP'}
                     markers={n ? [{ lat: Number(n.y), lng: Number(n.x), name: n.name, distance: n.distance }] : []}
                     caption={f.manual

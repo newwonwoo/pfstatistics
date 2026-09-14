@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { T } from './theme';
 import { loadKakaoSdk } from './kakaoSdk';
-import { captureMap } from './captureMap';
+import { captureMap, composeMap } from './captureMap';
 
 /**
  * 반경원 지도 — 캡쳐 01·02·05 의 그 그림.
@@ -43,7 +43,7 @@ const MAP_TYPES = [
 const MAX_LEVEL = { 300: 3, 500: 4, 1000: 5, 1500: 6 };
 const levelCapFor = (r) => MAX_LEVEL[r] ?? (r <= 300 ? 3 : r <= 500 ? 4 : r <= 1000 ? 5 : 6);
 
-export default function RadiusMap({ title, center, radius, markers = [], caption, defaultMapType = 'ROADMAP' }) {
+export default function RadiusMap({ title, center, radius, markers = [], polygon = null, caption, defaultMapType = 'ROADMAP' }) {
   const el = useRef(null);
   const mapRef = useRef(null);
   const [err, setErr] = useState(null);
@@ -51,10 +51,14 @@ export default function RadiusMap({ title, center, radius, markers = [], caption
   const [mapType, setMapType] = useState(defaultMapType);
   const [saving, setSaving] = useState(null);   // null | 'busy' | 실패사유
 
+  const mkey = JSON.stringify(markers);
+  const pkey = JSON.stringify(polygon);
+
   useEffect(() => {
     let dead = false;
     loadKakaoSdk().then((kakao) => {
       if (dead || !el.current) return;
+      el.current.innerHTML = '';        // 다시 만들 때 이전 지도가 남지 않게
       const c = new kakao.maps.LatLng(center.lat, center.lng);
       const map = new kakao.maps.Map(el.current, {
         center: c, level: 6,
@@ -69,6 +73,14 @@ export default function RadiusMap({ title, center, radius, markers = [], caption
       });
       circle.setMap(map);
       new kakao.maps.Marker({ position: c, map });   // 사업지
+      if (polygon?.length >= 3) {
+        // 판정 기준이 경계면 화면에도 경계를 보여야 한다 (캡쳐와 화면을 같게)
+        new kakao.maps.Polygon({
+          map, path: polygon.map(p => new kakao.maps.LatLng(p.lat, p.lng)),
+          strokeWeight: 2, strokeColor: '#1b4fd8', strokeOpacity: 0.95,
+          fillColor: '#1b4fd8', fillOpacity: 0.22,
+        });
+      }
       for (const m of markers) {
         const p = new kakao.maps.LatLng(m.lat, m.lng);
         new kakao.maps.Marker({ position: p, map });
@@ -100,7 +112,26 @@ export default function RadiusMap({ title, center, radius, markers = [], caption
       setReady(true);
     }).catch(e => !dead && setErr(e.message));
     return () => { dead = true; };
-  }, [center.lat, center.lng, radius, markers]);
+  // markers/polygon 은 렌더마다 새 배열이라 그대로 넣으면 지도가 매번 다시 만들어진다.
+  // 내용이 같으면 다시 만들지 않도록 문자열로 비교한다.
+  }, [center.lat, center.lng, radius, mkey, pkey, defaultMapType]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  /*
+   * 캡쳐 등록.
+   * 지도 DOM 을 html-to-image 로 뜨는 건 타일 CORS 때문에 계속 실패했다.
+   * 좌표는 이미 알고 있으니 타일만 같은 출처로 받아 캔버스에 직접 합성한다.
+   */
+  useEffect(() => {
+    const node = el.current;
+    if (!node || !ready || !mapRef.current) return;
+    node.__capture = (opts) => composeMap(node, {
+      map: mapRef.current.map,
+      kakao: mapRef.current.kakao,
+      center, radius, markers, polygon, title,
+      ...opts,
+    });
+    return () => { if (node) delete node.__capture; };
+  }, [ready, center.lat, center.lng, radius, mkey, pkey, title, mapType]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   async function savePng() {
     setSaving('busy');

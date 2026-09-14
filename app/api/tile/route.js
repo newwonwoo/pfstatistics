@@ -12,7 +12,8 @@ export const runtime = 'nodejs';
  * 캡쳐 직전에만 타일 src 를 이 경로로 바꿔 같은 출처로 만든 뒤 캡쳐하고 되돌린다.
  * 타일 자체는 카카오에서 그대로 가져오며, 변형하지 않는다.
  */
-const ALLOWED = /^https:\/\/map\d*\.daumcdn\.net\//;
+// 타일 외에 마커·라벨 이미지도 같은 계열 호스트에서 온다. 카카오 호스트로만 한정한다.
+const ALLOWED = /^https:\/\/[a-z0-9.-]+\.(?:daumcdn\.net|daum\.net|kakaocdn\.net)\//i;
 
 export async function GET(req) {
   const target = req.nextUrl.searchParams.get('u');
