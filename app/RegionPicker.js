@@ -1,5 +1,5 @@
 'use client';
-import { Fragment, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { T } from './theme';
 import REGIONS from '../data/regions.json';
 
@@ -39,10 +39,6 @@ const S = {
   }),
   dim: { color: T.muted },
   none: { padding: '9px 10px', fontSize: 12, color: T.muted },
-  group: {
-    padding: '6px 10px', fontSize: 10.5, fontWeight: 700, letterSpacing: '.03em',
-    color: T.warn, background: T.warnSoft, borderTop: `1px solid ${T.line}`,
-  },
 };
 
 export default function RegionPicker({ sido, sgg, onChange, disabled = false }) {
@@ -54,23 +50,18 @@ export default function RegionPicker({ sido, sgg, onChange, disabled = false }) 
   const picked = Boolean(sido);
 
   /*
-   * 고른 시도 안의 결과를 먼저 주되, **다른 시도의 동명 지역도 항상 같이 보여준다.**
-   * 고성군은 강원·경남 둘 다 있고 광주는 광역시와 경기도 시가 있다.
+   * 시도를 고르면 **그 시도의 시군구만** 보여준다.
+   * 시도가 정해졌는데 다른 시도가 섞이면 고를 때마다 다시 확인해야 한다.
+   *
+   * 시도를 안 고르면 전국에서 찾고, 동명 지역(고성군·광주)은 시도를 붙여 전부 보여준다 —
    * 하나만 보여주고 고르게 하면 틀린 줄도 모르고 넘어간다.
    */
   const hits = useMemo(() => {
     const words = q.trim().split(/\s+/).filter(Boolean);
     const pool = sido ? ALL.filter(r => r.sido === sido) : ALL;
-    if (!words.length) return pool.slice(0, 60).map(r => ({ ...r, other: false }));
-    const match = (r) => words.every(w => r.hay.includes(w));
-    const local = pool.filter(match).map(r => ({ ...r, other: false }));
-    const other = sido
-      ? ALL.filter(r => r.sido !== sido && match(r)).map(r => ({ ...r, other: true }))
-      : [];
-    return [...local, ...other].slice(0, 60);
+    if (!words.length) return pool.slice(0, 60);
+    return pool.filter(r => words.every(w => r.hay.includes(w))).slice(0, 60);
   }, [q, sido]);
-
-  const firstOther = hits.findIndex(r => r.other);
 
   const choose = (r) => {
     onChange({ sido: r.sido, sgg: r.sgg ?? '' });
@@ -122,21 +113,23 @@ export default function RegionPicker({ sido, sgg, onChange, disabled = false }) 
         />
         {open && !disabled && (
           <div style={S.list} onMouseDown={() => clearTimeout(blurTimer.current)}>
-            {hits.length === 0 && <div style={S.none}>해당하는 시군구가 없습니다</div>}
+            {hits.length === 0 && (
+              <div style={S.none}>
+                {sido
+                  ? `「${sido}」에는 없습니다 — 시도를 [전국에서 찾기] 로 바꾸면 다른 시도에서 찾습니다`
+                  : '해당하는 시군구가 없습니다'}
+              </div>
+            )}
             {hits.map((r, i) => (
-              <Fragment key={r.label}>
-                {i === firstOther && i > 0 && (
-                  <div style={S.group}>다른 시도에도 같은 이름이 있습니다</div>
-                )}
-                <div
-                  style={S.item(i === cur)}
-                  onMouseEnter={() => setCur(i)}
-                  onClick={() => choose(r)}
-                >
-                  {/* 동명 시군구(고성군 등)가 있어 시도를 항상 같이 보여준다 */}
-                  <span style={S.dim}>{r.sido}</span> {r.sgg ?? ''}
-                </div>
-              </Fragment>
+              <div
+                key={r.label}
+                style={S.item(i === cur)}
+                onMouseEnter={() => setCur(i)}
+                onClick={() => choose(r)}
+              >
+                {/* 전국 검색일 때 동명 시군구를 구분하려면 시도가 같이 보여야 한다 */}
+                {!sido && <span style={S.dim}>{r.sido} </span>}{r.sgg ?? r.sido}
+              </div>
             ))}
           </div>
         )}
