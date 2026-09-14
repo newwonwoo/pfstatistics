@@ -85,7 +85,7 @@ export default function Home() {
    */
   const [form, setForm] = useState({
     sido: '경기도', sgg: '광주시', detail: '탄벌동 203-4',
-    ym: '202607', company: '제일건설(주)', year: '2025',
+    ym: '202607', company: '제일건설(주)',
   });
   const [data, setData] = useState(null);           // 통계 수집 결과
   const [facilities, setFacilities] = useState(null); // 반경시설 수집 결과
@@ -94,6 +94,7 @@ export default function Home() {
   const [fixed, setFixed] = useState(false);        // 주소 확정 — 확정 후엔 입력을 잠근다
   const [latest, setLatest] = useState(null);       // 원천이 가진 최신 조회월
   const [ymManual, setYmManual] = useState(false);  // 조회월 직접 지정
+  const [rankMeta, setRankMeta] = useState(null);   // 시공능력평가 공시 연도·출처
   const [geo, setGeo] = useState(null);             // 주소 매칭 결과 (후보 포함)
   const [pick, setPick] = useState(0);              // 고른 후보
   const [manual, setManual] = useState({});         // 위성 육안 판정(6차선 등)
@@ -140,7 +141,7 @@ export default function Home() {
     }
     setBusy('collect'); setMsg(null);
     try {
-      const qs = new URLSearchParams({ sgg: region, ym: String(form.ym).trim(), company: form.company, year: form.year });
+      const qs = new URLSearchParams({ sgg: region, ym: String(form.ym).trim(), company: form.company });
       const res = await fetch(`/api/collect?${qs}`);
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? '수집 실패');
@@ -341,14 +342,11 @@ export default function Home() {
           </div>
           <CompanyPicker
             value={form.company}
-            year={form.year}
             disabled={fixed}
             onChange={(v) => setForm(f => ({ ...f, company: v }))}
+            onMeta={setRankMeta}
           />
-          <div style={S.field}>
-            <label style={S.label}>평가연도</label>
-            <input style={S.input} value={form.year} onChange={set('year')} />
-          </div>
+
         </div>
 
         {/*
@@ -360,6 +358,9 @@ export default function Home() {
           조회 주소 : <b style={{ color: T.ink2 }}>{addr || '(시도·시군구를 고르세요)'}</b>
           {latest && !ymManual && (
             <span> · 조회월 {latest.ym} 는 {latest.source} 기준 최신입니다</span>
+          )}
+          {rankMeta && (
+            <span> · 시공능력평가는 {rankMeta.year}년 공시({rankMeta.count.toLocaleString()}건) 기준</span>
           )}
         </div>
 

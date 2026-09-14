@@ -17,6 +17,10 @@ const S = {
   pend: { color: T.muted, fontWeight: 400, fontStyle: 'italic' },
   blank: { border: `1px solid ${T.sheetLine}`, padding: '8px 12px', background: 'repeating-linear-gradient(45deg,#fafbfc,#fafbfc 5px,#f1f3f5 5px,#f1f3f5 10px)' },
   formula: { marginTop: 9, fontSize: 11.5, color: T.muted },
+  block: { marginTop: 18, paddingTop: 14, borderTop: `2px solid ${T.line}` },
+  blockHead: { fontSize: 13, marginBottom: 8, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' },
+  crit: { marginLeft: 'auto', fontSize: 11.5, color: T.ink2, background: '#f1f3f5', padding: '3px 9px', borderRadius: 4 },
+  absent: { padding: '12px 14px', background: T.warnSoft, border: `1px solid #f0dcb4`, borderRadius: 6, fontSize: 12.5, color: T.warn, lineHeight: 1.6 },
   seg: { display: 'inline-flex', border: `1px solid ${T.lineStrong}`, borderRadius: 6, overflow: 'hidden', marginLeft: 'auto' },
   segBtn: (on, off) => ({
     padding: '5px 12px', fontSize: 11.5, fontWeight: 700, border: 0, cursor: off ? 'not-allowed' : 'pointer',
@@ -40,6 +44,9 @@ const S = {
     color: T.ink, fontFamily: 'inherit',
   },
 };
+
+/** 반경 표기를 한 군데서 만든다 — 1500m 과 1.5km 이 섞여 나오면 같은 값인지 의심하게 된다 */
+const rLabel = (r) => (r >= 1000 ? `${r / 1000}km` : `${r}m`);
 
 function Cell({ v, highlight }) {
   if (v == null) return <td style={S.td}><span style={S.pend}>수집 대기</span></td>;
@@ -231,58 +238,79 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
 
         {facilities && (
           <>
-            <div style={S.secTitle}>증빙 — 반경원 지도</div>
-            <div style={{ display: 'grid', gap: 14, marginBottom: 6 }}>
-              {(spec.groups ? spec.groups.flatMap(g => g.facilities) : spec.facilities).map(f => {
-                // 수기판정 항목은 수집결과가 없으므로 스펙의 반경으로 빈 지도를 띄운다
-                const h = hit(f.label) ?? (f.manual ? { radius: f.radius, count: null, nearest: null } : null);
-                if (!h) return null;
-                const n = h.nearest;
-                return (
-                  <RadiusMap
-                    key={f.label}
-                    title={f.label}
-                    center={{ lat: Number(facilities.coord.y), lng: Number(facilities.coord.x) }}
-                    radius={h.radius}
-                    polygon={facilities.basis === 'polygon' ? facilities.polygon : null}
-                    radiusBasis={radiusBasis}
-                    defaultMapType={f.manual ? 'HYBRID' : 'ROADMAP'}
-                    roadview
-                    roadviewOpen={Boolean(f.manual)}
-                    markers={n ? [{ lat: Number(n.y), lng: Number(n.x), name: n.name, distance: n.distance }] : []}
-                    caption={f.manual
-                      ? `위성 또는 로드뷰로 차선 수를 센 뒤 위 표에 입력하세요 (반경 ${h.radius}m · 왕복 6차선 = 편도 3차로)`
-                      : (n ? `최근접 ${n.name} · ${n.distance}m · 반경 내 ${h.count}건`
-                           : `반경 ${h.radius}m 이내 부재`)}
-                  />
-                );
-              })}
-            </div>
+            {/*
+              시설마다 [목록 표] 바로 아래 [그 시설의 지도] 를 붙인다.
+              표를 다 모아놓고 지도를 다 모아놓으면 어느 표가 어느 지도인지
+              위아래로 스크롤하며 맞춰봐야 한다. 한 시설 = 한 덩어리로 읽힌다.
+            */}
+            <div style={S.secTitle}>증빙 — 시설별 목록 · 반경원 지도</div>
 
-            <div style={S.secTitle}>증빙 — 반경내 시설 목록</div>
-            {(spec.groups ? spec.groups.flatMap(g => g.facilities) : spec.facilities)
-              .filter(f => !f.manual).map(f => {
-              const h = hit(f.label);
-              if (!h?.items?.length) return null;
+            {(spec.groups ? spec.groups.flatMap(g => g.facilities) : spec.facilities).map(f => {
+              // 수기판정 항목은 수집결과가 없으므로 스펙의 반경으로 빈 지도를 띄운다
+              const h = hit(f.label) ?? (f.manual ? { radius: f.radius, count: null, nearest: null, items: [] } : null);
+              if (!h) return null;
+              const n = h.nearest;
+              const items = h.items ?? [];
               return (
-                <div key={f.label} style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>
-                    {f.label} <span style={{ color: T.muted, fontWeight: 400 }}>· 반경 {h.radius}m · {h.count}건</span>
+                <div key={f.label} style={S.block}>
+                  <div style={S.blockHead}>
+                    <span style={{ fontWeight: 700 }}>{f.label}</span>
+                    <span style={{ color: T.muted, fontWeight: 400 }}>
+                      {' · '}반경 {rLabel(h.radius)}
+                      {f.manual ? ' · 지도 육안 판정' : ` · ${h.count ?? 0}건`}
+                    </span>
+                    {f.criteria && <span style={S.crit}>{f.criteria}</span>}
                   </div>
-                  <div style={S.scroll}>
-                    <table style={S.table}>
-                      <thead><tr>{['시설명', '거리', '분류', '주소'].map(c => <th key={c} style={S.th}>{c}</th>)}</tr></thead>
-                      <tbody>
-                        {h.items.slice(0, 5).map((it, i) => (
-                          <tr key={i}>
-                            <td style={{ ...S.td, textAlign: 'left' }}>{it.name}</td>
-                            <td style={i === 0 ? S.tdVal : S.td}>{it.distance}m</td>
-                            <td style={{ ...S.td, textAlign: 'left', color: T.muted, fontSize: 11.5 }}>{it.category ?? '-'}</td>
-                            <td style={{ ...S.td, textAlign: 'left', color: T.ink2 }}>{it.address}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+
+                  {/* ── 표 ── */}
+                  {f.manual ? (
+                    <div style={S.absent}>
+                      POI 로 검색되지 않는 항목입니다. 아래 지도(위성·로드뷰)로 차선을 세어
+                      위 평가표에 입력하세요.
+                    </div>
+                  ) : items.length ? (
+                    <div style={S.scroll}>
+                      <table style={S.table}>
+                        <thead><tr>{['#', '시설명', '거리', '분류', '주소'].map(c => <th key={c} style={S.th}>{c}</th>)}</tr></thead>
+                        <tbody>
+                          {items.map((it, i) => (
+                            <tr key={i}>
+                              <td style={{ ...S.td, width: 34, color: T.muted }}>{i + 1}</td>
+                              <td style={i === 0 ? { ...S.tdVal, textAlign: 'left' } : { ...S.td, textAlign: 'left' }}>{it.name}</td>
+                              <td style={i === 0 ? S.tdVal : S.td}>{it.distance}m</td>
+                              <td style={{ ...S.td, textAlign: 'left', color: T.muted, fontSize: 11.5 }}>{it.category ?? '-'}</td>
+                              <td style={{ ...S.td, textAlign: 'left', color: T.ink2 }}>{it.address}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div style={S.absent}>
+                      반경 {rLabel(h.radius)} 이내 부재
+                      {/* 왜 부재인지 근거를 남긴다 — 의원급은 의료시설이 아니다 */}
+                      {h.excludedClinics ? ` — 의원급 ${h.excludedClinics}곳은 심사 대상(병원급 이상)이 아니라 제외했습니다` : ''}
+                      {h.error ? ` · ${h.error}` : ''}
+                    </div>
+                  )}
+
+                  {/* ── 지도 ── */}
+                  <div style={{ marginTop: 10 }}>
+                    <RadiusMap
+                      title={f.label}
+                      center={{ lat: Number(facilities.coord.y), lng: Number(facilities.coord.x) }}
+                      radius={h.radius}
+                      polygon={facilities.basis === 'polygon' ? facilities.polygon : null}
+                      radiusBasis={radiusBasis}
+                      defaultMapType={f.manual ? 'HYBRID' : 'ROADMAP'}
+                      roadview
+                      roadviewOpen={Boolean(f.manual)}
+                      markers={n ? [{ lat: Number(n.y), lng: Number(n.x), name: n.name, distance: n.distance }] : []}
+                      caption={f.manual
+                        ? `위성 또는 로드뷰로 차선 수를 센 뒤 위 평가표에 입력하세요 (반경 ${rLabel(h.radius)} · 왕복 6차선 = 편도 3차로)`
+                        : (n ? `최근접 ${n.name} · ${n.distance}m · 반경 ${rLabel(h.radius)} 내 ${h.count}건`
+                             : `반경 ${rLabel(h.radius)} 이내 부재`)}
+                    />
                   </div>
                 </div>
               );

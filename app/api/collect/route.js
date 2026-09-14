@@ -22,7 +22,8 @@ export async function GET(req) {
   const region = q.get('sgg');
   const period = q.get('ym');
   const company = q.get('company');
-  const rankYear = q.get('year') ?? '2025';
+  // 평가연도는 화면에서 받지 않는다 — 적재된 공시 중 최신을 쓴다
+  const rankYear = q.get('year') || null;
 
   if (!region || !period) {
     // 무엇이 비었는지 말해줘야 화면에서 바로 고친다

@@ -4,13 +4,15 @@ import XLSX from 'xlsx';
 import { envelope } from '../lib/http.js';
 
 /**
- * 시공능력평가순위 — 엑셀 업로드 방식.
+ * 시공능력평가순위.
  *
  * 대한건설협회 공시는 연 1회(8월)뿐이라 실시간 API 가 의미없다.
- * 사내 GRU1119-06071 화면(캡쳐 06)에서 받은 목록을 엑셀로 올려 적재한다.
+ * **공시 원본 엑셀을 그대로 적재한다** — tools/build-constructor-rank.mjs 가
+ * 협회 공시자료 게시판에서 받아 토건(토목건축공사업) 시트를 뽑는다.
+ * (2024~2026, 연도별 2,800여 건)
  *
- * 업로드 파일은 헤더명만 맞으면 열 순서가 달라도 읽는다.
- * 캡쳐 06 기준 컬럼: 업종코드 · 업종 · 지역 · 등록번호 · 상호 · 법인등록번호 · 사업자등록번호 · 고객번호 · 순위
+ * ingest() 는 손으로 받은 엑셀을 올릴 때를 위해 남겨둔다.
+ * 헤더명만 맞으면 열 순서가 달라도 읽는다.
  */
 const STORE = 'data/constructor-rank.json';
 
@@ -80,15 +82,16 @@ export function ingest(filePath, year) {
 }
 
 export function lookup(company, year) {
-  if (!fs.existsSync(STORE)) throw new Error(`적재된 순위표 없음 — npm run ingest-rank -- <파일> <연도>`);
+  if (!fs.existsSync(STORE)) throw new Error('적재된 순위표 없음 — tools/build-constructor-rank.mjs');
   const store = JSON.parse(fs.readFileSync(STORE, 'utf8'));
-  const y = year ?? Object.keys(store).sort().at(-1);
+  // 연도를 안 주면 적재된 공시 중 최신을 쓴다 (화면에서 평가연도를 받지 않는다)
+  const y = (year && store[year]) ? year : Object.keys(store).sort().at(-1);
   const set = store[y];
   if (!set) throw new Error(`${y}년 순위표 미적재. 적재된 연도: ${Object.keys(store).join(', ')}`);
   const target = normalize(company);
   // 정확일치 → 부분일치 순으로 찾는다 ((주) 표기 차이 흡수)
   return {
-    year: y, sourceFile: set.sourceFile,
+    year: y, sourceFile: set.sourceFile, sourceUrl: set.sourceUrl ?? null,
     hit: set.rows.find(r => normalize(r.상호) === target)
       ?? set.rows.find(r => normalize(r.상호).includes(target) || target.includes(normalize(r.상호)))
       ?? null,
@@ -96,15 +99,15 @@ export function lookup(company, year) {
 }
 
 export async function collect(indicator, { region: company, period }) {
-  const { year, sourceFile, hit } = lookup(company, period);
+  const { year, sourceFile, sourceUrl, hit } = lookup(company, period);
   if (!hit) throw new Error(`"${company}" 순위표(${year})에 없음`);
   return envelope({
     indicatorId: indicator.id, name: indicator.name,
     region: hit.상호, period: year, value: hit.순위, unit: indicator.unit,
     source: {
-      org: '대한건설협회 / 사내 GRU1119-06071',
-      citation: `시공능력평가순위(${year})`,
-      url: null,
+      org: '대한건설협회 협회공시',
+      citation: `${year}년도 종합건설사업자 시공능력평가액 공시 · 토목건축공사업 ${hit.순위}위`,
+      url: sourceUrl ?? null,
       queryParams: { 업종: hit.업종, 지역: hit.지역, 등록번호: hit.등록번호 },
       dataUpdatedAt: year,
       viewUrl: indicator.source.viewUrl ?? null,
