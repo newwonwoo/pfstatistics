@@ -34,10 +34,16 @@ function buildTable(row) {
   const raw = row.raw ?? {};
   if (Array.isArray(raw.series)) {
     const s = raw.series.filter(x => x.momRate != null).slice(-8);
+    /*
+     * 마지막 달이 아니라 **이 지표가 채택한 달**을 강조해야 한다.
+     * 조회월이 202607 인데 202608 을 강조하면, 평가표의 0.167 과 증빙의 0.341 이
+     * 달라 보여 어느 쪽이 맞는지 알 수 없다(실제로 그렇게 나왔다).
+     */
+    const i = s.findIndex(x => String(x.period) === String(row.period));
     return {
       columns: ['지역명', ...s.map(x => x.period)],
       rows: [[raw.지역명 ?? row.region, ...s.map(x => x.momRate.toFixed(3))]],
-      markRow: 0, markCol: s.length,
+      markRow: 0, markCol: (i >= 0 ? i : s.length - 1) + 1,
     };
   }
   if (raw.고시일) {
