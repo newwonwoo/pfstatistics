@@ -75,10 +75,18 @@ export async function collect(indicator, { region, period }) {
   const series = toMoMRates(hit.dataList, dates);
   const row = series.find(s => s.period === period) ?? series.at(-1);
 
+  /*
+   * 증감률은 전월 지수가 있어야 나온다. 신설 시군구(예: 2026 인천 검단구)는
+   * 첫 달이라 전월이 없다 — 값을 빈칸으로 흘리면 "왜 비었나"를 알 수 없다.
+   */
+  if (row.momRate == null) {
+    throw new Error(`${region} ${row.period}: 전월 지수가 없어 증감률을 산출할 수 없습니다 (신설 지역이거나 시계열 시작점)`);
+  }
+
   return envelope({
     indicatorId: indicator.id, name: indicator.name,
     region, period: row.period,
-    value: row.momRate == null ? null : Number(row.momRate.toFixed(3)),
+    value: Number(row.momRate.toFixed(3)),
     unit: indicator.unit,
     source: {
       org: indicator.source.org, citation: indicator.source.citation, url,
