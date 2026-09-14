@@ -27,3 +27,21 @@ export function matchRegion(address) {
   const sgg = entry.sgg.find(g => rest.startsWith(g)) ?? '';
   return { sido: entry.name, sgg };
 }
+
+/**
+ * KOSIS 시도 단위 통계표가 쓰는 시도 키.
+ *
+ * 2026 전남·광주 통합으로 행정구역은 "전남광주통합특별시" 하나가 됐지만
+ * KOSIS 두 통계표(주택보급률·소비심리지수)는 **아직 광주/전남을 따로 집계한다**
+ * (objL1=ALL 실측 확인). 그래서 시군구로 어느 쪽인지 가른다.
+ * 옛 광주광역시 5개 구는 확정된 사실이라 추측이 아니다.
+ */
+const OLD_GWANGJU = ['동구', '서구', '남구', '북구', '광산구'];
+
+export function statSido(region) {
+  const short = sidoShort(region);
+  if (short !== '전남광주') return short;
+  const m = matchRegion(region);
+  if (!m?.sgg) return null;          // 시도만으로는 못 가린다 — 값을 내지 말고 실패시킨다
+  return OLD_GWANGJU.includes(m.sgg) ? '광주' : '전남';
+}

@@ -28,14 +28,14 @@ const S = {
     padding: '10px 14px', borderTop: `1px solid ${T.line}`, background: '#fafbfc',
   },
   foot2: { fontSize: 11.5, color: T.muted, flex: 1, minWidth: 220 },
-  cta: (off) => ({
-    padding: '8px 16px', borderRadius: 6, border: 0, fontSize: 12.5, fontWeight: 700,
-    background: off ? '#9aa1ab' : T.accent, color: '#fff', cursor: off ? 'not-allowed' : 'pointer',
-    whiteSpace: 'nowrap',
+  ready: (ok) => ({
+    padding: '7px 13px', borderRadius: 6, fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap',
+    background: ok ? T.okSoft : '#f1f3f5', color: ok ? T.ok : T.muted,
+    border: `1px solid ${ok ? '#c7e9d5' : T.line}`,
   }),
 };
 
-export default function PolygonDrawer({ center, polygon, onChange, onConfirm, confirmed, busy, autoDraw = false, pendingSheet }) {
+export default function PolygonDrawer({ center, polygon, onChange, busy, autoDraw = false, pendingSheet }) {
   const el = useRef(null);
   const state = useRef({ map: null, poly: null, dots: [] });
   const [pts, setPts] = useState(polygon ?? []);
@@ -136,11 +136,15 @@ export default function PolygonDrawer({ center, polygon, onChange, onConfirm, co
               ? '지도를 클릭해 사업지 모서리를 찍으세요 (3점 이상)'
               : '[그리기 시작] 을 누르고 지도에서 사업지 모서리를 찍으세요'}
         </span>
-        <button style={S.cta(busy || pts.length < 3)} onClick={onConfirm} disabled={busy || pts.length < 3}>
+        {/*
+          수집 버튼은 위 단계 줄에 이미 있다. 여기 또 두면 같은 동작이 두 군데가 된다.
+          여기서는 지금 상태와 다음에 누를 곳만 알려준다.
+        */}
+        <span style={S.ready(pts.length >= 3)}>
           {busy ? '수집 중…'
             : pts.length < 3 ? `경계를 ${3 - pts.length}점 더 찍으세요`
-            : `이 경계로 ${pendingSheet ?? '반경시설'} 수집`}
-        </button>
+            : `경계 지정 완료 — 위 [${pendingSheet ?? '시트'} 수집] 을 누르세요`}
+        </span>
       </div>
     </div>
   );

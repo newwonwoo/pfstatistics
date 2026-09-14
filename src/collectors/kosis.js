@@ -1,7 +1,7 @@
 import { requireKey } from '../lib/env.js';
 import { getJson, envelope } from '../lib/http.js';
 import { toSggCode, known } from '../lib/region.js';
-import { sidoShort } from '../lib/sido.js';
+import { statSido } from '../lib/sido.js';
 
 const BASE = 'https://kosis.kr/openapi';
 
@@ -100,8 +100,12 @@ export async function collect(indicator, { region, period }) {
    * 그것도 "검증" 배지를 달고. 지역이 안 맞으면 값을 내지 말고 실패시킨다.
    */
   if (!objL1 && s.objL1BySido) {
-    const short = sidoShort(region);
-    if (!short) throw new Error(`시도를 알 수 없습니다: ${region}`);
+    const short = statSido(region);
+    if (!short) {
+      throw new Error(
+        `${region} 의 시도코드를 정할 수 없습니다`
+        + ' — 전남광주통합특별시는 이 통계표가 아직 광주/전남을 따로 집계합니다. 시군구를 고르세요.');
+    }
     objL1 = s.objL1BySido[short];
     if (!objL1) throw new Error(`이 통계표에 ${short} 지역코드가 없습니다`);
   }

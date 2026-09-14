@@ -134,6 +134,12 @@ export default function Home() {
    */
   const [radiusBasis, setRadiusBasis] = useState('polygon');
   useEffect(() => { if (basisMode) setRadiusBasis(basisMode); }, [basisMode]);
+
+  // 경계를 다 그리면 다음에 누를 곳을 알려준다 (수집 버튼은 위 단계 줄에 하나만 둔다)
+  useEffect(() => {
+    if (pending === undefined || basisMode !== 'polygon' || !(polygon?.length >= 3)) return;
+    setMsg({ kind: 'ok', text: `경계 ${polygon.length}점 지정 완료 — [${pending ?? '시트'} 수집] 을 누르세요.` });
+  }, [polygon?.length, basisMode, pending]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [tab, setTab] = useState('지역미분양');
   const [busy, setBusy] = useState(null);
   const [msg, setMsg] = useState(null);
@@ -584,7 +590,6 @@ export default function Home() {
           onChange={setPolygon}
           autoDraw={drawNow}
           pendingSheet={pending}
-          onConfirm={() => runPoi(pending ?? null, polygon?.length >= 3 ? polygon : null)}
           confirmed={!!facilities}
           busy={busy === 'poi' || POI_SHEETS.includes(busy)}
         />

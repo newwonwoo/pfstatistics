@@ -17,6 +17,14 @@ const ADAPTERS = { molit, kb, kofia, kosis, constructor };
  * 지표를 병렬로 수집하고, 실패한 항목도 이유를 그대로 돌려준다.
  * 실무자가 "왜 이 칸이 비었는지" 화면에서 바로 알 수 있어야 한다.
  */
+/** 골든 표본과 같은 대상인지 — 시공사 지표는 상호로, 나머지는 지역으로 본다 */
+function sameGolden(goldenRegion, region, company) {
+  if (!goldenRegion) return false;
+  const n = (x) => String(x ?? '').replace(/\(주\)|㈜|주식회사|\s+/g, '');
+  return n(goldenRegion) === n(region) || n(goldenRegion) === n(company)
+    || n(region).startsWith(n(goldenRegion));   // "경기도" 골든 ↔ "경기도 광주시" 조회
+}
+
 export async function GET(req) {
   const q = req.nextUrl.searchParams;
   const region = q.get('sgg');
@@ -61,7 +69,12 @@ export async function GET(req) {
       const g = ind.golden;
       return {
         ...env, sheet: ind.sheet, ok: true,
-        golden: g && String(g.period) === String(env.period)
+        /*
+         * 골든은 표본(경기도 광주시)에서만 의미가 있다.
+         * 지역을 안 보고 대조하면 인천을 조회해도 "정답 99.4 → 불일치" 배지가 붙어
+         * 멀쩡한 값이 틀린 것처럼 보인다.
+         */
+        golden: g && String(g.period) === String(env.period) && sameGolden(g.region, region, company)
           ? { expected: g.value, match: Math.abs(Number(g.value) - Number(env.value)) < 0.005 }
           : null,
       };
