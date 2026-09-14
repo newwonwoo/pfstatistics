@@ -27,8 +27,8 @@ const S = {
 export default function Steps({ current, done }) {
   const steps = [
     { id: 'input', label: '사업지 입력', hint: '주소 · 시군구 · 조회월 · 시공사' },
-    { id: 'boundary', label: '사업지 경계', hint: '지도에 그리면 경계 기준으로 판정 (생략 가능)' },
-    { id: 'collect', label: '수집', hint: '통계 7종 + 반경시설 9종' },
+    { id: 'boundary', label: '사업지 경계', hint: '지도에 그리면 경계 최단거리로 판정 (생략 가능)' },
+    { id: 'collect', label: '통계 · 반경시설 수집', hint: '통계 7종 → 반경시설 9종 순으로' },
     { id: 'result', label: '확인 · 내보내기', hint: '시트별 검토 후 엑셀 다운로드' },
   ];
   return (

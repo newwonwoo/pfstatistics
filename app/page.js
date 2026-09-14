@@ -36,6 +36,7 @@ const S = {
     color: done ? T.ok : primary ? '#fff' : T.ink,
   }),
   check: { fontSize: 11, fontWeight: 800 },
+  arrow: { color: T.muted, fontSize: 16, fontWeight: 700, userSelect: 'none' },
   spacer: { marginLeft: 'auto' },
   msg: (kind) => ({
     marginTop: 11, padding: '9px 12px', borderRadius: 6, fontSize: 12.5,
@@ -158,7 +159,10 @@ export default function Home() {
     ...(polygon?.length >= 3 ? ['boundary'] : []),
     ...(data && facilities ? ['collect'] : []),
   ];
-  const current = !data ? 'collect' : !facilities ? (coord ? 'boundary' : 'collect') : 'result';
+  const current = !coord && !data ? 'boundary'
+    : !data ? 'collect'
+    : !facilities ? 'collect'
+    : 'result';
 
   const status = useMemo(() => {
     const m = {};
@@ -202,17 +206,14 @@ export default function Home() {
           </div>
         </div>
 
+        {/*
+          순서: 사업지 경계 → 통계 수집 → 반경시설 수집.
+          주소를 넣고 사업지를 확정한 뒤 수집하는 흐름이 실무 순서와 맞다.
+          (통계는 시군구 단위라 경계와 무관하지만, 사업지를 먼저 확정하는 편이 읽기 쉽다)
+        */}
         <div style={S.actions}>
           <button
-            style={S.btn({ busy: busy === 'collect', primary: !data, done: !!data })}
-            onClick={collect} disabled={!!busy}
-          >
-            {data && <span style={S.check}>✓</span>}
-            {busy === 'collect' ? '수집 중…' : data ? `통계 수집 (${data.okCount}/${data.total})` : '통계 수집'}
-          </button>
-
-          <button
-            style={S.btn({ busy: busy === 'geo', done: polygon?.length >= 3 })}
+            style={S.btn({ busy: busy === 'geo', primary: !coord && !data, done: polygon?.length >= 3 })}
             onClick={locate} disabled={!!busy}
           >
             {polygon?.length >= 3 && <span style={S.check}>✓</span>}
@@ -220,8 +221,20 @@ export default function Home() {
               : polygon?.length >= 3 ? `사업지 경계 (${polygon.length}점)` : '사업지 경계 지정'}
           </button>
 
+          <span style={S.arrow}>›</span>
+
           <button
-            style={S.btn({ busy: busy === 'poi', done: !!facilities })}
+            style={S.btn({ busy: busy === 'collect', primary: !data && (coord || polygon), done: !!data })}
+            onClick={collect} disabled={!!busy}
+          >
+            {data && <span style={S.check}>✓</span>}
+            {busy === 'collect' ? '수집 중…' : data ? `통계 수집 (${data.okCount}/${data.total})` : '통계 수집'}
+          </button>
+
+          <span style={S.arrow}>›</span>
+
+          <button
+            style={S.btn({ busy: busy === 'poi', primary: !!data && !facilities, done: !!facilities })}
             onClick={collectPoi} disabled={!!busy}
           >
             {facilities && <span style={S.check}>✓</span>}

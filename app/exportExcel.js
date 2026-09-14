@@ -135,12 +135,15 @@ export async function exportWorkbook({ data, facilities, manual, sheets, buildSh
   });
 
   // ── 시트별 ──────────────────────────────────────────────
+  const failed = [];
   for (const s of sheets) {
-    const spec = buildSheet(s.id, {
-      byId, region: data.region, period: data.period, company: data.company,
-    });
+    let spec;
+    try {
+      spec = buildSheet(s.id, { byId, region: data.region, period: data.period, company: data.company });
+    } catch (e) { failed.push(`${s.id}: ${e.message}`); continue; }
     if (!spec) continue;
     onProgress?.(s.id);
+    try {
 
     const ws = wb.addWorksheet(s.id, { views: [{ showGridLines: false }] });
     let cursor;
@@ -285,6 +288,22 @@ export async function exportWorkbook({ data, facilities, manual, sheets, buildSh
         row += 2;
       }
     }
+    } catch (e) {
+      // 시트 하나가 터져도 나머지는 나가야 한다. 실패 사실은 파일 안에 남긴다.
+      failed.push(`${s.id}: ${e.message}`);
+      ws.getCell(2, 2).value = `이 시트를 만들지 못했습니다 — ${e.message}`;
+      ws.getCell(2, 2).font = { size: 10, color: { argb: 'FFB3261E' } };
+    }
+  }
+
+  if (failed.length) {
+    const r0 = sum.rowCount + 3;
+    sum.getCell(r0, 2).value = '생성 실패 시트';
+    sum.getCell(r0, 2).font = { bold: true, size: 10, color: { argb: 'FFB3261E' } };
+    failed.forEach((f, i) => {
+      sum.getCell(r0 + 1 + i, 2).value = f;
+      sum.getCell(r0 + 1 + i, 2).font = { size: 9, color: { argb: 'FF666666' } };
+    });
   }
 
   const buf = await wb.xlsx.writeBuffer();
