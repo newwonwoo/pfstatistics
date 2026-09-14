@@ -45,12 +45,13 @@ export function load(id) {
 }
 
 /** 같은 사업장·조회월이면 덮어쓰고 맨 앞으로 올린다 */
-export function save({ data, facilities, addr }) {
+export function save({ data, facilities, addr, manual }) {
   if (!data) return false;
   const id = recordId(data);
   const rec = {
     id, region: data.region, period: data.period, company: data.company,
     addr: addr ?? null, data, facilities: facilities ?? null,
+    manual: manual ?? null,   // 수기판정(6차선 왕복도로 등)도 같이 보관해야 재현된다
     savedAt: new Date().toISOString(),
   };
   const rest = read().filter(r => r.id !== id);

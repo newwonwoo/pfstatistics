@@ -100,7 +100,15 @@ export function buildSheet(sheetId, { byId, region, period, company }) {
         columns: ['평가항목', '평가기준', '시설명', '거리', '점수', '평가점수 및 평가'],
         facilities: [
           { label: '지하철역', criteria: '사업지 반경 1km 이내' },
-          { label: '6차선 왕복도로', criteria: '사업지 반경 300m 이내', manual: true },
+          /*
+           * 6차선 왕복도로는 자동판정을 포기했다.
+           * 차선수를 주는 전국 단일 데이터가 없다 — 지자체별로 흩어져 있고,
+           * VDS·LCS 같은 교통량 데이터는 관측 지점만 덮거나 고속도로 전용이다.
+           * 폭원으로 역산하는 방법이 있으나 추정이라 심사가 틀어질 위험이 있다.
+           * 실무도 지도를 보고 판정하므로(사용자 확인), 반경원 지도를 띄워
+           * 눈으로 확인한 도로명을 그 자리에서 입력받는다.
+           */
+          { label: '6차선 왕복도로', criteria: '사업지 반경 300m 이내', manual: true, radius: 300 },
         ],
         summaryRow: '평균점수',
       };

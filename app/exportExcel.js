@@ -99,7 +99,7 @@ function writeTable(ws, startRow, { title, subtitle, columns, rows, markCell }) 
  * @param {Array} p.sheets      SHEETS
  * @param {Function} p.getCardEl  (indicatorId) => HTMLElement  증빙 카드 DOM
  */
-export async function exportWorkbook({ data, facilities, sheets, buildSheet, getCardEl, onProgress }) {
+export async function exportWorkbook({ data, facilities, manual, sheets, buildSheet, getCardEl, onProgress }) {
   const ExcelJS = (await import('exceljs')).default ?? (await import('exceljs'));
   const wb = new ExcelJS.Workbook();
   wb.creator = 'PF 보증심사 통계 자동수집';
@@ -140,7 +140,11 @@ export async function exportWorkbook({ data, facilities, sheets, buildSheet, get
       const rows = spec.facilities.map(f => {
         const hit = facilities?.facilities?.[f.label];
         const near = hit?.nearest;
-        if (f.manual) return [f.label, f.criteria, '(수기입력)', '', '', ''];
+        if (f.manual) {
+          // 위성사진을 보고 실무자가 판정한 값. 비어 있으면 판정 전임을 남긴다.
+          const m = manual?.[f.label];
+          return [f.label, f.criteria, m?.name ?? '(위성사진 판정 전)', m?.note ?? '', '', ''];
+        }
         return [
           f.label, f.criteria,
           near ? near.name : (facilities ? '부재' : ''),

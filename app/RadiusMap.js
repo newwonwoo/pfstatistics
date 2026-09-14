@@ -15,27 +15,46 @@ const S = {
   box: { border: `1px solid ${T.line}`, borderRadius: 8, overflow: 'hidden', background: '#fff' },
   bar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 14px', borderBottom: `1px solid ${T.line}`, background: '#fafbfc' },
   name: { fontSize: 12.5, fontWeight: 700, color: T.ink2 },
-  btn: { padding: '5px 12px', fontSize: 11.5, fontWeight: 700, border: `1px solid ${T.line}`, background: '#fff', borderRadius: 5, cursor: 'pointer', color: T.ink2 },
+  btn: { padding: '5px 11px', fontSize: 11.5, fontWeight: 700, border: `1px solid ${T.line}`, background: '#fff', borderRadius: 5, cursor: 'pointer', color: T.ink2 },
+  btnOn: { borderColor: T.accent, background: T.accentSoft, color: T.accent },
   map: { width: '100%', height: 420 },
   fallback: { padding: '36px 20px', textAlign: 'center', color: T.warn, fontSize: 12.5, background: T.warnSoft, lineHeight: 1.7 },
   cap: { padding: '9px 14px', fontSize: 11.5, color: T.muted, borderTop: `1px solid ${T.line}` },
 };
 
-export default function RadiusMap({ title, center, radius, markers = [], caption }) {
+/**
+ * 지도 타입.
+ * 6차선 왕복도로는 실무가 **위성사진으로 차선을 세어** 판정한다(사용자 확인).
+ * 그래서 판정용 지도는 위성+라벨(하이브리드)을 기본으로 준다 — 도로명도 같이 보여야 하기 때문.
+ */
+const MAP_TYPES = [
+  { id: 'ROADMAP', label: '일반' },
+  { id: 'HYBRID',  label: '위성+라벨' },
+  { id: 'SKYVIEW', label: '위성' },
+];
+
+export default function RadiusMap({ title, center, radius, markers = [], caption, defaultMapType = 'ROADMAP' }) {
   const el = useRef(null);
+  const mapRef = useRef(null);
   const [err, setErr] = useState(null);
   const [ready, setReady] = useState(false);
+  const [mapType, setMapType] = useState(defaultMapType);
 
   useEffect(() => {
     let dead = false;
     loadKakaoSdk().then((kakao) => {
       if (dead || !el.current) return;
       const c = new kakao.maps.LatLng(center.lat, center.lng);
-      const map = new kakao.maps.Map(el.current, { center: c, level: 6 });
+      const map = new kakao.maps.Map(el.current, {
+        center: c, level: 6,
+        mapTypeId: kakao.maps.MapTypeId[defaultMapType] ?? kakao.maps.MapTypeId.ROADMAP,
+      });
+      mapRef.current = { map, kakao };
       const circle = new kakao.maps.Circle({
         center: c, radius,
-        strokeWeight: 2, strokeColor: '#7B1FA2', strokeOpacity: 0.9, strokeStyle: 'solid',
-        fillColor: '#CE93D8', fillOpacity: 0.35,
+        // 위성 타일 위에서도 보이도록 선을 굵고 밝게, 채움은 옅게
+        strokeWeight: 3, strokeColor: '#FFEB3B', strokeOpacity: 1, strokeStyle: 'solid',
+        fillColor: '#CE93D8', fillOpacity: 0.18,
       });
       circle.setMap(map);
       new kakao.maps.Marker({ position: c, map });   // 사업지
@@ -65,7 +84,22 @@ export default function RadiusMap({ title, center, radius, markers = [], caption
     <div style={S.box}>
       <div style={S.bar}>
         <span style={S.name}>{title} · 반경 {radius >= 1000 ? `${radius / 1000}km` : `${radius}m`}</span>
-        {ready && <button style={S.btn} onClick={savePng}>PNG 저장</button>}
+        <span style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+          {MAP_TYPES.map(t => (
+            <button
+              key={t.id}
+              style={{ ...S.btn, ...(mapType === t.id ? S.btnOn : null) }}
+              onClick={() => {
+                const m = mapRef.current;
+                if (!m) return;
+                // SKYVIEW/HYBRID 는 위성 타일. HYBRID 는 도로명 라벨이 함께 나온다.
+                m.map.setMapTypeId(m.kakao.maps.MapTypeId[t.id]);
+                setMapType(t.id);
+              }}
+            >{t.label}</button>
+          ))}
+          {ready && <button style={S.btn} onClick={savePng}>PNG 저장</button>}
+        </span>
       </div>
       {err
         ? <div style={S.fallback}>

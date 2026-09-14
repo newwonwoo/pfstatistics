@@ -21,6 +21,11 @@ const S = {
   secTitle: { fontSize: 12, fontWeight: 700, color: T.muted, letterSpacing: '.04em', margin: '26px 0 12px', paddingTop: 18, borderTop: `1px solid ${T.line}` },
   empty: { padding: '44px 20px', textAlign: 'center', color: T.muted, fontSize: 13 },
   scroll: { overflowX: 'auto' },
+  input: {
+    width: '100%', minWidth: 150, padding: '4px 7px', fontSize: 12.5,
+    border: `1px solid ${T.line}`, borderRadius: 4, background: '#fffdf0',
+    color: T.ink, fontFamily: 'inherit',
+  },
 };
 
 function Cell({ v, highlight }) {
@@ -29,7 +34,7 @@ function Cell({ v, highlight }) {
   return <td style={highlight ? S.tdVal : S.td}>{v}</td>;
 }
 
-export default function SheetView({ sheetId, data, facilities }) {
+export default function SheetView({ sheetId, data, facilities, manual, onManual }) {
   const byId = Object.fromEntries((data?.results ?? []).map(r => [r.indicatorId, r]));
   const spec = buildSheet(sheetId, {
     byId, region: data?.region ?? '', period: data?.period ?? '', company: data?.company,
@@ -80,7 +85,24 @@ export default function SheetView({ sheetId, data, facilities }) {
                     <td style={S.tdL}>{f.label}</td>
                     <td style={S.td}>{f.criteria}</td>
                     {f.manual
-                      ? <td style={S.td} colSpan={2}><span style={S.pend}>도로 데이터 연계 전 — 수기입력</span></td>
+                      ? <>
+                          <td style={S.td}>
+                            <input
+                              value={manual?.[f.label]?.name ?? ''}
+                              onChange={e => onManual?.(f.label, { ...manual?.[f.label], name: e.target.value })}
+                              placeholder="지도에서 확인한 도로명"
+                              style={S.input}
+                            />
+                          </td>
+                          <td style={S.td}>
+                            <input
+                              value={manual?.[f.label]?.note ?? ''}
+                              onChange={e => onManual?.(f.label, { ...manual?.[f.label], note: e.target.value })}
+                              placeholder="존재 / 부재"
+                              style={{ ...S.input, width: 110 }}
+                            />
+                          </td>
+                        </>
                       : <><NameCell label={f.label} /><DistCell label={f.label} /></>}
                     <td style={S.blank} /><td style={S.blank} />
                   </tr>
@@ -151,9 +173,9 @@ export default function SheetView({ sheetId, data, facilities }) {
           <>
             <div style={S.secTitle}>증빙 — 반경원 지도</div>
             <div style={{ display: 'grid', gap: 14, marginBottom: 6 }}>
-              {(spec.groups ? spec.groups.flatMap(g => g.facilities) : spec.facilities)
-                .filter(f => !f.manual).map(f => {
-                const h = hit(f.label);
+              {(spec.groups ? spec.groups.flatMap(g => g.facilities) : spec.facilities).map(f => {
+                // 수기판정 항목은 수집결과가 없으므로 스펙의 반경으로 빈 지도를 띄운다
+                const h = hit(f.label) ?? (f.manual ? { radius: f.radius, count: null, nearest: null } : null);
                 if (!h) return null;
                 const n = h.nearest;
                 return (
@@ -162,9 +184,12 @@ export default function SheetView({ sheetId, data, facilities }) {
                     title={f.label}
                     center={{ lat: Number(facilities.coord.y), lng: Number(facilities.coord.x) }}
                     radius={h.radius}
+                    defaultMapType={f.manual ? 'HYBRID' : 'ROADMAP'}
                     markers={n ? [{ lat: Number(n.y), lng: Number(n.x), name: n.name }] : []}
-                    caption={n ? `최근접 ${n.name} · ${n.distance}m · 반경 내 ${h.count}건`
-                               : `반경 ${h.radius}m 이내 부재`}
+                    caption={f.manual
+                      ? `지도를 보고 6차선 왕복도로 여부를 판정한 뒤 위 표에 입력하세요 (반경 ${h.radius}m)`
+                      : (n ? `최근접 ${n.name} · ${n.distance}m · 반경 내 ${h.count}건`
+                           : `반경 ${h.radius}m 이내 부재`)}
                   />
                 );
               })}

@@ -50,12 +50,14 @@ export default function Home() {
   const [msg, setMsg] = useState(null);
   const [savedKey, setSavedKey] = useState(0);
   const [polygon, setPolygon] = useState(null);   // 사업지 경계 (3점 이상일 때만 값이 들어온다)
+  // 자동판정이 불가능한 항목(6차선 왕복도로)의 수기입력. 위성사진을 보고 실무자가 채운다.
+  const [manual, setManual] = useState({});
   const [coord, setCoord] = useState(null);       // 대표지번 좌표 — 지도 초기 중심
 
   /** 조회 결과를 이 브라우저에 보관 — 같은 사업장은 덮어쓴다 */
   function saveRecord() {
     if (!data) return;
-    const ok = store.save({ data, facilities, addr: form.addr });
+    const ok = store.save({ data, facilities, addr: form.addr, manual });
     setSavedKey(k => k + 1);
     setMsg(ok
       ? { kind: 'warn', text: `저장했습니다 — ${data.region} · ${data.period}` }
@@ -69,6 +71,7 @@ export default function Home() {
     setFacilities(rec.facilities ?? null);
     setPolygon(rec.facilities?.polygon ?? null);
     setCoord(rec.facilities?.coord ?? null);
+    setManual(rec.manual ?? {});
     setForm(f => ({
       ...f,
       addr: rec.addr ?? f.addr,
@@ -86,7 +89,7 @@ export default function Home() {
     try {
       const { exportWorkbook } = await import('./exportExcel');
       await exportWorkbook({
-        data, facilities, sheets: SHEETS, buildSheet,
+        data, facilities, manual, sheets: SHEETS, buildSheet,
         getCardEl: (id) => document.querySelector(`[data-evidence="${id}"]`),
         onProgress: (sheet) => setMsg({ kind: 'warn', text: `엑셀 생성 중 — ${sheet}` }),
       });
@@ -233,7 +236,11 @@ export default function Home() {
               pointerEvents: 'none',
             }}
           >
-            <SheetView sheetId={s.id} data={data} facilities={facilities} />
+            <SheetView
+              sheetId={s.id} data={data} facilities={facilities}
+              manual={manual}
+              onManual={(label, v) => setManual(m => ({ ...m, [label]: v }))}
+            />
           </div>
         ))}
       </div>
