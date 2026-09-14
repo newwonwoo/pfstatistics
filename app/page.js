@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import './globals.css';
 import { SHEETS, buildSheet } from './sheets';
 import { T } from './theme';
@@ -11,6 +11,7 @@ import SavedList from './SavedList';
 import SourceHealth from './SourceHealth';
 import PolygonDrawer from './PolygonDrawer';
 import RegionPicker from './RegionPicker';
+import CompanyPicker from './CompanyPicker';
 import * as store from './storage';
 
 const S = {
@@ -37,6 +38,7 @@ const S = {
     color: done ? T.ok : primary ? '#fff' : T.ink,
   }),
   check: { fontSize: 11, fontWeight: 800 },
+  dim: { color: T.muted },
   /** 주소 매칭 확인 — 어디를 사업지로 잡았는지 말없이 넘어가면 안 된다 */
   match: (sure) => ({
     marginTop: 11, padding: '9px 12px', borderRadius: 6, fontSize: 12.5, lineHeight: 1.6,
@@ -90,6 +92,8 @@ export default function Home() {
   const [polygon, setPolygon] = useState(null);     // 사업지 경계 (3점 이상)
   const [coord, setCoord] = useState(null);         // 대표지번 좌표 — 지도 중심
   const [fixed, setFixed] = useState(false);        // 주소 확정 — 확정 후엔 입력을 잠근다
+  const [latest, setLatest] = useState(null);       // 원천이 가진 최신 조회월
+  const [ymManual, setYmManual] = useState(false);  // 조회월 직접 지정
   const [geo, setGeo] = useState(null);             // 주소 매칭 결과 (후보 포함)
   const [pick, setPick] = useState(0);              // 고른 후보
   const [manual, setManual] = useState({});         // 위성 육안 판정(6차선 등)
@@ -99,6 +103,21 @@ export default function Home() {
   const [savedKey, setSavedKey] = useState(0);
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  /*
+   * 조회월은 사람이 칠 값이 아니다. 원천마다 공표 시차가 달라서
+   * 이번 달을 넣으면 "자료 없음"이 난다(실측: 2026-09 기준 미분양 최신은 202607).
+   * 최신 시점을 물어서 채운다.
+   */
+  useEffect(() => {
+    let dead = false;
+    fetch('/api/latest').then(r => r.json()).then(j => {
+      if (dead || !j.ym) return;
+      setLatest(j);
+      setForm(f => (ymManual ? f : { ...f, ym: j.ym }));
+    }).catch(() => {});
+    return () => { dead = true; };
+  }, []);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // 통계는 시군구 단위, 지도는 지번까지 — 둘 다 고른 행정구역에서 만들어진다
   const region = [form.sido, form.sgg].filter(Boolean).join(' ');
@@ -287,13 +306,33 @@ export default function Home() {
               disabled={fixed} />
           </div>
           <div style={S.field}>
-            <label style={S.label}>조회월</label>
-            <input style={S.input} value={form.ym} onChange={set('ym')} placeholder="202607" />
+            <label style={S.label}>
+              조회월
+              {!ymManual && latest && <span style={{ color: T.accent }}> · 자동 (원천 최신)</span>}
+              {!ymManual && !latest && <span style={S.dim}> · 확인 중…</span>}
+            </label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input
+                style={{ ...S.input, ...(ymManual ? null : { background: T.accentSoft, borderColor: T.accent }) }}
+                value={form.ym} onChange={set('ym')} placeholder="202607"
+                readOnly={!ymManual} disabled={fixed}
+              />
+              <button
+                style={{ ...S.btn({}), padding: '8px 10px', fontSize: 11.5, whiteSpace: 'nowrap' }}
+                onClick={() => {
+                  if (ymManual && latest) setForm(f => ({ ...f, ym: latest.ym }));
+                  setYmManual(m => !m);
+                }}
+                disabled={fixed}
+              >{ymManual ? '자동' : '직접'}</button>
+            </div>
           </div>
-          <div style={S.field}>
-            <label style={S.label}>시공사</label>
-            <input style={S.input} value={form.company} onChange={set('company')} />
-          </div>
+          <CompanyPicker
+            value={form.company}
+            year={form.year}
+            disabled={fixed}
+            onChange={(v) => setForm(f => ({ ...f, company: v }))}
+          />
           <div style={S.field}>
             <label style={S.label}>평가연도</label>
             <input style={S.input} value={form.year} onChange={set('year')} />
@@ -307,6 +346,9 @@ export default function Home() {
         */}
         <div style={{ marginTop: 9, fontSize: 12, color: T.muted }}>
           조회 주소 : <b style={{ color: T.ink2 }}>{addr || '(시도·시군구를 고르세요)'}</b>
+          {latest && !ymManual && (
+            <span> · 조회월 {latest.ym} 는 {latest.source} 기준 최신입니다</span>
+          )}
         </div>
 
         {geo && (

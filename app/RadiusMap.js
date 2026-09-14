@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { T } from './theme';
 import { loadKakaoSdk } from './kakaoSdk';
-import { captureMap, composeMap } from './captureMap';
+import { captureMap, composeMap, captureRoadview } from './captureMap';
 import { bufferPolygon } from '../src/lib/geo';
 
 /**
@@ -197,6 +197,18 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
     if (ready && roadview && roadviewOpen && !rvOn) toggleRoadview();
   }, [ready, roadview, roadviewOpen]);   // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** 로드뷰 PNG — 되는지 안 되는지 앱이 직접 시도해서 알린다 */
+  function saveRoadviewPng() {
+    try {
+      const url = captureRoadview(rvEl.current);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${title}_로드뷰.png`; a.click();
+      setRvMsg('로드뷰를 PNG 로 저장했습니다.');
+    } catch (e) {
+      setRvMsg(String(e.message));
+    }
+  }
+
   async function savePng() {
     setSaving('busy');
     try {
@@ -260,10 +272,10 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
       {rvOn && (
         <>
           <div ref={rvEl} style={{ width: '100%', height: 340, borderTop: `1px solid ${T.line}` }} />
-          <div style={{ ...S.cap, background: T.accentSoft, color: T.accent }}>
-            {rvMsg ?? '로드뷰'}
-            {/* 로드뷰는 캔버스 렌더라 PNG 로 못 뜬다. 증빙은 위성 지도로 남긴다. */}
-            <span style={{ color: T.muted }}> · 증빙 캡쳐는 위성 지도로 남깁니다(로드뷰는 저장 불가)</span>
+          <div style={{ ...S.cap, background: T.accentSoft, color: T.accent, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ flex: 1, minWidth: 240 }}>{rvMsg ?? '로드뷰'}</span>
+            {/* 타일 CORS 여부는 밖에서 확인이 안 된다 — 눌러서 실제 결과를 본다 */}
+            <button style={S.btn} onClick={saveRoadviewPng}>로드뷰 PNG 저장</button>
           </div>
         </>
       )}

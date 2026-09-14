@@ -251,6 +251,39 @@ export async function composeMap(el, spec = {}) {
   return url;
 }
 
+/**
+ * 로드뷰 캡쳐.
+ *
+ * 로드뷰는 2D 캔버스에 그린다(SDK 코드 확인 — WebGL 아님).
+ * 캔버스는 캡쳐를 막지 않는다. 막는 건 **cross-origin 이미지로 오염된 캔버스의 읽기**다.
+ * 카카오가 파노라마 타일을 CORS 로 받으면 오염되지 않아 그대로 읽힌다.
+ *
+ * 타일에 CORS 헤더가 붙는지는 밖에서 확인할 방법이 없었다(타일 주소에 panoId 가 필요한데
+ * 그건 브라우저에서만 나온다). 그래서 추측하지 않고 **그냥 시도해서 실제 사유를 알린다.**
+ */
+export function captureRoadview(root) {
+  if (!root) throw new Error('로드뷰 요소를 찾지 못했습니다');
+  const canvases = [...root.querySelectorAll('canvas')]
+    .filter(c => c.width > 50 && c.height > 50)
+    .sort((a, b) => b.width * b.height - a.width * a.height);
+  if (!canvases.length) throw new Error('로드뷰 캔버스를 찾지 못했습니다 (아직 로딩 중일 수 있습니다)');
+
+  const c = canvases[0];
+  let url;
+  try {
+    url = c.toDataURL('image/png');
+  } catch (e) {
+    throw new Error(
+      `로드뷰 캔버스를 읽을 수 없습니다 — ${e.name}. `
+      + '파노라마 타일에 CORS 헤더가 없어 캔버스가 오염된 상태입니다. '
+      + '증빙은 위성 지도로 남기세요.');
+  }
+  if (!url || url.length < 5000) {
+    throw new Error(`로드뷰 캡쳐가 비었습니다 (${c.width}x${c.height}, ${url?.length ?? 0}B)`);
+  }
+  return url;
+}
+
 /* ── 예전 방식(물러설 자리) ──────────────────────────────── */
 
 /** 타일 src 를 같은 출처로 바꿔치기하고 끝나면 되돌린다 */
