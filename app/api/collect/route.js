@@ -54,10 +54,13 @@ export async function GET(req) {
       return { indicatorId: ind.id, name: ind.name, sheet: ind.sheet, ok: false,
                reason: `${ind.source.adapter} 어댑터 미지원` };
     }
-    // 지역 인자는 지표의 집계 단위에 맞춰 넘긴다
-    const target = ind.regionLevel === 'sido' ? region.split(' ')[0]
-                 : ind.regionLevel === 'company' ? company
-                 : region;
+    /*
+     * 지역 인자.
+     * 시도 단위라고 시군구를 떼면 안 된다 — 통합 시도(전남광주통합특별시)는
+     * 시군구를 봐야 KOSIS 의 광주/전남 중 어느 쪽인지 가린다.
+     * 수집기가 알아서 필요한 만큼만 쓴다.
+     */
+    const target = ind.regionLevel === 'company' ? company : region;
     // 시공능력평가는 연 단위라 조회월(YYYYMM)이 아니라 평가연도를 넘겨야 한다
     const p = ind.regionLevel === 'company' ? rankYear : period;
 

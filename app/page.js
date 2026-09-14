@@ -415,9 +415,9 @@ export default function Home() {
               >{ymManual ? '자동' : '직접'}</button>
             </div>
           </div>
+          {/* 시공사는 사업지 주소와 무관하다 — 확정 후에도 바꿀 수 있어야 한다 */}
           <CompanyPicker
             value={form.company}
-            disabled={fixed}
             onChange={(v) => setForm(f => ({ ...f, company: v }))}
             onMeta={setRankMeta}
           />

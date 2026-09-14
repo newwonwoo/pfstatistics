@@ -1,4 +1,5 @@
 import { getJson, envelope } from '../lib/http.js';
+import { sidoShort } from '../lib/sido.js';
 
 /**
  * KB부동산 월간KB주택가격동향 — API 키 불필요.
@@ -17,15 +18,24 @@ const HEADERS = { Accept: 'application/json', Referer: 'https://data.kbland.kr/'
 export const MAE_JEONSE = { 매매: '01', 전세: '02' };
 export const CYCLE = { 월간: '01', 주간: '02' };
 
-/** 시도명 → KB 지역코드 (시군구 목록을 받기 위한 상위코드) */
+/**
+ * 시도 축약형 → KB 지역코드 (시군구 목록을 받기 위한 상위코드).
+ *
+ * KB 목록을 직접 받아 맞춘 값이다(2026-09-14 실측).
+ * 행정구역이 바뀌면 코드도 바뀐다 — 강원·전북은 특별자치도 전환 때 42/45 → 51/52 로 바뀌었고
+ * 전남·광주 통합으로 **광주 = 12** 가 새로 생겼다(옛 29·46 은 "(구)…" 로 남아 있다).
+ * 낡은 코드를 그대로 두면 그 지역만 조용히 0건이 난다.
+ */
 export const SIDO_CODE = {
   서울: '1100000000', 부산: '2600000000', 대구: '2700000000', 인천: '2800000000',
-  광주: '2900000000', 대전: '3000000000', 울산: '3100000000', 세종: '3600000000',
-  경기: '4100000000', 강원: '4200000000', 충북: '4300000000', 충남: '4400000000',
-  전북: '4500000000', 전남: '4600000000', 경북: '4700000000', 경남: '4800000000',
-  제주: '5000000000',
+  대전: '3000000000', 울산: '3100000000', 세종: '3600000000',
+  경기: '4100000000', 충북: '4300000000', 충남: '4400000000',
+  경북: '4700000000', 경남: '4800000000', 제주: '5000000000',
+  강원: '5100000000', 전북: '5200000000',
+  전남광주: '1200000000',
+  // 통합 이전 표기로 들어와도 현재 코드로 보낸다
+  광주: '1200000000', 전남: '1200000000',
 };
-const normSido = s => s.replace(/(특별자치도|특별자치시|특별시|광역시|도)$/, '');
 
 /** 지수 원본 조회. 지역코드 미지정시 전국·시도 레벨, 지정시 그 시도의 시군구 레벨. */
 export async function fetchPriceIndex({ sido = null, maeJeonse = '01', cycle = '01' } = {}) {
@@ -33,7 +43,7 @@ export async function fetchPriceIndex({ sido = null, maeJeonse = '01', cycle = '
     매매전세코드: maeJeonse, 월간주간구분코드: cycle, 메뉴코드: '1',
   });
   if (sido) {
-    const code = SIDO_CODE[normSido(sido)];
+    const code = SIDO_CODE[sidoShort(sido) ?? sido];
     if (!code) throw new Error(`KB 지역코드 미매핑: ${sido}`);
     qs.set('지역코드', code);
   }
@@ -72,7 +82,7 @@ export async function collect(indicator, { region, period }) {
     unit: indicator.unit,
     source: {
       org: indicator.source.org, citation: indicator.source.citation, url,
-      queryParams: { 매매전세코드: '01', 월간주간구분코드: '01', 메뉴코드: '1', 지역코드: SIDO_CODE[normSido(sido)] },
+      queryParams: { 매매전세코드: '01', 월간주간구분코드: '01', 메뉴코드: '1', 지역코드: SIDO_CODE[sidoShort(sido) ?? sido] },
       dataUpdatedAt: updatedAt,
       viewUrl: indicator.source.viewUrl ?? null,
     },
