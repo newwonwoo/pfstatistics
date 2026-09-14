@@ -16,7 +16,7 @@ const MARK_FILL = 'FFFFFDF0';
 const BORDER = { style: 'thin', color: { argb: 'FF9AA5B1' } };
 const box = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
 
-import { scoreSheet, scoreGroup, scoreFacility } from '../src/lib/scoring';
+import { scoreSheet, scoreGroup, scoreFacility, scorePoi } from '../src/lib/scoring';
 
 const fmt = (v) =>
   typeof v === 'number' ? v : (v == null || v === '' ? '' : String(v));
@@ -215,9 +215,14 @@ export async function exportWorkbook({ data, facilities, manual, sheets, buildSh
         }
       } else {
         for (const f of spec.facilities) {
-          rows.push(f.manual
-            ? manualRow(f)
-            : [f.label, f.criteria, cell(f.label), dist(f.label), '', '']);
+          if (f.manual) { rows.push(manualRow(f)); continue; }
+          // 지하철역 — 부재행만 구간표가 확인됐다. 존재하면 점수 대신 사유를 적는다
+          const sc = facilities ? scorePoi(f.label, facilities) : null;
+          rows.push([
+            f.label, f.criteria, cell(f.label), dist(f.label),
+            sc && !sc.pending ? sc.score : '',
+            sc ? (sc.pending ? sc.text : `${sc.score}점 · ${sc.label}${sc.text ? ` (${sc.text})` : ''}`) : '',
+          ]);
         }
         if (spec.summaryRow) rows.push([spec.summaryRow, '', '', '', '', '']);
       }

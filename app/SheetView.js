@@ -1,7 +1,7 @@
 'use client';
 import { Fragment, useState } from 'react';
 import { buildSheet } from './sheets';
-import { scoreSheet, scoreGroup, scoreFacility } from '../src/lib/scoring';
+import { scoreSheet, scoreGroup, scoreFacility, scorePoi } from '../src/lib/scoring';
 import { T, mono } from './theme';
 import EvidenceCard from './EvidenceCard';
 import RadiusMap from './RadiusMap';
@@ -196,16 +196,24 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                       : <><NameCell label={f.label} /><DistCell label={f.label} /></>}
                     {/* 구간표가 들어온 항목만 점수를 낸다 — 없으면 빗금 그대로 */}
                     {(() => {
-                      const sc = f.manual ? scoreFacility(f.label, manual?.[f.label]) : null;
-                      return sc
-                        ? (<>
-                            <td style={S.tdVal}>{sc.score}</td>
-                            <td style={S.td}>
-                              {sc.score}점 · {sc.label}
-                              {sc.reason ? <span style={S.why}> ({sc.reason})</span> : null}
-                            </td>
-                          </>)
-                        : (<><td style={S.blank} /><td style={S.blank} /></>);
+                      const sc = f.manual
+                        ? scoreFacility(f.label, manual?.[f.label])
+                        : scorePoi(f.label, facilities);
+                      if (!sc) return (<><td style={S.blank} /><td style={S.blank} /></>);
+                      // 구간을 못 받은 경우 — 점수를 매기지 않고 사유를 적는다
+                      if (sc.pending) {
+                        return (<>
+                          <td style={S.blank} />
+                          <td style={S.td}><span style={S.pend}>{sc.text}</span></td>
+                        </>);
+                      }
+                      return (<>
+                        <td style={S.tdVal}>{sc.score}</td>
+                        <td style={S.td}>
+                          {sc.score}점 · {sc.label}
+                          {sc.reason ?? sc.text ? <span style={S.why}> ({sc.reason ?? sc.text})</span> : null}
+                        </td>
+                      </>);
                     })()}
                   </tr>
                 ))}

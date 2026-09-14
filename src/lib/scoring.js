@@ -77,6 +77,24 @@ export function scoreGroup(sheetId, groupLabel, facilities) {
 }
 
 /**
+ * POI 단위 점수 (지하철역처럼 그 시설 하나의 존재 여부로 판정하는 것).
+ *
+ * 지하철역은 골든 캡쳐에서 **부재일 때 1점**만 확인됐다.
+ * 역이 있을 때의 구간은 아직 못 받았으므로 `pending` 으로 돌려 빗금을 유지한다 —
+ * 추정해서 채우면 틀린 점수가 조용히 매겨진다.
+ */
+export function scorePoi(label, facilities) {
+  const t = TABLE[label];
+  if (!t || t.scope !== 'poi' || !facilities) return null;
+  for (const rule of t.rules) {
+    if (!matches(rule, facilities, [label])) continue;
+    if (rule.pending) return { pending: true, text: rule.text };
+    return { score: rule.score, label: rule.label, text: rule.text, rule };
+  }
+  return { score: t.base.score, label: t.base.label, text: t.base.text, rule: null };
+}
+
+/**
  * 시설 단위 점수 (6차선 왕복도로처럼 거리 구간으로 판정하는 것)
  * @param {object} value  수기 판정값 { distance, lanes }
  */
