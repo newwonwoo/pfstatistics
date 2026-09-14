@@ -67,6 +67,7 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
   const set = (patch) => onChange?.({ radius, mode, data, picked, ...patch });
 
   const priceOf = (a) => (mode === 'weighted' ? a.weighted : a.simple);
+  const usePoly = polygon?.length >= 3 && radiusBasis === 'polygon';
 
   const collect = async () => {
     if (!coord) { setErr('사업지 주소를 먼저 확정하세요'); return; }
@@ -75,7 +76,8 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
       const qs = new URLSearchParams({
         x: String(coord.x), y: String(coord.y), region, radius: String(radius),
       });
-      if (polygon?.length >= 3) qs.set('polygon', JSON.stringify(polygon));
+      // 그린 선이 곧 판정선이어야 한다 — 지도에 경계 기준으로 그릴 때만 경계로 잰다
+      if (usePoly) qs.set('polygon', JSON.stringify(polygon));
       const res = await fetch(`/api/apts?${qs}`);
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? `수집 실패 (${res.status})`);
@@ -203,7 +205,7 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
           center={{ lat: Number(coord.y), lng: Number(coord.x) }}
           radius={data.radius}
           markers={markers}
-          polygon={polygon}
+          polygon={data.basis === 'polygon' ? polygon : null}
           radiusBasis={radiusBasis}
           defaultMapType="ROADMAP"
           caption={`핀 번호 = 위 표의 #`}
