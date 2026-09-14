@@ -117,7 +117,7 @@ export async function geocodeCandidates(address, region = null) {
   if (!docs.length) {
     const e = new Error(
       `주소를 찾지 못했습니다: ${query}`
-      + (region?.sgg ? ` — 지번·상세가 ${region.sidoShort} ${region.sgg} 에 없는 주소일 수 있습니다.` : '')
+      + (region?.sgg ? ` — 「${region.sidoShort} ${region.sgg}」에 없는 지번일 수 있습니다.` : '')
       + ' 지번을 비우면 시군구 중심으로 잡습니다.');
     e.code = 'NO_MATCH';
     throw e;
