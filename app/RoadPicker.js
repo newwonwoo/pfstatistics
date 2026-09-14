@@ -50,7 +50,7 @@ export default function RoadPicker({ coord, radius = 300, value, onPick }) {
       <div style={S.head}>
         <span>반경 {radius}m 도로명 후보</span>
         <span style={S.note}>
-          접미사는 법으로 규모와 묶여 있습니다(도로명주소법) — 대로 = 왕복 8차로↑ · 로 = 왕복 2~7차로 · 길 = 이면도로.
+          법정 도로 규모 기준 — 대로 = 왕복 8차선 이상 · 로 = 왕복 2~7차로 · 길 = 이면도로.
           <b> 추정 근거일 뿐이니 차선 수는 아래 로드뷰로 세어 확정하세요.</b>
         </span>
       </div>

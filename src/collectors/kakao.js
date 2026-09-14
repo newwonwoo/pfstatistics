@@ -158,17 +158,26 @@ export async function nearbyRoads({ x, y }, radius = 300) {
   const R = 6371008.8;
   const rad = (d) => (d * Math.PI) / 180;
   const k = Math.cos(rad(Number(y)));
-  const at = (dist, theta) => ({
-    x: Number(x) + ((dist * Math.cos(theta)) / (k * R)) * (180 / Math.PI),
-    y: Number(y) + ((dist * Math.sin(theta)) / R) * (180 / Math.PI),
+  const toLngLat = (dx, dy) => ({
+    x: Number(x) + (dx / (k * R)) * (180 / Math.PI),
+    y: Number(y) + (dy / R) * (180 / Math.PI),
   });
 
-  // 중심 + 3겹 고리 × 12방향. 도로는 선이라 방향을 촘촘히 봐야 놓치지 않는다.
-  const pts = [{ dist: 0, ...at(0, 0) }];
-  for (const f of [0.4, 0.7, 1.0]) {
-    for (let i = 0; i < 12; i += 1) {
-      const d = Math.round(radius * f);
-      pts.push({ dist: d, ...at(d, (i / 12) * 2 * Math.PI) });
+  /*
+   * 격자로 훑는다.
+   *
+   * 처음엔 고리 모양(반경 3겹 × 12방향)으로 찍었는데 **큰 도로를 놓쳤다** —
+   * 300m 고리에서 표본 간격이 157m 라 그 사이를 지나는 도로는 한 점도 안 걸린다.
+   * (송도에서 랜드마크로가 통째로 안 잡혔다)
+   * 도로는 선이라 간격이 도시 블록(보통 100~200m)보다 촘촘해야 걸린다.
+   */
+  const step = Math.min(120, Math.max(50, Math.round(radius / 4)));
+  const pts = [];
+  for (let dy = -radius; dy <= radius; dy += step) {
+    for (let dx = -radius; dx <= radius; dx += step) {
+      const dist = Math.round(Math.hypot(dx, dy));
+      if (dist > radius) continue;
+      pts.push({ dist, ...toLngLat(dx, dy) });
     }
   }
 
@@ -183,8 +192,8 @@ export async function nearbyRoads({ x, y }, radius = 300) {
   const grade = (name) => {
     if (/번길$/.test(name)) return { rank: 3, grade: '번길', hint: '이면도로 — 6차선 아님' };
     if (/대로\d*번?길$/.test(name)) return { rank: 3, grade: '번길', hint: '이면도로 — 6차선 아님' };
-    if (/대로$/.test(name)) return { rank: 0, grade: '대로', hint: '폭 40m↑ 또는 왕복 8차로↑' };
-    if (/로$/.test(name)) return { rank: 1, grade: '로', hint: '폭 12~40m 또는 왕복 2~7차로' };
+    if (/대로$/.test(name)) return { rank: 0, grade: '대로', hint: '왕복 8차로 이상' };
+    if (/로$/.test(name)) return { rank: 1, grade: '로', hint: '왕복 2~7차로' };
     if (/길$/.test(name)) return { rank: 3, grade: '길', hint: '이면도로 — 6차선 아님' };
     return { rank: 2, grade: '기타', hint: null };
   };
