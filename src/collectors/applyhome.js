@@ -162,6 +162,20 @@ async function mapLimit(items, limit, fn) {
   return out;
 }
 
+/**
+ * 재공고 묶음 키.
+ *
+ * 같은 단지가 원공고 · 조합원 취소분 · 잔여세대로 여러 번 올라오는데
+ * 표기가 조금씩 다르다(실측):
+ *   "광주탄벌 서희스타힐스2단지" / "광주 탄벌 서희스타힐스 2단지"
+ *   "광주시 탄벌동 532-2번지 일원" / "경기도 광주시 탄벌동 532-2번지 일원"
+ * 이름 그대로 묶으면 같은 단지가 표에 세 줄로 앉아 평균을 왜곡한다.
+ * 그래서 **공백을 지운 단지명 + 읍면동** 으로 묶고 최신 공고만 남긴다.
+ */
+const dongOf = (addr) => (String(addr ?? '').match(/\S+?[동리가](?=\s|$)/) ?? [''])[0];
+const dedupeKey = (r) =>
+  `${String(r.HOUSE_NM ?? '').replace(/[\s()]/g, '')}|${dongOf(r.HSSPLY_ADRES)}`;
+
 /** 주소 앞 두 토큰 = 시도 + 시군구 (광역시 자치구도 같은 모양) */
 const sggOf = (addr) => String(addr ?? '').split(/\s+/).slice(0, 2).join(' ');
 
@@ -188,7 +202,7 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
   // 같은 단지가 재공고로 여러 건 들어온다 — 최신 공고만 남긴다
   const latest = new Map();
   for (const r of notices) {
-    const key = `${r.HOUSE_NM}|${r.HSSPLY_ADRES}`;
+    const key = dedupeKey(r);
     const prev = latest.get(key);
     if (!prev || String(r.RCRIT_PBLANC_DE) > String(prev.RCRIT_PBLANC_DE)) latest.set(key, r);
   }

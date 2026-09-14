@@ -5,6 +5,7 @@ import { SHEETS, buildSheet } from './sheets';
 import { T } from './theme';
 import Steps from './Steps';
 import SheetTabs from './SheetTabs';
+import CompareView from './CompareView';
 import SheetView from './SheetView';
 import Overview from './Overview';
 import SavedList from './SavedList';
@@ -133,6 +134,8 @@ export default function Home() {
    * 시트 상단으로 꺼내고, 경계가 없을 때도 왜 못 고르는지 보이게 한다.
    */
   const [radiusBasis, setRadiusBasis] = useState('polygon');
+  // 비교사업장 — 반경·선택·수집결과를 한 덩어리로 들고 있는다(보관·내보내기도 이걸 그대로 읽는다)
+  const [compare, setCompare] = useState(null);
   useEffect(() => { if (basisMode) setRadiusBasis(basisMode); }, [basisMode]);
 
   // 경계를 다 그리면 다음에 누를 곳을 알려준다 (수집 버튼은 위 단계 줄에 하나만 둔다)
@@ -289,7 +292,7 @@ export default function Home() {
   // ── 보관 / 내보내기 ───────────────────────────────────────
   function saveRecord() {
     if (!data) return;
-    const ok = store.save({ data, facilities, addr, manual });
+    const ok = store.save({ data, facilities, addr, manual, compare });
     setSavedKey(k => k + 1);
     setMsg(ok
       ? { kind: 'ok', text: `이 브라우저에 보관했습니다 — ${data.region} · ${data.period}` }
@@ -300,6 +303,7 @@ export default function Home() {
     if (!rec) return;
     setData(rec.data);
     setFacilities(rec.facilities ?? null);
+    setCompare(rec.compare ?? null);
     setPolygon(rec.facilities?.polygon ?? null);
     setCoord(rec.facilities?.coord ?? null);
     setGeo(rec.facilities?.geo ?? null); setPick(0);
@@ -324,7 +328,7 @@ export default function Home() {
     try {
       const { exportWorkbook } = await import('./exportExcel');
       await exportWorkbook({
-        data, facilities, manual, sheets: SHEETS, buildSheet,
+        data, facilities, manual, compare: compare && { ...compare, addr }, sheets: SHEETS, buildSheet,
         getCardEl: (id) => document.querySelector(`[data-evidence="${id}"]`),
         onProgress: (label) => setMsg({ kind: 'warn', text: `엑셀 생성 중 — ${label}` }),
       });
@@ -615,12 +619,22 @@ export default function Home() {
               position: 'absolute', left: -99999, top: 0, width: 1100, pointerEvents: 'none',
             }}
           >
-            <SheetView
-              sheetId={s.id} data={data} facilities={facilities}
-              radiusBasis={radiusBasis} onRadiusBasis={setRadiusBasis}
-              manual={manual}
-              onManual={(label, v) => setManual(m => ({ ...m, [label]: v }))}
-            />
+            {s.kind === 'comp'
+              ? (
+                <CompareView
+                  addr={addr} coord={coord} region={region} polygon={polygon}
+                  radiusBasis={radiusBasis}
+                  value={compare} onChange={setCompare}
+                />
+              )
+              : (
+                <SheetView
+                  sheetId={s.id} data={data} facilities={facilities}
+                  radiusBasis={radiusBasis} onRadiusBasis={setRadiusBasis}
+                  manual={manual}
+                  onManual={(label, v) => setManual(m => ({ ...m, [label]: v }))}
+                />
+              )}
           </div>
         ))}
       </div>

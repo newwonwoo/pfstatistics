@@ -13,6 +13,7 @@ export const SHEETS = [
   { id: '교통환경',     label: '교통환경',     kind: 'poi' },
   { id: '주거편의',     label: '주거편의',     kind: 'poi' },
   { id: '교육환경',     label: '교육환경',     kind: 'poi' },
+  { id: '비교사업장',   label: '비교사업장',   kind: 'comp' },
   { id: '지역미분양',   label: '지역미분양',   kind: 'stat' },
   { id: '지역수요',     label: '지역수요',     kind: 'stat' },
   { id: '지역경쟁력',   label: '지역경쟁력',   kind: 'stat' },

@@ -110,7 +110,7 @@ function writeTable(ws, startRow, { title, subtitle, columns, rows, markCell }) 
  * @param {Array} p.sheets      SHEETS
  * @param {Function} p.getCardEl  (indicatorId) => HTMLElement  증빙 카드 DOM
  */
-export async function exportWorkbook({ data, facilities, manual, sheets, buildSheet, getCardEl, onProgress }) {
+export async function exportWorkbook({ data, facilities, manual, compare, sheets, buildSheet, getCardEl, onProgress }) {
   const ExcelJS = (await import('exceljs')).default ?? (await import('exceljs'));
   const wb = new ExcelJS.Workbook();
   wb.creator = 'PF 보증심사 통계 자동수집';
@@ -135,6 +135,75 @@ export async function exportWorkbook({ data, facilities, manual, sheets, buildSh
       r.ok ? (r.source?.viewUrl ?? '') : '',
     ]),
   });
+
+  // ── 비교사업장 ──────────────────────────────────────────
+  /*
+   * 화면에서 고른 단지와 그 산술평균을 그대로 옮긴다.
+   * 엑셀은 화면 상태를 읽는다는 원칙대로, 따로 저장하지 않아도 들어간다.
+   */
+  if (compare?.data?.items?.length) {
+    onProgress?.('비교사업장');
+    const c = compare.data;
+    const mode = compare.mode ?? 'weighted';
+    const priceOf = (a) => (mode === 'weighted' ? a.weighted : a.simple);
+    const picked = compare.picked ?? [];
+    const chosen = c.items.filter(a => picked.includes(a.manageNo));
+    const vals = chosen.map(priceOf).filter(v => v != null);
+    const avg = vals.length ? vals.reduce((s2, v) => s2 + v, 0) / vals.length : null;
+    const rkm = c.radius >= 1000 ? `${c.radius / 1000}km` : `${c.radius}m`;
+
+    const cw = wb.addWorksheet('비교사업장', { views: [{ showGridLines: false }] });
+    let cur = writeTable(cw, 2, {
+      title: '비교사업장',
+      subtitle: `▶ 사업지 : ${compare.addr ?? facilities?.address ?? data.region}`
+        + ` · 반경 ${rkm} · ${c.basis === 'polygon' ? '사업지 경계 기준' : '대표지번 중심 기준'}`,
+      columns: ['선택', '#', '단지명', '주소', '거리', '공고일', '공급세대', '전용면적', '분양가(원/㎡)'],
+      rows: c.items.map((a, i) => [
+        picked.includes(a.manageNo) ? '■' : '',
+        i + 1, a.name, a.address, `${a.distance}m`, a.noticeDate,
+        a.totalHouseholds ?? '',
+        a.areaMin ? `${a.areaMin.toFixed(2)}~${a.areaMax.toFixed(2)}` : '',
+        priceOf(a) == null ? '' : Math.round(priceOf(a)),
+      ]),
+      markCell: [0, 8],
+    });
+
+    cw.getCell(cur.nextRow, 2).value =
+      `선택 ${chosen.length}곳 산술평균 : ${avg == null ? '-' : Math.round(avg).toLocaleString('ko-KR')} 원/㎡`
+      + (avg == null ? '' : ` (평당 약 ${Math.round(avg * 3.305785).toLocaleString('ko-KR')} 원)`)
+      + ` · 단지 대표단가는 ${mode === 'weighted' ? '세대수 가중평균' : '주택형 단순평균'}`;
+    cw.getCell(cur.nextRow, 2).font = { bold: true, size: 11 };
+    cw.getCell(cur.nextRow + 1, 2).value = c.source?.citation ?? '';
+    cw.getCell(cur.nextRow + 1, 2).font = { size: 9, color: { argb: 'FF666666' } };
+    let crow = cur.nextRow + 3;
+
+    if (chosen.length) {
+      cur = writeTable(cw, crow, {
+        title: '선택 단지 상세 (면적별)',
+        subtitle: '▶ 전용면적 기준 · 세대수 = 특별공급 + 일반공급',
+        columns: ['단지명', '주소', '주택형', '전용면적(㎡)', '세대수', '분양최고금액(원)', '원/㎡'],
+        rows: chosen.flatMap(a => a.types.map(t => [
+          a.name, a.address, t.type, t.area, t.households, t.amount ?? '',
+          t.unitPrice == null ? '' : Math.round(t.unitPrice),
+        ])),
+        markCell: [0, 6],
+      });
+      crow = cur.nextRow + 1;
+    }
+
+    // 반경 지도도 증빙으로 넣는다 (다른 시트와 같은 캔버스 합성 캡쳐를 쓴다)
+    const mapEl = document.querySelector('[data-map^="비교사업장"]');
+    if (mapEl) {
+      const png = await shotMap(mapEl);
+      if (png) {
+        cw.getCell(crow, 2).value = `[증빙] 반경 ${rkm} 분양단지 위치`;
+        cw.getCell(crow, 2).font = { bold: true, size: 10 };
+        const h = Math.round(620 * (mapEl.offsetHeight / mapEl.offsetWidth));
+        const imgId = wb.addImage({ base64: png.split(',')[1], extension: 'png' });
+        cw.addImage(imgId, { tl: { col: 1, row: crow }, ext: { width: 620, height: h } });
+      }
+    }
+  }
 
   // ── 시트별 ──────────────────────────────────────────────
   const failed = [];
