@@ -47,7 +47,7 @@ const LABEL_MAX = 8;
 
 const levelCapFor = (r) => MAX_LEVEL[r] ?? (r <= 300 ? 3 : r <= 500 ? 4 : r <= 1000 ? 5 : 6);
 
-export default function RadiusMap({ title, center, radius, markers = [], polygon = null, caption, defaultMapType = 'ROADMAP', roadview = false, roadviewOpen = false, radiusBasis }) {
+export default function RadiusMap({ title, center, radius, markers = [], polygon = null, caption, defaultMapType = 'ROADMAP', roadview = false, roadviewOpen = false, roadviewAt = null, radiusBasis }) {
   const el = useRef(null);
   const mapRef = useRef(null);
   const [err, setErr] = useState(null);
@@ -228,7 +228,8 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
     }
     try {
       rvRef.current = new kakao.maps.Roadview(rvEl.current);
-      moveRoadview(kakao, new kakao.maps.LatLng(center.lat, center.lng));
+      const at = roadviewAt ?? center;
+      moveRoadview(kakao, new kakao.maps.LatLng(at.lat, at.lng));
     } catch (e) {
       setRvMsg(`로드뷰 생성 실패: ${e.message}`);
     }
@@ -238,6 +239,16 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
   useEffect(() => {
     if (ready && roadview && roadviewOpen) setRvOn(true);
   }, [ready, roadview, roadviewOpen]);
+
+  // 도로 후보에서 고르면 그 지점 로드뷰로 옮긴다 (거기서 차선을 센다)
+  useEffect(() => {
+    const m = mapRef.current;
+    if (!roadviewAt || !m) return;
+    const ll = new m.kakao.maps.LatLng(roadviewAt.lat, roadviewAt.lng);
+    m.map.setCenter(ll);
+    if (!rvOn) { setRvOn(true); return; }       // 생성 효과가 이어서 이 지점으로 간다
+    moveRoadview(m.kakao, ll);
+  }, [roadviewAt?.lat, roadviewAt?.lng]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   /** 로드뷰 PNG — 되는지 안 되는지 앱이 직접 시도해서 알린다 */
   function saveRoadviewPng() {

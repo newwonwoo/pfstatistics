@@ -1,9 +1,10 @@
 'use client';
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import { buildSheet } from './sheets';
 import { T, mono } from './theme';
 import EvidenceCard from './EvidenceCard';
 import RadiusMap from './RadiusMap';
+import RoadPicker from './RoadPicker';
 
 const S = {
   page: { background: T.panel, border: `1px solid ${T.lineStrong}`, borderTop: 0, borderRadius: `0 0 ${T.radius}px ${T.radius}px`, padding: '22px 24px 26px' },
@@ -55,6 +56,8 @@ function Cell({ v, highlight }) {
 }
 
 export default function SheetView({ sheetId, data, facilities, manual, onManual, radiusBasis = 'polygon', onRadiusBasis }) {
+  // 도로 후보에서 고른 지점 — 로드뷰를 그곳으로 보낸다
+  const [roadSpot, setRoadSpot] = useState({});
   const byId = Object.fromEntries((data?.results ?? []).map(r => [r.indicatorId, r]));
   const spec = buildSheet(sheetId, {
     byId, region: data?.region ?? '', period: data?.period ?? '', company: data?.company,
@@ -264,10 +267,16 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
 
                   {/* ── 표 ── */}
                   {f.manual ? (
-                    <div style={S.absent}>
-                      POI 로 검색되지 않는 항목입니다. 아래 지도(위성·로드뷰)로 차선을 세어
-                      위 평가표에 입력하세요.
-                    </div>
+                    <RoadPicker
+                      coord={facilities.coord}
+                      radius={h.radius}
+                      value={manual?.[f.label]?.name ?? ''}
+                      onPick={(r) => {
+                        // 고른 도로명을 평가표에 채우고, 그 지점을 로드뷰로 보낸다
+                        onManual?.(f.label, { ...manual?.[f.label], name: r.name });
+                        setRoadSpot({ ...roadSpot, [f.label]: { lat: Number(r.y), lng: Number(r.x), name: r.name, distance: r.distance } });
+                      }}
+                    />
                   ) : items.length ? (
                     <div style={S.scroll}>
                       <table style={S.table}>
@@ -305,11 +314,14 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                       defaultMapType={f.manual ? 'HYBRID' : 'ROADMAP'}
                       roadview
                       roadviewOpen={Boolean(f.manual)}
+                      roadviewAt={roadSpot[f.label] ?? null}
                       /* 표에 있는 것은 지도에도 전부 있어야 한다 — 번호는 표의 # 와 같다 */
-                      markers={items.map((it, i) => ({
-                        no: i + 1, lat: Number(it.y), lng: Number(it.x),
-                        name: it.name, distance: it.distance,
-                      }))}
+                      markers={f.manual
+                        ? (roadSpot[f.label] ? [{ no: 1, ...roadSpot[f.label] }] : [])
+                        : items.map((it, i) => ({
+                            no: i + 1, lat: Number(it.y), lng: Number(it.x),
+                            name: it.name, distance: it.distance,
+                          }))}
                       caption={f.manual
                         ? `위성 또는 로드뷰로 차선 수를 센 뒤 위 평가표에 입력하세요 (반경 ${rLabel(h.radius)} · 왕복 6차선 = 편도 3차로)`
                         : (n ? `최근접 ${n.name} · ${n.distance}m · 반경 ${rLabel(h.radius)} 내 ${h.count}건`

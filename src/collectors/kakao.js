@@ -172,6 +172,23 @@ export async function nearbyRoads({ x, y }, radius = 300) {
     }
   }
 
+  /*
+   * 도로명 접미사는 법으로 규모와 묶여 있다(도로명주소법 시행령 별표1).
+   *   대로 : 폭 40m 이상 또는 왕복 8차로 이상
+   *   로   : 폭 12m 이상 40m 미만 또는 왕복 2차로 이상 8차로 미만
+   *   길   : 그 밖의 도로
+   * 그래서 "왕복 6차선"은 대로 아니면 로 급이고, 길·번길은 아니다.
+   * **추정 근거일 뿐 판정이 아니다** — 확정은 로드뷰로 차선을 세어서 한다.
+   */
+  const grade = (name) => {
+    if (/번길$/.test(name)) return { rank: 3, grade: '번길', hint: '이면도로 — 6차선 아님' };
+    if (/대로\d*번?길$/.test(name)) return { rank: 3, grade: '번길', hint: '이면도로 — 6차선 아님' };
+    if (/대로$/.test(name)) return { rank: 0, grade: '대로', hint: '폭 40m↑ 또는 왕복 8차로↑' };
+    if (/로$/.test(name)) return { rank: 1, grade: '로', hint: '폭 12~40m 또는 왕복 2~7차로' };
+    if (/길$/.test(name)) return { rank: 3, grade: '길', hint: '이면도로 — 6차선 아님' };
+    return { rank: 2, grade: '기타', hint: null };
+  };
+
   const found = new Map();
   const results = await Promise.all(pts.map(async (p) => {
     try {
@@ -187,10 +204,11 @@ export async function nearbyRoads({ x, y }, radius = 300) {
     if (!r) continue;
     const cur = found.get(r.name);
     if (!cur || r.dist < cur.distance) {
-      found.set(r.name, { name: r.name, distance: r.dist, x: r.x, y: r.y, address: r.addr });
+      found.set(r.name, { name: r.name, distance: r.dist, x: r.x, y: r.y, address: r.addr, ...grade(r.name) });
     }
   }
-  return [...found.values()].sort((a, b) => a.distance - b.distance);
+  // 큰 도로부터, 같은 급이면 가까운 것부터
+  return [...found.values()].sort((a, b) => a.rank - b.rank || a.distance - b.distance);
 }
 
 async function searchAll(path, params) {
