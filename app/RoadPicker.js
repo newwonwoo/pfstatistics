@@ -33,6 +33,11 @@ const S = {
   dist: { fontSize: 11.5, fontWeight: 700, color: T.ink2, whiteSpace: 'nowrap' },
   del: { border: 0, background: 'none', color: T.muted, cursor: 'pointer', fontSize: 15, lineHeight: 1, padding: '2px 4px' },
   msg: { fontSize: 11.5, color: T.muted, padding: '6px 0' },
+  mapTag: { marginLeft: 8, fontSize: 11, fontWeight: 700, color: T.accent, background: T.accentSoft, border: `1px solid #c8d5fb`, padding: '2px 8px', borderRadius: 4 },
+  applied: { fontSize: 10.5, fontWeight: 700, color: T.ok, background: T.okSoft, border: `1px solid #c7e9d5`, padding: '2px 7px', borderRadius: 4, whiteSpace: 'nowrap' },
+  applyBar: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 8, padding: '10px 12px', borderRadius: 6, background: T.accentSoft, border: `1px solid ${T.accent}` },
+  applyTxt: { flex: 1, minWidth: 200, fontSize: 12, color: T.ink2 },
+  applyBtn: { padding: '8px 16px', borderRadius: 6, border: 0, background: T.accent, color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' },
   undo: { border: 0, background: 'none', color: T.accent, cursor: 'pointer', fontSize: 11.5, textDecoration: 'underline', padding: 0 },
 
   lanes: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, padding: '10px 12px', borderRadius: 6, background: '#f7f9fb', border: `1px solid ${T.line}`, flexWrap: 'wrap' },
@@ -49,10 +54,13 @@ const S = {
 /** 구간표(config/scoring.json)로 점수를 낸다 */
 export const roadScore = (m) => scoreFacility('6차선 왕복도로', m);
 
-export default function RoadPicker({ coord, radius = 300, value, onChange }) {
+export default function RoadPicker({ coord, radius = 300, value, onChange, onRoads, onPreview }) {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
   const dismissed = value?.dismissed ?? [];
+  // 고르는 것과 적용하는 것을 나눈다 — 눌러보며 로드뷰로 확인한 뒤 [적용] 해야
+  // 평가표와 지도에 박힌다. 누르자마자 반영되면 되돌리기가 번거롭다.
+  const [sel, setSel] = useState(null);
 
   useEffect(() => {
     if (!coord?.x || !coord?.y) return;
@@ -61,13 +69,20 @@ export default function RoadPicker({ coord, radius = 300, value, onChange }) {
     // 구간표의 가장 먼 구간(1km)까지 훑는다. 조금 더 봐야 경계 밖도 눈에 들어온다
     fetch(`/api/roads?x=${coord.x}&y=${coord.y}&radius=${Math.round(radius * 1.2)}`)
       .then(r => r.json())
-      .then(j => { if (!dead) (j.error ? setErr(j.error) : setRows(j.roads ?? [])); })
+      .then(j => {
+        if (dead) return;
+        if (j.error) { setErr(j.error); return; }
+        setRows(j.roads ?? []);
+        onRoads?.(j.roads ?? []);   // 지도에 찍을 수 있게 위로 올린다
+      })
       .catch(e => !dead && setErr(e.message));
     return () => { dead = true; };
   }, [coord?.x, coord?.y, radius]);
 
   const set = (patch) => onChange?.({ ...(value ?? {}), ...patch });
   const visible = (rows ?? []).filter(r => !dismissed.includes(r.name));
+  // 지도에 찍히는 것은 큰 도로(대로·로)만 — 길·번길까지 찍으면 핀에 덮인다
+  const bigCount = visible.filter(r => r.rank <= 1).length;
   const lanes = value?.lanes ?? 0;
   const verdict = scoreFacility('6차선 왕복도로', value);
 
@@ -75,6 +90,9 @@ export default function RoadPicker({ coord, radius = 300, value, onChange }) {
     <div style={S.box}>
       <div style={S.head}>
         반경 {Math.round(radius * 1.2)}m 도로 후보 — 판정 대상을 고르세요
+        {bigCount > 0 && (
+          <span style={S.mapTag}>큰 도로 {bigCount}곳을 아래 지도에 표시 중</span>
+        )}
         <span style={S.note}>
           법정 도로 유형 기준 (도로명주소법 시행령 §3) — 대로 = 폭 40m↑ <b>또는</b> 왕복 8차로↑ ·
           로 = 폭 12~40m <b>또는</b> 왕복 2~7차로 · 길 = 그 밖의 도로.
@@ -89,21 +107,19 @@ export default function RoadPicker({ coord, radius = 300, value, onChange }) {
       {rows?.length === 0 && <div style={S.msg}>주변에서 도로명을 찾지 못했습니다.</div>}
 
       {visible.map(r => {
-        const on = value?.name === r.name;
+        const applied = value?.name === r.name;
+        const on = applied || sel?.name === r.name;
         // 어느 점수 구간에 드는지 미리 보여준다 (6차선이라고 가정한 값)
         const band = scoreFacility('6차선 왕복도로', { distance: r.distance, lanes: 6 });
         return (
           <div key={r.name} style={S.row(on)}>
             <button
               style={S.pick}
-              onClick={() => set({
-                name: r.name, distance: r.distance, x: r.x, y: r.y,
-                // 다른 도로를 고르면 차선 수는 다시 센다 — 앞 도로 값을 물려받으면 판정이 틀린다
-                ...(value?.name === r.name ? {} : { lanes: 0 }),
-              })}
+              onClick={() => { setSel(r); onPreview?.(r); }}
             >
               <span style={S.name}>{r.name}</span>
               <span style={S.badge(r.rank)}>{r.grade}</span>
+              {applied && <span style={S.applied}>적용됨</span>}
               <span style={S.hint}>{r.hint ?? ''}</span>
               <span style={{ ...S.dist, color: band.score > 1 ? T.ink2 : T.muted }}>
                 {r.distance}m · 6차선이면 {band.score}점
@@ -112,15 +128,36 @@ export default function RoadPicker({ coord, radius = 300, value, onChange }) {
             <button
               style={S.del}
               title="이 도로를 목록에서 지웁니다"
-              onClick={() => set({
+              onClick={() => {
+                if (sel?.name === r.name) setSel(null);
+                set({
                 dismissed: [...dismissed, r.name],
                 // 지운 것이 고른 것이면 선택도 푼다
                 ...(value?.name === r.name ? { name: null, distance: null } : {}),
-              })}
+              }); }}
             >×</button>
           </div>
         );
       })}
+
+      {sel && sel.name !== value?.name && (
+        <div style={S.applyBar}>
+          <span style={S.applyTxt}>
+            <b>{sel.name}</b> · {sel.distance}m — 로드뷰로 확인했으면 적용하세요
+          </span>
+          <button
+            style={S.applyBtn}
+            onClick={() => {
+              set({
+                name: sel.name, distance: sel.distance, x: sel.x, y: sel.y,
+                // 도로가 바뀌면 차선 수는 다시 센다 — 앞 도로 값을 물려받으면 판정이 틀린다
+                lanes: 0,
+              });
+              setSel(null);
+            }}
+          >이 도로로 적용</button>
+        </div>
+      )}
 
       {dismissed.length > 0 && (
         <button style={S.undo} onClick={() => set({ dismissed: [] })}>

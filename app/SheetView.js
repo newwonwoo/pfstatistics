@@ -60,6 +60,8 @@ function Cell({ v, highlight }) {
 export default function SheetView({ sheetId, data, facilities, manual, onManual, radiusBasis = 'polygon', onRadiusBasis }) {
   // 도로 후보에서 고른 지점 — 로드뷰를 그곳으로 보낸다
   const [roadSpot, setRoadSpot] = useState({});
+  // 후보 목록 자체 — 큰 도로를 지도에 자동으로 찍기 위해 들고 있는다
+  const [roadList, setRoadList] = useState({});
   const byId = Object.fromEntries((data?.results ?? []).map(r => [r.indicatorId, r]));
   const spec = buildSheet(sheetId, {
     byId, region: data?.region ?? '', period: data?.period ?? '', company: data?.company,
@@ -81,6 +83,25 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
     const near = (label) => facilities?.facilities?.[label]?.nearest ?? null;
     const hit  = (label) => facilities?.facilities?.[label] ?? null;
     const pend = <span style={S.pend}>수집 대기</span>;
+
+    /**
+     * 6차선 판정용 마커 — 큰 도로(대로·로)만 자동으로 찍는다.
+     * 길·번길까지 다 찍으면 지도가 핀으로 덮여 무엇을 보는지 알 수 없다.
+     * 고른 도로가 있으면 맨 앞에 둬서 파란 핀으로 눈에 띄게 한다.
+     */
+    const roadMarkers = (f) => {
+      const dismissed = manual?.[f.label]?.dismissed ?? [];
+      const picked = manual?.[f.label]?.name;
+      const big = (roadList[f.label] ?? [])
+        .filter(r => r.rank <= 1 && !dismissed.includes(r.name));
+      const sorted = picked
+        ? [...big.filter(r => r.name === picked), ...big.filter(r => r.name !== picked)]
+        : big;
+      return sorted.map((r, i) => ({
+        no: i + 1, lat: Number(r.y), lng: Number(r.x),
+        name: `${r.name} (${r.grade})`, distance: r.distance,
+      }));
+    };
 
     /** 시설명 셀 — 수집 전이면 대기, 수집 후 없으면 '부재' */
     const NameCell = ({ label }) => {
@@ -290,6 +311,10 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                       coord={facilities.coord}
                       radius={h.radius}
                       value={manual?.[f.label]}
+                      onRoads={(rows) => setRoadList(prev => ({ ...prev, [f.label]: rows }))}
+                      /* 누르기만 해도 로드뷰는 그쪽으로 — 보고 나서 적용한다 */
+                      onPreview={(r) => setRoadSpot(prev => ({ ...prev,
+                        [f.label]: { lat: Number(r.y), lng: Number(r.x), name: r.name, distance: r.distance } }))}
                       onChange={(v) => {
                         onManual?.(f.label, v);
                         // 고른 도로 지점으로 지도를 옮겨 로드뷰를 띄운다
@@ -339,14 +364,13 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                       defaultMapType={f.manual ? 'HYBRID' : 'ROADMAP'}
                       roadview
                       roadviewOpen={Boolean(f.manual)}
-                      roadviewAt={roadSpot[f.label] ?? null}
+                      /* 고른 도로가 없으면 가장 큰·가까운 후보로 로드뷰를 열어둔다 */
+                      roadviewAt={roadSpot[f.label] ?? roadMarkers(f)[0] ?? null}
                       /* 표에 있는 것은 지도에도 전부 있어야 한다 — 번호는 표의 # 와 같다 */
-                      markers={f.manual
-                        ? (roadSpot[f.label] ? [{ no: 1, ...roadSpot[f.label] }] : [])
-                        : items.map((it, i) => ({
-                            no: i + 1, lat: Number(it.y), lng: Number(it.x),
-                            name: it.name, distance: it.distance,
-                          }))}
+                      markers={f.manual ? roadMarkers(f) : items.map((it, i) => ({
+                        no: i + 1, lat: Number(it.y), lng: Number(it.x),
+                        name: it.name, distance: it.distance,
+                      }))}
                       caption={f.manual
                         ? `로드뷰에서 차선을 세어 위 [왕복 __ 차선] 에 넣으면 판정됩니다 (기준 ${rLabel(h.radius)} 이내 · 왕복 6차선 = 편도 3차로)`
                         : (n ? `최근접 ${n.name} · ${n.distance}m · 반경 ${rLabel(h.radius)} 내 ${h.count}건`
