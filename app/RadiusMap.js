@@ -44,7 +44,7 @@ const MAP_TYPES = [
 const MAX_LEVEL = { 300: 3, 500: 4, 1000: 5, 1500: 6 };
 const levelCapFor = (r) => MAX_LEVEL[r] ?? (r <= 300 ? 3 : r <= 500 ? 4 : r <= 1000 ? 5 : 6);
 
-export default function RadiusMap({ title, center, radius, markers = [], polygon = null, caption, defaultMapType = 'ROADMAP', roadview = false, roadviewOpen = false }) {
+export default function RadiusMap({ title, center, radius, markers = [], polygon = null, caption, defaultMapType = 'ROADMAP', roadview = false, roadviewOpen = false, radiusBasis }) {
   const el = useRef(null);
   const mapRef = useRef(null);
   const [err, setErr] = useState(null);
@@ -66,12 +66,12 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
    * (실측: 1km 기준에서 중심원이 모든 방향으로 100~181m 작았다)
    * 경계가 있으면 경계에서 radius 만큼 떨어진 선을 그리는 것을 기본으로 한다.
    */
-  const [radiusBasis, setRadiusBasis] = useState(hasPoly ? 'polygon' : 'point');
-  useEffect(() => { setRadiusBasis(hasPoly ? 'polygon' : 'point'); }, [hasPoly, pkey]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // 기준은 시트 상단에서 고른다 (지도 안쪽 버튼은 아무도 못 찾았다)
+  const basis = hasPoly ? (radiusBasis ?? 'polygon') : 'point';
 
   const ring = useMemo(
-    () => (radiusBasis === 'polygon' && hasPoly ? bufferPolygon(polygon, radius) : null),
-    [radiusBasis, hasPoly, pkey, radius],   // eslint-disable-line react-hooks/exhaustive-deps
+    () => (basis === 'polygon' && hasPoly ? bufferPolygon(polygon, radius) : null),
+    [basis, hasPoly, pkey, radius],   // eslint-disable-line react-hooks/exhaustive-deps
   );
   const rkey = ring ? `poly${radius}` : `pt${radius}`;
 
@@ -232,13 +232,6 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
             onClick={() => mapRef.current?.map.setLevel(mapRef.current.map.getLevel() - 1)}>＋</button>
           <button style={S.btn} title="축소"
             onClick={() => mapRef.current?.map.setLevel(mapRef.current.map.getLevel() + 1)}>－</button>
-          {hasPoly && (
-            <button
-              style={{ ...S.btn, ...(radiusBasis === 'polygon' ? S.btnOn : null) }}
-              title="반경을 어디서부터 잴지 — 판정은 항상 경계 기준입니다"
-              onClick={() => setRadiusBasis(b => (b === 'polygon' ? 'point' : 'polygon'))}
-            >{radiusBasis === 'polygon' ? '경계기준' : '중심기준'}</button>
-          )}
           {MAP_TYPES.map(t => (
             <button
               key={t.id}
@@ -287,7 +280,7 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
       {caption && <div style={S.cap}>{caption}</div>}
       {hasPoly && (
         <div style={S.cap}>
-          {radiusBasis === 'polygon'
+          {basis === 'polygon'
             ? `노란 선 = 사업지 경계에서 ${radius >= 1000 ? `${radius / 1000}km` : `${radius}m`} — 판정선과 같은 선입니다`
             : `노란 원 = 대표지번 중심 기준 — 판정(경계 최단거리)과 다릅니다. [경계기준] 을 누르세요`}
         </div>

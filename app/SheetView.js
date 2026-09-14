@@ -17,6 +17,12 @@ const S = {
   pend: { color: T.muted, fontWeight: 400, fontStyle: 'italic' },
   blank: { border: `1px solid ${T.sheetLine}`, padding: '8px 12px', background: 'repeating-linear-gradient(45deg,#fafbfc,#fafbfc 5px,#f1f3f5 5px,#f1f3f5 10px)' },
   formula: { marginTop: 9, fontSize: 11.5, color: T.muted },
+  seg: { display: 'inline-flex', border: `1px solid ${T.lineStrong}`, borderRadius: 6, overflow: 'hidden', marginLeft: 'auto' },
+  segBtn: (on, off) => ({
+    padding: '5px 12px', fontSize: 11.5, fontWeight: 700, border: 0, cursor: off ? 'not-allowed' : 'pointer',
+    background: on ? T.accent : '#fff', color: on ? '#fff' : (off ? T.muted : T.ink2),
+    opacity: off ? 0.55 : 1,
+  }),
   note: { marginTop: 9, fontSize: 11.5, color: T.ink2 },
   secTitle: { fontSize: 12, fontWeight: 700, color: T.muted, letterSpacing: '.04em', margin: '26px 0 12px', paddingTop: 18, borderTop: `1px solid ${T.line}` },
   empty: { padding: '44px 20px', textAlign: 'center', color: T.muted, fontSize: 13 },
@@ -41,7 +47,7 @@ function Cell({ v, highlight }) {
   return <td style={highlight ? S.tdVal : S.td}>{v}</td>;
 }
 
-export default function SheetView({ sheetId, data, facilities, manual, onManual }) {
+export default function SheetView({ sheetId, data, facilities, manual, onManual, radiusBasis = 'polygon', onRadiusBasis }) {
   const byId = Object.fromEntries((data?.results ?? []).map(r => [r.indicatorId, r]));
   const spec = buildSheet(sheetId, {
     byId, region: data?.region ?? '', period: data?.period ?? '', company: data?.company,
@@ -87,12 +93,44 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual 
           )}
         </p>
 
-        {/* 경계를 그려도 적용됐는지 화면에서 안 보이면 안 쓴 것과 같다 */}
-        {facilities && (
+        {/*
+          경계를 그려도 적용됐는지 화면에서 안 보이면 안 쓴 것과 같다.
+          반경 표시 기준도 여기서 바꾼다 — 지도 안쪽 버튼은 아무도 못 찾았다.
+        */}
+        {facilities && spec.poi && (() => {
+          const hasPoly = (facilities.polygon?.length ?? 0) >= 3;
+          const on = hasPoly && radiusBasis === 'polygon';
+          return (
+            <div style={{ ...S.basis(hasPoly), display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span style={{ flex: '1 1 380px' }}>
+                {hasPoly
+                  ? `판정 기준 : 사업지 경계 최단거리 (경계 ${facilities.polygon.length}점 · 사업지 안의 시설은 0m)`
+                  : '판정 기준 : 대표지번 중심점 — 지도에서 경계를 그리면 실제 사업지 경계로 다시 잽니다'}
+              </span>
+              <span style={{ fontSize: 11.5, color: T.muted }}>지도 반경 표시</span>
+              <span style={S.seg}>
+                <button
+                  style={S.segBtn(on, !hasPoly)}
+                  disabled={!hasPoly}
+                  title={hasPoly ? '사업지 경계에서 잰 선 — 판정선과 같습니다'
+                                 : '사업지 경계를 그려야 쓸 수 있습니다'}
+                  onClick={() => onRadiusBasis?.('polygon')}
+                >경계 기준{!hasPoly && ' (경계 없음)'}</button>
+                <button
+                  style={S.segBtn(!on, false)}
+                  title="대표지번 중심의 원 — 경계 기준 판정과는 다릅니다"
+                  onClick={() => onRadiusBasis?.('point')}
+                >중심 기준</button>
+              </span>
+            </div>
+          );
+        })()}
+
+        {facilities && !spec.poi && (
           <div style={S.basis(facilities.basis === 'polygon')}>
             {facilities.basis === 'polygon'
-              ? `판정 기준 : 사업지 경계 최단거리 (경계 ${facilities.polygon?.length ?? 0}점 · 사업지 안의 시설은 0m) — 지도의 노란 선이 이 판정선입니다`
-              : '판정 기준 : 대표지번 중심점 — 경계를 그리면 실제 사업지 경계로 다시 잽니다'}
+              ? `판정 기준 : 사업지 경계 최단거리 (경계 ${facilities.polygon?.length ?? 0}점)`
+              : '판정 기준 : 대표지번 중심점'}
           </div>
         )}
 
@@ -207,6 +245,7 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual 
                     center={{ lat: Number(facilities.coord.y), lng: Number(facilities.coord.x) }}
                     radius={h.radius}
                     polygon={facilities.basis === 'polygon' ? facilities.polygon : null}
+                    radiusBasis={radiusBasis}
                     defaultMapType={f.manual ? 'HYBRID' : 'ROADMAP'}
                     roadview
                     roadviewOpen={Boolean(f.manual)}

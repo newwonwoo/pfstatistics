@@ -97,6 +97,11 @@ export default function Home() {
   const [geo, setGeo] = useState(null);             // 주소 매칭 결과 (후보 포함)
   const [pick, setPick] = useState(0);              // 고른 후보
   const [manual, setManual] = useState({});         // 위성 육안 판정(6차선 등)
+  /*
+   * 반경을 어디서부터 잴지. 지도 안쪽 버튼으로만 두니 아무도 못 찾았다 —
+   * 시트 상단으로 꺼내고, 경계가 없을 때도 왜 못 고르는지 보이게 한다.
+   */
+  const [radiusBasis, setRadiusBasis] = useState('polygon');
   const [tab, setTab] = useState('지역미분양');
   const [busy, setBusy] = useState(null);
   const [msg, setMsg] = useState(null);
@@ -126,9 +131,16 @@ export default function Home() {
   // ── 수집 ─────────────────────────────────────────────────
   async function collect() {
     if (!region) return setMsg({ kind: 'warn', text: '시도·시군구를 먼저 고르세요.' });
+    // [직접] 로 바꾼 뒤 칸을 비우면 빈 값이 그대로 나갔다 — 여기서 막는다
+    if (!/^\d{6}$/.test(String(form.ym).trim())) {
+      return setMsg({
+        kind: 'warn',
+        text: `조회월이 비었거나 형식이 맞지 않습니다 (지금: "${form.ym}"). YYYYMM 6자리로 넣거나 [자동] 을 누르세요.`,
+      });
+    }
     setBusy('collect'); setMsg(null);
     try {
-      const qs = new URLSearchParams({ sgg: region, ym: form.ym, company: form.company, year: form.year });
+      const qs = new URLSearchParams({ sgg: region, ym: String(form.ym).trim(), company: form.company, year: form.year });
       const res = await fetch(`/api/collect?${qs}`);
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? '수집 실패');
@@ -441,8 +453,10 @@ export default function Home() {
         {msg && <div style={S.msg(msg.kind)}>{msg.text}</div>}
       </div>
 
-      <SavedList onOpen={openRecord} refreshKey={savedKey} />
-
+      {/*
+        경계 그리기는 주소 확정 **바로 다음** 동작이다.
+        사이에 보관 목록이 끼면 흐름이 끊긴다 — 순서를 흐름대로 둔다.
+      */}
       {coord && (
         <PolygonDrawer
           center={{ lat: Number(coord.y), lng: Number(coord.x) }}
@@ -453,6 +467,8 @@ export default function Home() {
           busy={busy === 'poi' || POI_SHEETS.includes(busy)}
         />
       )}
+
+      <SavedList onOpen={openRecord} refreshKey={savedKey} />
 
       {data && <Overview data={data} onJump={setTab} />}
 
@@ -474,6 +490,7 @@ export default function Home() {
           >
             <SheetView
               sheetId={s.id} data={data} facilities={facilities}
+              radiusBasis={radiusBasis} onRadiusBasis={setRadiusBasis}
               manual={manual}
               onManual={(label, v) => setManual(m => ({ ...m, [label]: v }))}
             />

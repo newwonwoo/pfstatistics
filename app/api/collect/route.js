@@ -25,7 +25,12 @@ export async function GET(req) {
   const rankYear = q.get('year') ?? '2025';
 
   if (!region || !period) {
-    return NextResponse.json({ error: 'sgg, ym 파라미터가 필요합니다' }, { status: 400 });
+    // 무엇이 비었는지 말해줘야 화면에서 바로 고친다
+    const miss = [!region && 'sgg(시도·시군구)', !period && 'ym(조회월 YYYYMM)'].filter(Boolean);
+    return NextResponse.json({ error: `${miss.join(' · ')} 가 비었습니다` }, { status: 400 });
+  }
+  if (!/^\d{6}$/.test(period)) {
+    return NextResponse.json({ error: `조회월 형식이 맞지 않습니다: "${period}" (YYYYMM 6자리)` }, { status: 400 });
   }
 
   /*
