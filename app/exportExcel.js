@@ -146,21 +146,57 @@ export async function exportWorkbook({ data, facilities, manual, sheets, buildSh
     let cursor;
 
     if (spec.poi) {
-      const rows = spec.facilities.map(f => {
-        const hit = facilities?.facilities?.[f.label];
-        const near = hit?.nearest;
-        if (f.manual) {
-          // 위성사진을 보고 실무자가 판정한 값. 비어 있으면 판정 전임을 남긴다.
-          const m = manual?.[f.label];
-          return [f.label, f.criteria, m?.name ?? '(위성사진 판정 전)', m?.note ?? '', '', ''];
+      /*
+       * POI 시트는 캡쳐대로 표 구조가 셋이다(화면과 동일하게 유지해야 한다).
+       *   flat    교통환경   — 항목별 독립 판정 + 평균점수 행
+       *   grouped 주거편의   — 그룹별 판정 + 묶음 라벨 행
+       *   dual    교육환경   — 반경 500m / 1km 2단
+       */
+      const near = (label) => facilities?.facilities?.[label]?.nearest ?? null;
+      const cell = (label) => {
+        const n = near(label);
+        return facilities ? (n ? n.name : '부재') : '';
+      };
+      const dist = (label) => {
+        const n = near(label);
+        return facilities ? (n ? `${n.distance}m` : '-') : '';
+      };
+      /** 6차선 왕복도로처럼 위성사진으로 육안 판정하는 항목 */
+      const manualRow = (f) => {
+        const m = manual?.[f.label];
+        return [f.label, f.criteria, m?.name ?? '(위성사진 판정 전)', m?.note ?? '', '', ''];
+      };
+
+      let rows = [];
+      if (spec.layout === 'grouped') {
+        for (const g of spec.groups) {
+          for (const f of g.facilities) {
+            rows.push([f.label, cell(f.label), dist(f.label), g.condition, '', '']);
+          }
+          rows.push([g.label, '', '', '', '', '']);   // 묶음 라벨 행
         }
-        return [
-          f.label, f.criteria,
-          near ? near.name : (facilities ? '부재' : ''),
-          near ? `${near.distance}m` : '',
-          '', '',
-        ];
-      });
+      } else if (spec.layout === 'dual') {
+        for (const f of spec.facilities) {
+          const n = near(f.label);
+          const in500 = n && n.distance <= 500;
+          const in1k = n && n.distance > 500 && n.distance <= 1000;
+          rows.push([
+            f.label,
+            in500 ? `${n.name} (${n.distance}m)` : '',
+            in1k ? `${n.name} (${n.distance}m)` : '',
+            '', '',
+          ]);
+        }
+        if (spec.summaryRow) rows.push([spec.summaryRow, '', '', '', '']);
+      } else {
+        for (const f of spec.facilities) {
+          rows.push(f.manual
+            ? manualRow(f)
+            : [f.label, f.criteria, cell(f.label), dist(f.label), '', '']);
+        }
+        if (spec.summaryRow) rows.push([spec.summaryRow, '', '', '', '', '']);
+      }
+
       cursor = writeTable(ws, 2, {
         title: spec.title,
         subtitle: `▶ 사업지 : ${facilities?.address ?? spec.subject}`,

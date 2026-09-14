@@ -40,6 +40,7 @@ export default function RadiusMap({ title, center, radius, markers = [], caption
   const [err, setErr] = useState(null);
   const [ready, setReady] = useState(false);
   const [mapType, setMapType] = useState(defaultMapType);
+  const [saving, setSaving] = useState(null);   // null | 'busy' | 실패사유
 
   useEffect(() => {
     let dead = false;
@@ -75,10 +76,17 @@ export default function RadiusMap({ title, center, radius, markers = [], caption
   }, [center.lat, center.lng, radius, markers]);
 
   async function savePng() {
-    const url = await captureMap(el.current);
-    if (!url) return;
-    const a = document.createElement('a');
-    a.href = url; a.download = `${title}_반경${radius}m.png`; a.click();
+    setSaving('busy');
+    try {
+      const url = await captureMap(el.current);
+      if (!url) throw new Error('캡쳐 결과가 비었습니다');
+      const a = document.createElement('a');
+      a.href = url; a.download = `${title}_반경${radius}m.png`; a.click();
+      setSaving(null);
+    } catch (e) {
+      // 조용히 실패하면 "버튼이 안 먹는다"로 보인다. 사유를 남긴다.
+      setSaving(String(e.message).slice(0, 120));
+    }
   }
 
   return (
@@ -99,7 +107,11 @@ export default function RadiusMap({ title, center, radius, markers = [], caption
               }}
             >{t.label}</button>
           ))}
-          {ready && <button style={S.btn} onClick={savePng}>PNG 저장</button>}
+          {ready && (
+            <button style={S.btn} onClick={savePng} disabled={saving === 'busy'}>
+              {saving === 'busy' ? '캡쳐 중…' : 'PNG 저장'}
+            </button>
+          )}
         </span>
       </div>
       {err
@@ -107,6 +119,11 @@ export default function RadiusMap({ title, center, radius, markers = [], caption
             지도를 불러오지 못했습니다.<br />{err}
           </div>
         : <div ref={el} data-map={title} style={S.map} />}
+      {saving && saving !== 'busy' && (
+        <div style={{ ...S.cap, background: T.errSoft, color: T.err }}>
+          캡쳐 실패: {saving}
+        </div>
+      )}
       {caption && <div style={S.cap}>{caption}</div>}
     </div>
   );

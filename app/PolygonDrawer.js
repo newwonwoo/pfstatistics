@@ -23,10 +23,19 @@ const S = {
   }),
   map: { width: '100%', height: 460 },
   fail: { padding: '32px 20px', textAlign: 'center', color: T.warn, fontSize: 12.5, background: T.warnSoft, lineHeight: 1.7 },
-  foot: { padding: '8px 14px', fontSize: 11.5, color: T.muted, borderTop: `1px solid ${T.line}`, ...mono },
+  next: {
+    display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+    padding: '10px 14px', borderTop: `1px solid ${T.line}`, background: '#fafbfc',
+  },
+  foot2: { fontSize: 11.5, color: T.muted, flex: 1, minWidth: 220 },
+  cta: (busy) => ({
+    padding: '8px 16px', borderRadius: 6, border: 0, fontSize: 12.5, fontWeight: 700,
+    background: busy ? '#9aa1ab' : T.accent, color: '#fff', cursor: busy ? 'wait' : 'pointer',
+    whiteSpace: 'nowrap',
+  }),
 };
 
-export default function PolygonDrawer({ center, polygon, onChange }) {
+export default function PolygonDrawer({ center, polygon, onChange, onConfirm, confirmed, busy }) {
   const el = useRef(null);
   const state = useRef({ map: null, poly: null, dots: [] });
   const [pts, setPts] = useState(polygon ?? []);
@@ -105,10 +114,21 @@ export default function PolygonDrawer({ center, polygon, onChange }) {
       {err ? <div style={S.fail}>지도를 불러오지 못했습니다.<br />{err}</div>
            : <div ref={el} style={S.map} />}
 
-      <div style={S.foot}>
-        {pts.length >= 3
-          ? '경계 최단거리로 판정합니다 (사업지 안의 시설은 0m).'
-          : '경계 미지정 — 대표지번 중심점 기준으로 판정합니다.'}
+      {/*
+        그리고 나서 뭘 해야 하는지가 안 보이면 안 된다.
+        다음 동작(수집)을 지도 바로 아래에 붙여 둔다.
+      */}
+      <div style={S.next}>
+        <span style={S.foot2}>
+          {pts.length >= 3
+            ? `경계 ${pts.length}점 지정됨 — 경계 최단거리로 판정합니다 (사업지 안의 시설은 0m)`
+            : '경계를 안 그리면 대표지번 중심점 기준으로 판정합니다'}
+        </span>
+        <button style={S.cta(busy)} onClick={onConfirm} disabled={busy}>
+          {busy ? '수집 중…'
+            : pts.length >= 3 ? '이 경계로 반경시설 수집'
+            : '중심점 기준으로 반경시설 수집'}
+        </button>
       </div>
     </div>
   );
