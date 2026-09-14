@@ -144,6 +144,55 @@ export async function geocode(address) {
   return candidates[0];
 }
 
+/**
+ * 사업지 주변 도로명 후보.
+ *
+ * 6차선 왕복도로는 POI 가 아니라 도로라서 장소검색으로 안 나온다.
+ * 그래서 사업지 둘레를 점으로 훑어 각 점의 도로명주소를 물어본다 —
+ * 도로 위의 점은 그 도로 이름을 돌려준다.
+ *
+ * 차로수는 여기서 안 나온다(좌표→주소 변환에는 그 속성이 없다).
+ * 이름을 찾아주는 데까지가 여기 몫이고, 차선은 로드뷰로 센다.
+ */
+export async function nearbyRoads({ x, y }, radius = 300) {
+  const R = 6371008.8;
+  const rad = (d) => (d * Math.PI) / 180;
+  const k = Math.cos(rad(Number(y)));
+  const at = (dist, theta) => ({
+    x: Number(x) + ((dist * Math.cos(theta)) / (k * R)) * (180 / Math.PI),
+    y: Number(y) + ((dist * Math.sin(theta)) / R) * (180 / Math.PI),
+  });
+
+  // 중심 + 3겹 고리 × 12방향. 도로는 선이라 방향을 촘촘히 봐야 놓치지 않는다.
+  const pts = [{ dist: 0, ...at(0, 0) }];
+  for (const f of [0.4, 0.7, 1.0]) {
+    for (let i = 0; i < 12; i += 1) {
+      const d = Math.round(radius * f);
+      pts.push({ dist: d, ...at(d, (i / 12) * 2 * Math.PI) });
+    }
+  }
+
+  const found = new Map();
+  const results = await Promise.all(pts.map(async (p) => {
+    try {
+      const d = await getJson(
+        `${BASE}/geo/coord2address.json?x=${p.x}&y=${p.y}`, { headers: H() });
+      const road = d.documents?.[0]?.road_address;
+      return road?.road_name ? { name: road.road_name, dist: p.dist, x: p.x, y: p.y,
+                                 addr: road.address_name ?? null } : null;
+    } catch { return null; }
+  }));
+
+  for (const r of results) {
+    if (!r) continue;
+    const cur = found.get(r.name);
+    if (!cur || r.dist < cur.distance) {
+      found.set(r.name, { name: r.name, distance: r.dist, x: r.x, y: r.y, address: r.addr });
+    }
+  }
+  return [...found.values()].sort((a, b) => a.distance - b.distance);
+}
+
 async function searchAll(path, params) {
   const out = [];
   for (let page = 1; page <= 3; page++) {   // 카카오 최대 45건(15×3)
