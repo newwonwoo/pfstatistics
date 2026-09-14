@@ -13,15 +13,36 @@ import { distanceToPolygon, centroid, circumradius, haversine } from '../lib/geo
  *   의원급  의원 · 치과의원 · 한의원          (30병상 미만)
  *   병원급  병원 · 치과병원 · 한방병원 ·
  *          요양병원 · 정신병원 · 종합병원 ·
- *          상급종합병원                      (30병상 이상)
+ *          상급종합                          (30병상 이상)
+ *          ※ 심평원 종별명은 "상급종합병원" 이 아니라 "상급종합" 이다
  *
- * 심사 기준은 **병원급 이상**(실무 확인). 종별명이 "병원"으로 끝나면 병원급이고
- * "의원"으로 끝나면 의원급이라 코드표 없이도 안전하게 갈린다.
+ * 심사 기준은 **병원급 이상**(실무 확인).
  */
 const BASE = 'https://apis.data.go.kr/B551182/hospInfoServicev2/getHospBasisList';
 
-/** 병원급 판정 — 종별명 말미로 가른다 */
-export const isHospitalGrade = (clCdNm) => /병원$/.test(String(clCdNm ?? '').trim());
+/*
+ * 병원급 판정.
+ *
+ * 처음엔 "종별명이 병원으로 끝나면 병원급" 으로 뒀는데 **틀렸다.**
+ * 심평원이 주는 종별명은 "상급종합병원" 이 아니라 **"상급종합"** 이다(실측).
+ * 그 규칙으로는 전국 상급종합병원 47곳이 통째로 빠진다 — 가장 큰 병원들이.
+ *
+ * 그래서 의료법 제3조의 종별을 명시적으로 적는다.
+ * 실측으로 확인한 종별: 상급종합 · 종합병원 · 병원 · 요양병원 · 치과병원 · 한방병원 ·
+ *                      의원 · 치과의원 · 한의원 · 보건소 · 보건지소
+ */
+const HOSPITAL = new Set(['상급종합', '종합병원', '병원', '요양병원', '정신병원', '치과병원', '한방병원']);
+const CLINIC = new Set(['의원', '치과의원', '한의원', '조산원']);
+
+export const isHospitalGrade = (clCdNm) => {
+  const n = String(clCdNm ?? '').trim();
+  if (HOSPITAL.has(n)) return true;
+  if (CLINIC.has(n)) return false;
+  // 보건소·보건지소·보건진료소·보건의료원은 지역보건법 기관이라 의료법 종별이 아니다
+  if (/^보건/.test(n)) return false;
+  // 모르는 종별이 새로 생기면 말미로 가른다 (보루)
+  return /병원$/.test(n);
+};
 
 /**
  * 좌표 반경내 의료기관 조회.
