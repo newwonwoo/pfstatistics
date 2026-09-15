@@ -61,6 +61,7 @@ const S = {
 const won = (v) => (v == null ? '-' : Math.round(v).toLocaleString('ko-KR'));
 const m2 = (v) => (v == null ? '-' : v.toFixed(2));
 const RADII = [1000, 2000, 3000];
+const KIND_ORDER = ['아파트', '민간임대', '오피스텔', '도시형생활주택', '생활형숙박시설'];
 const rLabel = (r) => `${r / 1000}km`;
 
 export default function CompareView({ addr, coord, region, polygon, radiusBasis, value, onChange }) {
@@ -108,7 +109,9 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
   const kindCounts = useMemo(() => {
     const m = new Map();
     for (const a of all) m.set(a.kind ?? '아파트', (m.get(a.kind ?? '아파트') ?? 0) + 1);
-    return [...m.entries()];
+    // 칩 순서는 고정한다 — 조회할 때마다 자리가 바뀌면 누르던 위치를 다시 찾아야 한다
+    const rank = (k) => { const i = KIND_ORDER.indexOf(k); return i < 0 ? KIND_ORDER.length : i; };
+    return [...m.entries()].sort((a, b) => rank(a[0]) - rank(b[0]));
   }, [all]);
   const items = useMemo(() => all.filter(a => kinds.includes(a.kind ?? '아파트')), [all, kinds]);
   const chosen = useMemo(() => items.filter(a => picked.includes(a.manageNo)), [items, picked]);
