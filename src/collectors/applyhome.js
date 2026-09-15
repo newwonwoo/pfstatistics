@@ -25,6 +25,13 @@ import { sidoShort } from '../lib/sido.js';
 const HOST = 'https://api.odcloud.kr/api';
 const P_DETAIL = `${HOST}/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail`;
 const P_MODEL = `${HOST}/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancMdl`;
+/*
+ * 오피스텔·도시형생활주택·민간임대는 **다른 API 에 있다**(전국 619건 — 실측).
+ * APT 쪽만 보면 통째로 안 보인다. 필드 이름도 다르다:
+ *   EXCLUSE_AR(전용면적) · SUPLY_AMOUNT(금액, 만원) · SUPLY_HSHLDCO(세대) · TP(타입)
+ */
+const P_URBTY = `${HOST}/ApplyhomeInfoDetailSvc/v1/getUrbtyOfctlLttotPblancDetail`;
+const P_URBTY_MODEL = `${HOST}/ApplyhomeInfoDetailSvc/v1/getUrbtyOfctlLttotPblancMdl`;
 
 const KAKAO = 'https://dapi.kakao.com/v2/local';
 const H = () => ({ Authorization: `KakaoAK ${requireKey('KAKAO_REST_KEY').trim()}` });
@@ -82,19 +89,31 @@ async function odcloud(base, params, { rows = 1000, page = 1 } = {}) {
  * 시도 단위 분양공고 목록.
  * 임대는 분양가가 없으므로 분양주택만 남긴다.
  */
-export async function fetchNotices(sido, { from = null } = {}) {
+async function fetchAll(path, sido, from) {
   const cond = { 'cond[SUBSCRPT_AREA_CODE_NM::EQ]': sido };
   if (from) cond['cond[RCRIT_PBLANC_DE::GTE]'] = from;
-
   const out = [];
   for (let page = 1; page <= 3; page++) {
-    const d = await odcloud(P_DETAIL, cond, { page });
+    const d = await odcloud(path, cond, { page });
     const rows = d?.data ?? [];
     out.push(...rows);
     if (out.length >= (d?.matchCount ?? 0) || rows.length === 0) break;
   }
-  return out.filter(r => r.RENT_SECD_NM === '분양주택');
+  return out;
 }
+
+/**
+ * 시도 단위 APT 분양공고.
+ *
+ * **임대를 여기서 버리지 않는다.** 예전엔 `RENT_SECD_NM='분양주택'` 만 남겼는데,
+ * 그러면 "반경 안에 임대단지가 있었는데 왜 안 보이나" 를 화면에서 설명할 수 없다.
+ * 거리를 잰 다음 반경 안의 임대만 따로 세어 사유와 함께 돌려준다
+ * (의료시설에서 의원급을 `excludedClinics` 로 남긴 것과 같은 이유).
+ */
+export const fetchNotices = (sido, { from = null } = {}) => fetchAll(P_DETAIL, sido, from);
+
+/** 오피스텔·도시형생활주택·민간임대 공고 */
+export const fetchUrbty = (sido, { from = null } = {}) => fetchAll(P_URBTY, sido, from);
 
 /** 한 공고의 주택형별 상세 (전용면적 · 세대수 · 분양가) */
 export async function fetchModels(manageNo) {
@@ -112,6 +131,36 @@ export async function fetchModels(manageNo) {
     };
   }).filter(t => t.area);
 }
+
+/**
+ * 오피스텔·도시형·민간임대의 주택형별 상세.
+ * 필드 이름이 APT 쪽과 다르다 — 전용면적이 `EXCLUSE_AR` 로 아예 명시돼 있다.
+ */
+export async function fetchUrbtyModels(manageNo) {
+  const d = await odcloud(P_URBTY_MODEL, { 'cond[HOUSE_MANAGE_NO::EQ]': String(manageNo) }, { rows: 100 });
+  return (d?.data ?? []).map(m => {
+    const area = Number(m.EXCLUSE_AR);
+    const manwon = Number(m.SUPLY_AMOUNT);
+    const households = Number(m.SUPLY_HSHLDCO ?? 0);
+    return {
+      type: m.TP ?? String(m.MODEL_NO ?? ''),
+      area: Number.isFinite(area) && area > 0 ? area : null,
+      households,
+      amount: Number.isFinite(manwon) ? manwon * 10000 : null,
+      unitPrice: Number.isFinite(area) && area > 0 && Number.isFinite(manwon) ? (manwon * 10000) / area : null,
+    };
+  }).filter(t => t.area);
+}
+
+/*
+ * 민간임대의 금액은 **분양가가 아니라 임대보증금**이다 (실측으로 확인).
+ *   힐스테이트 용인포레(기업형민간임대) 59.96㎡ → 1.35억 → 2,251,520원/㎡ (평당 744만원)
+ *   안성 공도 센트럴카운티             84.93㎡ → 2.65억 → 3,120,323원/㎡ (평당 1,031만원)
+ * 같은 데이터셋의 도시형생활주택(분양)은 14,463,258원/㎡ 이다 — 자릿수가 다르다.
+ * 그대로 섞으면 분양가 평균이 반토막 난다. 값은 보여주되 **분양가로 쓰지 못하게** 표시한다.
+ */
+const DEPOSIT_KINDS = new Set(['민간임대']);
+const RENTAL_APT = new Set(['분양전환 가능임대', '분양전환 불가임대']);
 
 /**
  * 단지 대표 ㎡당 분양가.
@@ -197,19 +246,32 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
     throw e;
   }
 
-  const notices = await fetchNotices(sido, { from });
+  /*
+   * 두 원천을 같이 본다.
+   *   APT   분양·임대 아파트
+   *   URBTY 오피스텔 · 도시형생활주택 · 민간임대 · 생활형숙박시설
+   * 종류를 끝까지 들고 다녀야 화면에서 무엇을 평균에 넣을지 고를 수 있다.
+   */
+  const [aptRows, urbtyRows] = await Promise.all([
+    fetchNotices(sido, { from }),
+    fetchUrbty(sido, { from }),
+  ]);
+  const notices = [
+    ...aptRows.map(r => ({ r, src: 'apt', kind: RENTAL_APT.has(r.RENT_SECD_NM) ? r.RENT_SECD_NM : '아파트' })),
+    ...urbtyRows.map(r => ({ r, src: 'urbty', kind: r.HOUSE_DTL_SECD_NM ?? '오피스텔' })),
+  ];
 
-  // 같은 단지가 재공고로 여러 건 들어온다 — 최신 공고만 남긴다
+  // 같은 단지가 재공고로 여러 건 들어온다 — 최신 공고만 남긴다 (종류가 다르면 다른 줄이다)
   const latest = new Map();
-  for (const r of notices) {
-    const key = dedupeKey(r);
+  for (const n of notices) {
+    const key = `${n.kind}|${dedupeKey(n.r)}`;
     const prev = latest.get(key);
-    if (!prev || String(r.RCRIT_PBLANC_DE) > String(prev.RCRIT_PBLANC_DE)) latest.set(key, r);
+    if (!prev || String(n.r.RCRIT_PBLANC_DE) > String(prev.r.RCRIT_PBLANC_DE)) latest.set(key, n);
   }
   const uniq = [...latest.values()];
 
   // 1차 — 시군구 중심으로 거른다
-  const sggs = [...new Set(uniq.map(r => sggOf(r.HSSPLY_ADRES)))].filter(Boolean);
+  const sggs = [...new Set(uniq.map(n => sggOf(n.r.HSSPLY_ADRES)))].filter(Boolean);
   const centers = await mapLimit(sggs, 8, geocodeOne);
   const near = new Set();
   sggs.forEach((s, i) => {
@@ -217,21 +279,30 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
     if (!c) { near.add(s); return; }   // 중심을 못 찾으면 버리지 않는다 (놓치는 것보다 낫다)
     if (haversine({ lat: Number(site.y), lng: Number(site.x) }, { lat: c.y, lng: c.x }) <= radius + 25000) near.add(s);
   });
-  const shortlist = uniq.filter(r => near.has(sggOf(r.HSSPLY_ADRES)));
+  const shortlist = uniq.filter(n => near.has(sggOf(n.r.HSSPLY_ADRES)));
 
   // 2차 — 남은 공고의 실제 지번을 지오코딩해 거리를 잰다
   const dist = (p) => (polygon?.length >= 3
     ? distanceToPolygon({ lat: p.y, lng: p.x }, polygon)
     : haversine({ lat: Number(site.y), lng: Number(site.x) }, { lat: p.y, lng: p.x }));
 
-  const located = await mapLimit(shortlist, 10, async (r) => {
-    const q = normalizeSupplyAddress(r.HSSPLY_ADRES);
+  const located = await mapLimit(shortlist, 10, async (n) => {
+    const q = normalizeSupplyAddress(n.r.HSSPLY_ADRES);
     const p = await geocodeOne(q);
     if (!p) return null;
-    return { r, q, p, d: Math.round(dist(p)) };
+    return { ...n, q, p, d: Math.round(dist(p)) };
   });
 
-  const inside = located.filter(v => v && v.d <= radius).sort((a, b) => a.d - b.d);
+  const within = located.filter(v => v && v.d <= radius).sort((a, b) => a.d - b.d);
+
+  /*
+   * 분양전환 임대 아파트는 분양가가 없다 — 평균에 넣을 수 없다.
+   * 다만 **반경 안에 있었다는 사실은 남긴다.** 안 그러면
+   * "옆에 단지가 있는데 왜 안 나오나" 에 화면이 답을 못 한다.
+   */
+  const excludedRental = within.filter(v => RENTAL_APT.has(v.kind))
+    .map(v => ({ name: v.r.HOUSE_NM, address: v.r.HSSPLY_ADRES, distance: v.d, kind: v.kind }));
+  const inside = within.filter(v => !RENTAL_APT.has(v.kind));
 
   /*
    * 진단창구 — "가까운 단지가 왜 안 나오나" 를 화면 밖에서 따질 수 있어야 한다.
@@ -239,14 +310,14 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
    */
   if (probe) {
     const re = new RegExp(probe);
-    const hits = uniq.filter(r => re.test(r.HOUSE_NM ?? '') || re.test(r.HSSPLY_ADRES ?? ''));
-    const traced = await mapLimit(hits, 6, async (r) => {
-      const q = normalizeSupplyAddress(r.HSSPLY_ADRES);
+    const hits = uniq.filter(n => re.test(n.r.HOUSE_NM ?? '') || re.test(n.r.HSSPLY_ADRES ?? ''));
+    const traced = await mapLimit(hits, 6, async (n) => {
+      const q = normalizeSupplyAddress(n.r.HSSPLY_ADRES);
       const p = await geocodeOne(q);
       return {
-        name: r.HOUSE_NM, address: r.HSSPLY_ADRES, query: q,
-        rent: r.RENT_SECD_NM, houseSecd: r.HOUSE_SECD_NM, notice: r.RCRIT_PBLANC_DE,
-        sggKept: near.has(sggOf(r.HSSPLY_ADRES)),
+        name: n.r.HOUSE_NM, address: n.r.HSSPLY_ADRES, query: q,
+        kind: n.kind, src: n.src, notice: n.r.RCRIT_PBLANC_DE,
+        sggKept: near.has(sggOf(n.r.HSSPLY_ADRES)),
         geocoded: p, distance: p ? Math.round(dist(p)) : null,
       };
     });
@@ -254,11 +325,16 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
   }
 
   // 3차 — 반경 안의 단지만 주택형별 상세를 받는다 (호출 수를 최소로)
-  const items = await mapLimit(inside, 5, async ({ r, q, p, d }) => {
+  const items = await mapLimit(inside, 5, async ({ r, q, p, d, src, kind }) => {
     let types = [];
-    try { types = await fetchModels(r.HOUSE_MANAGE_NO); } catch { /* 상세 실패해도 단지는 남긴다 */ }
+    try {
+      types = src === 'urbty' ? await fetchUrbtyModels(r.HOUSE_MANAGE_NO) : await fetchModels(r.HOUSE_MANAGE_NO);
+    } catch { /* 상세 실패해도 단지는 남긴다 */ }
     const s = summarize(types);
     return {
+      src, kind,
+      // 민간임대 금액은 임대보증금이다 — 분양가로 평균내면 안 된다
+      priceKind: DEPOSIT_KINDS.has(kind) ? 'deposit' : 'sale',
       manageNo: r.HOUSE_MANAGE_NO,
       name: r.HOUSE_NM,
       address: r.HSSPLY_ADRES,
@@ -269,7 +345,6 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
       moveIn: r.MVN_PREARNGE_YM,
       builder: r.CNSTRCT_ENTRPS_NM,
       developer: r.BSNS_MBY_NM,
-      kind: r.HOUSE_DTL_SECD_NM,
       totalHouseholds: Number(r.TOT_SUPLY_HSHLDCO) || null,
       url: r.PBLANC_URL,
       types,
@@ -285,9 +360,10 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
     shortlisted: shortlist.length,
     count: items.length,
     items,
+    excludedRental,   // 반경 안에 있었으나 분양가가 없어 뺀 임대 아파트
     source: {
       org: '한국부동산원 청약홈',
-      citation: `* 출처 : 한국부동산원 청약홈 APT 분양정보 (공공데이터포털) · ${sido} 분양공고 ${uniq.length}건 중 반경 ${radius >= 1000 ? `${radius / 1000}km` : `${radius}m`} 이내`,
+      citation: `* 출처 : 한국부동산원 청약홈 분양정보 (APT / 오피스텔·도시형·민간임대, 공공데이터포털) · ${sido} 공고 ${uniq.length}건 중 반경 ${radius >= 1000 ? `${radius / 1000}km` : `${radius}m`} 이내`,
       url: 'https://www.applyhome.co.kr/',
     },
   };

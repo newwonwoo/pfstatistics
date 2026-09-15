@@ -48,6 +48,8 @@ const S = {
   secTitle: { fontSize: 12, fontWeight: 700, color: T.muted, letterSpacing: '.04em', margin: '26px 0 12px', paddingTop: 18, borderTop: `1px solid ${T.line}` },
   note: { marginTop: 10, fontSize: 11.5, color: T.muted, lineHeight: 1.7 },
   link: { color: T.accent, textDecoration: 'none' },
+  kind: { fontSize: 11, color: T.muted, background: '#f1f3f5', padding: '2px 7px', borderRadius: 4 },
+  pend: { color: T.muted, fontWeight: 400, fontStyle: 'italic', fontSize: 11.5 },
 };
 
 const won = (v) => (v == null ? '-' : Math.round(v).toLocaleString('ko-KR'));
@@ -66,6 +68,8 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
   const picked = value?.picked ?? [];
   const set = (patch) => onChange?.({ radius, mode, data, picked, ...patch });
 
+  /* 민간임대 금액은 임대보증금이라 분양가와 자릿수가 다르다 — 평균에 절대 섞지 않는다 */
+  const isSale = (a) => a.priceKind !== 'deposit';
   const priceOf = (a) => (mode === 'weighted' ? a.weighted : a.simple);
   const usePoly = polygon?.length >= 3 && radiusBasis === 'polygon';
 
@@ -92,7 +96,7 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
 
   /* 3번 요구 — 고른 단지들의 **산술평균**. 단지 안에서는 가중/단순을 고를 수 있게 했다 */
   const avg = useMemo(() => {
-    const vals = chosen.map(priceOf).filter(v => v != null);
+    const vals = chosen.filter(isSale).map(priceOf).filter(v => v != null);
     return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
   }, [chosen, mode]);   // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -165,7 +169,7 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
         <div style={S.scroll}>
           <table style={S.table}>
             <thead><tr>
-              {['선택', '#', '단지명', '주소', '거리', '공고일', '공급세대', '전용면적', '분양가(원/㎡)'].map(c =>
+              {['선택', '#', '종류', '단지명', '주소', '거리', '공고일', '공급세대', '전용면적', '분양가(원/㎡)'].map(c =>
                 <th key={c} style={S.th}>{c}</th>)}
             </tr></thead>
             <tbody>
@@ -174,9 +178,17 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
                 return (
                   <tr key={a.manageNo} style={on ? S.rowOn : undefined}>
                     <td style={S.td}>
-                      <input type="checkbox" checked={on} onChange={() => toggle(a.manageNo)} />
+                      <input
+                        type="checkbox" checked={on}
+                        disabled={!isSale(a)}
+                        title={isSale(a) ? '' : '임대보증금이라 분양가 평균에 넣을 수 없습니다'}
+                        onChange={() => toggle(a.manageNo)}
+                      />
                     </td>
                     <td style={S.td}>{i + 1}</td>
+                    <td style={S.td}>
+                      <span style={a.kind === '아파트' ? undefined : S.kind}>{a.kind}</span>
+                    </td>
                     <td style={S.tdL}>
                       {a.url ? <a href={a.url} target="_blank" rel="noreferrer" style={S.link}>{a.name}</a> : a.name}
                       {a.builder && <span style={{ color: T.muted, fontSize: 11 }}> · {a.builder}</span>}
@@ -186,13 +198,25 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
                     <td style={S.td}>{a.noticeDate}</td>
                     <td style={S.td}>{a.totalHouseholds?.toLocaleString('ko-KR') ?? '-'}</td>
                     <td style={S.td}>{a.areaMin ? `${m2(a.areaMin)}~${m2(a.areaMax)}㎡` : '-'}</td>
-                    <td style={S.tdVal}>{won(priceOf(a))}</td>
+                    {isSale(a)
+                      ? <td style={S.tdVal}>{won(priceOf(a))}</td>
+                      : <td style={S.td} title="민간임대의 공급금액은 임대보증금입니다">
+                          <span style={S.pend}>임대보증금 {won(priceOf(a))}</span>
+                        </td>}
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
+        {data.excludedRental?.length > 0 && (
+          <div style={{ ...S.warn, marginTop: 10 }}>
+            반경 안에 <b>분양전환 임대 아파트 {data.excludedRental.length}건</b>이 더 있었지만
+            분양가가 없어 표에서 뺐습니다 —{' '}
+            {data.excludedRental.slice(0, 3).map(r => `${r.name} (${r.distance}m · ${r.kind})`).join(' · ')}
+            {data.excludedRental.length > 3 && ` 외 ${data.excludedRental.length - 3}건`}
+          </div>
+        )}
         <p style={S.note}>
           {data.source?.citation}<br />
           거리는 {data.basis === 'polygon' ? '사업지 경계 최단거리' : '대표지번 중심'} 기준입니다.

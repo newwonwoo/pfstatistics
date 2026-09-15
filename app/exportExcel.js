@@ -147,8 +147,9 @@ export async function exportWorkbook({ data, facilities, manual, compare, sheets
     const mode = compare.mode ?? 'weighted';
     const priceOf = (a) => (mode === 'weighted' ? a.weighted : a.simple);
     const picked = compare.picked ?? [];
+    const isSale = (a) => a.priceKind !== 'deposit';
     const chosen = c.items.filter(a => picked.includes(a.manageNo));
-    const vals = chosen.map(priceOf).filter(v => v != null);
+    const vals = chosen.filter(isSale).map(priceOf).filter(v => v != null);
     const avg = vals.length ? vals.reduce((s2, v) => s2 + v, 0) / vals.length : null;
     const rkm = c.radius >= 1000 ? `${c.radius / 1000}km` : `${c.radius}m`;
 
@@ -157,15 +158,15 @@ export async function exportWorkbook({ data, facilities, manual, compare, sheets
       title: '비교사업장',
       subtitle: `▶ 사업지 : ${compare.addr ?? facilities?.address ?? data.region}`
         + ` · 반경 ${rkm} · ${c.basis === 'polygon' ? '사업지 경계 기준' : '대표지번 중심 기준'}`,
-      columns: ['선택', '#', '단지명', '주소', '거리', '공고일', '공급세대', '전용면적', '분양가(원/㎡)'],
+      columns: ['선택', '#', '종류', '단지명', '주소', '거리', '공고일', '공급세대', '전용면적', '분양가(원/㎡)'],
       rows: c.items.map((a, i) => [
         picked.includes(a.manageNo) ? '■' : '',
-        i + 1, a.name, a.address, `${a.distance}m`, a.noticeDate,
+        i + 1, a.kind ?? '아파트', a.name, a.address, `${a.distance}m`, a.noticeDate,
         a.totalHouseholds ?? '',
         a.areaMin ? `${a.areaMin.toFixed(2)}~${a.areaMax.toFixed(2)}` : '',
-        priceOf(a) == null ? '' : Math.round(priceOf(a)),
+        priceOf(a) == null ? '' : (isSale(a) ? Math.round(priceOf(a)) : `(임대보증금) ${Math.round(priceOf(a)).toLocaleString('ko-KR')}`),
       ]),
-      markCell: [0, 8],
+      markCell: [0, 9],
     });
 
     cw.getCell(cur.nextRow, 2).value =
@@ -176,6 +177,13 @@ export async function exportWorkbook({ data, facilities, manual, compare, sheets
     cw.getCell(cur.nextRow + 1, 2).value = c.source?.citation ?? '';
     cw.getCell(cur.nextRow + 1, 2).font = { size: 9, color: { argb: 'FF666666' } };
     let crow = cur.nextRow + 3;
+    if (c.excludedRental?.length) {
+      cw.getCell(crow - 1, 2).value =
+        `* 반경 안 분양전환 임대 ${c.excludedRental.length}건은 분양가가 없어 제외 : `
+        + c.excludedRental.map(r => `${r.name}(${r.distance}m·${r.kind})`).join(' · ');
+      cw.getCell(crow - 1, 2).font = { size: 9, color: { argb: 'FF8A6D3B' } };
+      crow += 1;
+    }
 
     if (chosen.length) {
       cur = writeTable(cw, crow, {
