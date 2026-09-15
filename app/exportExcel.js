@@ -16,7 +16,7 @@ const MARK_FILL = 'FFFFFDF0';
 const BORDER = { style: 'thin', color: { argb: 'FF9AA5B1' } };
 const box = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
 
-import { scoreSheet, scoreGroup, scoreFacility, scorePoi } from '../src/lib/scoring';
+import { scoreSheet, scoreGroup, scoreFacility, scorePoi, scoreMatrix } from '../src/lib/scoring';
 
 const fmt = (v) =>
   typeof v === 'number' ? v : (v == null || v === '' ? '' : String(v));
@@ -145,7 +145,13 @@ export async function exportWorkbook({ data, facilities, manual, compare, sheets
     onProgress?.('비교사업장');
     const c = compare.data;
     const mode = compare.mode ?? 'weighted';
-    const priceOf = (a) => (mode === 'weighted' ? a.weighted : a.simple);
+    const areaBasis = compare.areaBasis ?? 'supply';
+    const site = compare.site ?? {};
+    const PY = 3.305785;
+    // 화면과 같은 산식을 쓴다 — 면적기준(공급/전용) × 산식(가중/단순)
+    const priceOf = (a) => (areaBasis === 'supply'
+      ? (mode === 'weighted' ? a.weightedSupply : a.simpleSupply)
+      : (mode === 'weighted' ? a.weighted : a.simple));
     const picked = compare.picked ?? [];
     const isSale = (a) => a.priceKind !== 'deposit';
     // 화면에서 켠 종류만 내보낸다 (화면 상태를 그대로 읽는다는 원칙)
@@ -161,26 +167,43 @@ export async function exportWorkbook({ data, facilities, manual, compare, sheets
       title: '비교사업장',
       subtitle: `▶ 사업지 : ${compare.addr ?? facilities?.address ?? data.region}`
         + ` · 반경 ${rkm} · ${c.basis === 'polygon' ? '사업지 경계 기준' : '대표지번 중심 기준'}`,
-      columns: ['선택', '#', '종류', '단지명', '주소', '거리', '공고일', '공급세대', '전용면적', '분양가(원/㎡)'],
+      columns: ['선택', '#', '종류', '단지명', '시공사', '주소', '거리', '분양개시일', '시기', '공급세대', '면적(㎡)', '분양가(원/㎡)', '유사도'],
       rows: shown.map((a, i) => [
         picked.includes(a.manageNo) ? '■' : '',
-        i + 1, a.kind ?? '아파트', a.name, a.address, `${a.distance}m`, a.noticeDate,
+        i + 1, a.kind ?? '아파트', a.name,
+        `${a.builder ?? ''}${a.builderRank ? ` (${a.builderRank}위)` : ''}`,
+        a.address, `${a.distance}m`, a.saleStart ?? '', a.timing ?? '',
         a.totalHouseholds ?? '',
-        a.areaMin ? `${a.areaMin.toFixed(2)}~${a.areaMax.toFixed(2)}` : '',
+        areaBasis === 'supply'
+          ? (a.supplyMin ? `${a.supplyMin.toFixed(2)}~${a.supplyMax.toFixed(2)}` : '')
+          : (a.areaMin ? `${a.areaMin.toFixed(2)}~${a.areaMax.toFixed(2)}` : ''),
         priceOf(a) == null ? '' : (isSale(a) ? Math.round(priceOf(a)) : `(임대보증금) ${Math.round(priceOf(a)).toLocaleString('ko-KR')}`),
+        a.publicSale ? '공공분양 — 제외 권고' : (a.years > 10 ? '10년 경과 — 제외 권고' : ''),
       ]),
-      markCell: [0, 9],
+      markCell: [0, 11],
     });
 
+    const sitePrice = Number(site.unitPrice) || null;
+    const index = sitePrice && avg ? (sitePrice / avg) * 100 : null;
+    const sc = scoreMatrix('분양가경쟁력', index ?? NaN, Number(site.exclScore));
+
     cw.getCell(cur.nextRow, 2).value =
-      `선택 ${chosen.length}곳 산술평균 : ${avg == null ? '-' : Math.round(avg).toLocaleString('ko-KR')} 원/㎡`
-      + (avg == null ? '' : ` (평당 약 ${Math.round(avg * 3.305785).toLocaleString('ko-KR')} 원)`)
+      `비교사업장 ${chosen.length}곳 평균 : ${avg == null ? '-' : Math.round(avg).toLocaleString('ko-KR')} 원/㎡`
+      + (avg == null ? '' : ` (평당 약 ${Math.round(avg * PY).toLocaleString('ko-KR')} 원)`)
+      + ` · ${areaBasis === 'supply' ? '공급면적 기준(심사기준)' : '전용면적 기준'}`
       + ` · 단지 대표단가는 ${mode === 'weighted' ? '세대수 가중평균' : '주택형 단순평균'}`
       + ` · 표시 종류 ${kinds.join('·')}`;
     cw.getCell(cur.nextRow, 2).font = { bold: true, size: 11 };
-    cw.getCell(cur.nextRow + 1, 2).value = c.source?.citation ?? '';
-    cw.getCell(cur.nextRow + 1, 2).font = { size: 9, color: { argb: 'FF666666' } };
-    let crow = cur.nextRow + 3;
+    // 분양가격지수와 배점 — 화면에 보이는 것과 같은 값을 적는다
+    cw.getCell(cur.nextRow + 1, 2).value = sitePrice
+      ? `본건 ${Math.round(sitePrice).toLocaleString('ko-KR')} 원/㎡ (평당 ${Math.round(sitePrice * PY).toLocaleString('ko-KR')})`
+        + (index == null ? '' : ` · 분양가격지수 ${index.toFixed(2)}`)
+        + (sc && !sc.pending ? ` · ${sc.score}점 ${sc.label} (${sc.text})` : ` · ${sc?.text ?? ''}`)
+      : '* 본건 ㎡당 분양가를 입력하면 분양가격지수와 배점이 채워집니다';
+    cw.getCell(cur.nextRow + 1, 2).font = { bold: Boolean(sitePrice), size: 10 };
+    cw.getCell(cur.nextRow + 2, 2).value = c.source?.citation ?? '';
+    cw.getCell(cur.nextRow + 2, 2).font = { size: 9, color: { argb: 'FF666666' } };
+    let crow = cur.nextRow + 4;
     if (c.excludedRental?.length) {
       cw.getCell(crow - 1, 2).value =
         `* 반경 안 분양전환 임대 ${c.excludedRental.length}건은 분양가가 없어 제외 : `
@@ -193,12 +216,13 @@ export async function exportWorkbook({ data, facilities, manual, compare, sheets
       cur = writeTable(cw, crow, {
         title: '선택 단지 상세 (면적별)',
         subtitle: '▶ 전용면적 기준 · 세대수 = 특별공급 + 일반공급',
-        columns: ['단지명', '주소', '주택형', '전용면적(㎡)', '세대수', '분양최고금액(원)', '원/㎡'],
+        columns: ['단지명', '주소', '주택형', '전용면적(㎡)', '공급면적(㎡)', '세대수', '세대당분양가(원)', '원/㎡'],
         rows: chosen.flatMap(a => a.types.map(t => [
-          a.name, a.address, t.type, t.area, t.households, t.amount ?? '',
-          t.unitPrice == null ? '' : Math.round(t.unitPrice),
+          a.name, a.address, t.type, t.area, t.supplyArea ?? '', t.households, t.amount ?? '',
+          (areaBasis === 'supply' ? t.unitPriceSupply : t.unitPrice) == null
+            ? '' : Math.round(areaBasis === 'supply' ? t.unitPriceSupply : t.unitPrice),
         ])),
-        markCell: [0, 6],
+        markCell: [0, 7],
       });
       crow = cur.nextRow + 1;
     }

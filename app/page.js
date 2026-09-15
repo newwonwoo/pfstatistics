@@ -624,6 +624,9 @@ export default function Home() {
                 <CompareView
                   addr={addr} coord={coord} region={region} polygon={polygon}
                   radiusBasis={radiusBasis}
+                  company={data?.company}
+                  /* 시공능력평가순위는 이미 수집돼 있다 — 본건 유사도 판정에 참고로 보여준다 */
+                  companyRank={(data?.results ?? []).find(r => r.indicatorId === 'construction_capability_rank' && r.ok)?.value ?? null}
                   value={compare} onChange={setCompare}
                 />
               )
