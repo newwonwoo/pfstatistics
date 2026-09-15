@@ -49,6 +49,12 @@ const S = {
   note: { marginTop: 10, fontSize: 11.5, color: T.muted, lineHeight: 1.7 },
   link: { color: T.accent, textDecoration: 'none' },
   kind: { fontSize: 11, color: T.muted, background: '#f1f3f5', padding: '2px 7px', borderRadius: 4 },
+  chips: { display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', margin: '0 0 14px' },
+  chip: (on) => ({
+    padding: '5px 12px', fontSize: 11.5, fontWeight: 700, borderRadius: 999, cursor: 'pointer',
+    border: `1px solid ${on ? T.accent : T.line}`,
+    background: on ? '#eaf1fb' : '#fff', color: on ? T.accent : T.muted,
+  }),
   pend: { color: T.muted, fontWeight: 400, fontStyle: 'italic', fontSize: 11.5 },
 };
 
@@ -63,10 +69,16 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
   const [err, setErr] = useState(null);
   // 단지 대표단가를 세대수로 가중할지 주택형 단순평균으로 할지 — 실무 관행이 갈린다
   const [mode, setMode] = useState(value?.mode ?? 'weighted');
+  /*
+   * 표에 올릴 종류. 청약홈은 아파트와 오피스텔·도시형생활주택·민간임대를
+   * 서로 다른 원천으로 준다 — 성격이 달라 한 평균에 섞으면 안 된다.
+   * 기본은 아파트만 켠다(심사의 비교대상). 나머지는 건수를 보여주고 눌러서 켠다.
+   */
+  const kinds = value?.kinds ?? ['아파트'];
 
   const data = value?.data ?? null;
   const picked = value?.picked ?? [];
-  const set = (patch) => onChange?.({ radius, mode, data, picked, ...patch });
+  const set = (patch) => onChange?.({ radius, mode, data, picked, kinds, ...patch });
 
   /* 민간임대 금액은 임대보증금이라 분양가와 자릿수가 다르다 — 평균에 절대 섞지 않는다 */
   const isSale = (a) => a.priceKind !== 'deposit';
@@ -91,8 +103,22 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
     } finally { setBusy(false); }
   };
 
-  const items = data?.items ?? [];
+  const all = data?.items ?? [];
+  // 수집 결과에 실제로 들어온 종류만 칩으로 보여준다 (없는 종류를 켜고 끌 이유가 없다)
+  const kindCounts = useMemo(() => {
+    const m = new Map();
+    for (const a of all) m.set(a.kind ?? '아파트', (m.get(a.kind ?? '아파트') ?? 0) + 1);
+    return [...m.entries()];
+  }, [all]);
+  const items = useMemo(() => all.filter(a => kinds.includes(a.kind ?? '아파트')), [all, kinds]);
   const chosen = useMemo(() => items.filter(a => picked.includes(a.manageNo)), [items, picked]);
+
+  /* 종류를 끄면 그 종류로 고른 것도 같이 뺀다 — 안 보이는 줄이 평균에 남으면 안 된다 */
+  const toggleKind = (k) => {
+    const next = kinds.includes(k) ? kinds.filter(v => v !== k) : [...kinds, k];
+    const keep = all.filter(a => next.includes(a.kind ?? '아파트')).map(a => a.manageNo);
+    set({ kinds: next, picked: picked.filter(no => keep.includes(no)) });
+  };
 
   /* 3번 요구 — 고른 단지들의 **산술평균**. 단지 안에서는 가중/단순을 고를 수 있게 했다 */
   const avg = useMemo(() => {
@@ -138,6 +164,21 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
 
       {err && <div style={S.warn}>{err}</div>}
 
+      {kindCounts.length > 0 && (
+        <div style={S.chips}>
+          <span style={S.label}>종류</span>
+          {kindCounts.map(([k, n]) => (
+            <button key={k} style={S.chip(kinds.includes(k))} onClick={() => toggleKind(k)}
+              title={k === '민간임대' ? '공급금액이 임대보증금이라 분양가 평균에는 넣을 수 없습니다' : ''}>
+              {k} {n}
+            </button>
+          ))}
+          <span style={{ ...S.label, marginLeft: 4 }}>
+            {items.length}건 표시 {kinds.length === 0 && '· 종류를 하나 이상 고르세요'}
+          </span>
+        </div>
+      )}
+
       {/* 2·3번 요구 — 고르는 즉시 산술평균이 바뀐다 */}
       <div style={S.sum}>
         <span style={S.sumUnit}>선택 {chosen.length}곳 산술평균</span>
@@ -158,10 +199,15 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
         </div>
       )}
 
-      {data && items.length === 0 && (
+      {data && all.length === 0 && (
         <div style={S.warn}>
           반경 {rLabel(data.radius)} 안에 분양공고 이력이 있는 단지가 없습니다
           ({data.sido} 공고 {data.scanned}건 조회). 반경을 넓혀 보세요.
+        </div>
+      )}
+      {data && all.length > 0 && items.length === 0 && (
+        <div style={S.warn}>
+          반경 안에 {all.length}건이 있지만 고른 종류에 해당하는 것이 없습니다 — 위에서 종류를 켜세요.
         </div>
       )}
 
