@@ -152,6 +152,8 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
    * ③ 유사도 — 본건과 몇 개 항목이 일치하는가.
    * 택지유형은 원천에 없어 본건·상대 모두 수기다(상대는 아직 못 받으므로 판정에서 뺀다).
    */
+  /* 본건 제원을 하나도 안 채웠으면 유사도를 "0개 일치" 로 붉게 띄우지 않는다 — 겁만 준다 */
+  const siteFilled = Boolean(site.houseType || site.sizeBand || site.rankBand || site.landType);
   const similarity = (a) => {
     const hit = [];
     const miss = [];
@@ -350,8 +352,11 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
             {items.length}건 표시{kinds.length === 0 && ' · 종류를 하나 이상 고르세요'}
           </span>
           {items.length > 0 && (
-            <button style={{ ...S.ghost, marginLeft: 'auto' }} onClick={autoPick}
-              title="유사도 2개 이상 · 공공분양/10년 경과 제외 · 1년 이내 분양개시 우선 · 3개 이상 일치 우선">
+            <button style={{ ...S.ghost, marginLeft: 'auto', opacity: siteFilled ? 1 : 0.5 }}
+              onClick={autoPick} disabled={!siteFilled}
+              title={siteFilled
+                ? '유사도 2개 이상 · 공공분양/10년 경과 제외 · 1년 이내 분양개시 우선 · 3개 이상 일치 우선'
+                : '위 [본건 제원] 을 채워야 유사도를 판정할 수 있습니다'}>
               규정대로 자동선택
             </button>
           )}
@@ -455,8 +460,10 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
                       : <td style={S.tdNo} title="민간임대의 공급금액은 임대보증금입니다">
                           <span style={S.pend}>임대보증금 {won(priceOf(a))}</span>
                         </td>}
-                    <td style={S.td} title={`일치 : ${a.sim.hit.join(', ') || '없음'}\n불일치 : ${a.sim.miss.join(', ')}`}>
-                      <span style={S.badge(a.sim.n >= 3 ? 'ok' : a.sim.n >= 2 ? 'none' : 'warn')}>{a.sim.n}개 일치</span>
+                    <td style={S.tdNo} title={siteFilled ? `일치 : ${a.sim.hit.join(', ') || '없음'}\n불일치 : ${a.sim.miss.join(', ')}` : '위 [본건 제원] 을 채우면 유사도를 판정합니다'}>
+                      {siteFilled
+                        ? <span style={S.badge(a.sim.n >= 3 ? 'ok' : a.sim.n >= 2 ? 'none' : 'warn')}>{a.sim.n}개 일치</span>
+                        : <span style={S.pend}>본건 제원 미입력</span>}
                     </td>
                   </tr>
                 );
