@@ -223,7 +223,10 @@ async function mapLimit(items, limit, fn) {
  */
 const dongOf = (addr) => (String(addr ?? '').match(/\S+?[동리가](?=\s|$)/) ?? [''])[0];
 const dedupeKey = (r) =>
-  `${String(r.HOUSE_NM ?? '').replace(/[\s()]/g, '')}|${dongOf(r.HSSPLY_ADRES)}`;
+  // 괄호 **안의 내용까지** 지운다 — "역북 서희스타힐스 프라임시티(조합원 취소분)" 이
+  // 원공고와 따로 앉아 같은 단지가 두 줄로 나왔다(실측).
+  // 종류는 키에 따로 들어가므로 "○○(오피스텔)" 이 아파트와 합쳐지지는 않는다.
+  `${String(r.HOUSE_NM ?? '').replace(/\([^)]*\)/g, '').replace(/\s/g, '')}|${dongOf(r.HSSPLY_ADRES)}`;
 
 /** 주소 앞 두 토큰 = 시도 + 시군구 (광역시 자치구도 같은 모양) */
 const sggOf = (addr) => String(addr ?? '').split(/\s+/).slice(0, 2).join(' ');
