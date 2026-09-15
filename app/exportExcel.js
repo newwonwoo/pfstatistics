@@ -148,6 +148,9 @@ export async function exportWorkbook({ data, facilities, manual, compare, sheets
     const priceOf = (a) => (mode === 'weighted' ? a.weighted : a.simple);
     const picked = compare.picked ?? [];
     const isSale = (a) => a.priceKind !== 'deposit';
+    // 화면에서 켠 종류만 내보낸다 (화면 상태를 그대로 읽는다는 원칙)
+    const kinds = compare.kinds ?? ['아파트'];
+    const shown = c.items.filter(a => kinds.includes(a.kind ?? '아파트'));
     const chosen = c.items.filter(a => picked.includes(a.manageNo));
     const vals = chosen.filter(isSale).map(priceOf).filter(v => v != null);
     const avg = vals.length ? vals.reduce((s2, v) => s2 + v, 0) / vals.length : null;
@@ -159,7 +162,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, sheets
       subtitle: `▶ 사업지 : ${compare.addr ?? facilities?.address ?? data.region}`
         + ` · 반경 ${rkm} · ${c.basis === 'polygon' ? '사업지 경계 기준' : '대표지번 중심 기준'}`,
       columns: ['선택', '#', '종류', '단지명', '주소', '거리', '공고일', '공급세대', '전용면적', '분양가(원/㎡)'],
-      rows: c.items.map((a, i) => [
+      rows: shown.map((a, i) => [
         picked.includes(a.manageNo) ? '■' : '',
         i + 1, a.kind ?? '아파트', a.name, a.address, `${a.distance}m`, a.noticeDate,
         a.totalHouseholds ?? '',
@@ -172,7 +175,8 @@ export async function exportWorkbook({ data, facilities, manual, compare, sheets
     cw.getCell(cur.nextRow, 2).value =
       `선택 ${chosen.length}곳 산술평균 : ${avg == null ? '-' : Math.round(avg).toLocaleString('ko-KR')} 원/㎡`
       + (avg == null ? '' : ` (평당 약 ${Math.round(avg * 3.305785).toLocaleString('ko-KR')} 원)`)
-      + ` · 단지 대표단가는 ${mode === 'weighted' ? '세대수 가중평균' : '주택형 단순평균'}`;
+      + ` · 단지 대표단가는 ${mode === 'weighted' ? '세대수 가중평균' : '주택형 단순평균'}`
+      + ` · 표시 종류 ${kinds.join('·')}`;
     cw.getCell(cur.nextRow, 2).font = { bold: true, size: 11 };
     cw.getCell(cur.nextRow + 1, 2).value = c.source?.citation ?? '';
     cw.getCell(cur.nextRow + 1, 2).font = { size: 9, color: { argb: 'FF666666' } };
