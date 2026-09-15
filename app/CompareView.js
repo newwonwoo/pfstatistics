@@ -84,6 +84,20 @@ const S = {
     border: `1px solid ${on ? T.accent : T.line}`, background: on ? '#eaf1fb' : '#fff', color: on ? T.accent : T.muted,
   }),
   pend: { color: T.muted, fontWeight: 400, fontStyle: 'italic', fontSize: 11.5 },
+  propBox: { marginBottom: 14, borderRadius: 8, border: `1px solid ${T.lineStrong}`, overflow: 'hidden', background: '#fff' },
+  propHead: { display: 'flex', alignItems: 'baseline', gap: 10, padding: '10px 16px', background: '#eef2f7', borderBottom: `1px solid ${T.line}`, fontSize: 12.5, fontWeight: 700, color: T.ink },
+  propClause: { marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: T.muted },
+  propTable: { borderCollapse: 'collapse', width: '100%', fontSize: 12.5 },
+  propKey: { padding: '7px 16px', color: T.ink2, whiteSpace: 'nowrap', width: 200 },
+  propNum: { padding: '7px 8px', textAlign: 'right', fontWeight: 700, width: 140, ...mono },
+  propUnit: { padding: '7px 4px', color: T.muted, fontSize: 11.5, width: 44 },
+  propPy: { padding: '7px 16px', color: T.muted, fontSize: 11.5, ...mono },
+  propFinal: { borderTop: `2px solid ${T.lineStrong}`, background: '#fffdf0', paddingTop: 9, paddingBottom: 9 },
+  propWhy: { padding: '9px 16px 12px', fontSize: 12, color: T.ink2, lineHeight: 1.7 },
+  propAsk: { padding: '11px 16px 13px', borderTop: `1px solid ${T.line}`, background: '#fafbfc' },
+  propAskHead: { fontSize: 11, fontWeight: 700, color: T.muted, letterSpacing: '.04em', marginBottom: 7 },
+  propCheck: { display: 'flex', gap: 7, alignItems: 'flex-start', fontSize: 11.5, color: T.ink2, lineHeight: 1.7, marginTop: 4 },
+  propHint: { color: T.muted },
   badge: (tone) => ({
     fontSize: 10.5, fontWeight: 700, padding: '2px 7px', borderRadius: 4, whiteSpace: 'nowrap',
     background: tone === 'ok' ? T.okSoft : tone === 'warn' ? T.warnSoft : '#f1f3f5',
@@ -211,12 +225,39 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
   const sc = scoreMatrix('분양가경쟁력', index ?? NaN, Number(site.exclScore));
 
   /* 제16조①2 — 적정분양가 산정 */
+  /**
+   * 제16조①2 — 적정분양가 산정.
+   *
+   * **④는 자동이 아니다.** "±10퍼센트 범위 이내로서 단위사업의 입지여건, 마감수준,
+   * 인근부동산중개업소 방문조사 결과 등을 감안하여 그 **타당성이 인정되는 경우**" 다.
+   * 예전에는 110% 이내면 말없이 예정분양가를 채택했는데, 그건 규정을 앞질러 간 것이다.
+   * 원칙(나목)은 평균가격 채택이고, ④는 심사자가 체크해야 열린다.
+   */
   const proper = (() => {
     if (!sitePrice || !avg) return null;
     const ratio = (sitePrice / avg) * 100;
-    if (sitePrice <= avg) return { price: sitePrice, why: '예정분양가가 평균가격보다 낮음 → 예정분양가를 적용 (제16조①2 가목)', tone: 'ok', ratio };
-    if (ratio <= 110) return { price: sitePrice, why: `예정분양가가 평균가격의 ${ratio.toFixed(1)}% — ±10% 범위 이내이므로 타당성이 인정되면 예정분양가를 적정한 것으로 인정할 수 있음 (제16조④)`, tone: 'warn', ratio };
-    return { price: avg, why: `예정분양가가 평균가격의 ${ratio.toFixed(1)}% — 평균가격을 적용하며 보증신청인과 사전협의 필요 (제16조①2 나목)`, tone: 'warn', ratio };
+    const within10 = ratio <= 110;
+    if (sitePrice <= avg) {
+      return {
+        price: sitePrice, ratio, within10, tone: 'ok',
+        clause: '제16조①2 가목',
+        why: '예정분양가가 평균가격보다 낮으므로 예정분양가를 적용합니다.'
+          + (ratio < 90 ? ' 적정분양가의 90% 미만이므로 실무상 적정한 것으로 간주합니다.' : ''),
+      };
+    }
+    if (within10 && site.art4) {
+      return {
+        price: sitePrice, ratio, within10, tone: 'ok',
+        clause: '제16조④',
+        why: '±10% 범위 이내이고 입지여건·마감수준·인근 중개업소 방문조사 결과를 감안해 '
+          + '타당성이 인정되는 것으로 판단하여 예정분양가를 적용합니다.',
+      };
+    }
+    return {
+      price: avg, ratio, within10, tone: 'warn',
+      clause: '제16조①2 나목',
+      why: '예정분양가가 평균가격보다 높으므로 평균가격을 적용하며, 보증신청인과 사전협의가 필요합니다.',
+    };
   })();
 
   const markers = useMemo(() => items.map((a, i) => ({
@@ -379,16 +420,77 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
         </span>
       </div>
 
+      {/*
+        적정분양가는 심사의 결론이다 — 한 줄 문장에 밀어넣으면 무엇이 값이고 무엇이 근거인지
+        구분이 안 된다. 산정 과정을 **표로** 펴서 ①②와 결론을 한자리에서 본다.
+        판단이 필요한 것(④ 타당성, 미분양관리지역)은 결론에서 떼어내 아래에 둔다.
+      */}
       {proper && (
-        <div style={proper.tone === 'ok' ? S.ok : S.warn}>
-          <b>적정분양가 {won(proper.price)} 원/㎡</b> (평당 {won(proper.price * PY)}) — {proper.why}
-          {proper.ratio < 90 && <><br />※ 예정분양가가 적정분양가의 90% 미만이므로 실무상 적정한 것으로 간주합니다.</>}
-          {site.unsoldZone && <><br />※ 미분양관리지역 : 예정분양가가 적정분양가의 <b>105% 이내</b>여야 합니다
-            (현재 {proper.ratio.toFixed(1)}% → {proper.ratio <= 105 ? '충족' : '초과'}).</>}
-          <label style={{ display: 'block', marginTop: 6, fontSize: 11.5 }}>
-            <input type="checkbox" checked={!!site.unsoldZone}
-              onChange={e => setSite({ unsoldZone: e.target.checked })} /> 미분양관리지역 사업장
-          </label>
+        <div style={S.propBox}>
+          <div style={S.propHead}>
+            <span>적정분양가 산정</span>
+            <span style={S.propClause}>{proper.clause}</span>
+          </div>
+          <table style={S.propTable}>
+            <tbody>
+              <tr>
+                <td style={S.propKey}>① 비교사업장 평균가격</td>
+                <td style={S.propNum}>{won(avg)}</td>
+                <td style={S.propUnit}>원/㎡</td>
+                <td style={S.propPy}>평당 {won(avg * PY)}</td>
+              </tr>
+              <tr>
+                <td style={S.propKey}>② 본건 예정분양가</td>
+                <td style={S.propNum}>{won(sitePrice)}</td>
+                <td style={S.propUnit}>원/㎡</td>
+                <td style={S.propPy}>평당 {won(sitePrice * PY)}</td>
+              </tr>
+              <tr>
+                <td style={S.propKey}>② ÷ ①</td>
+                <td style={{ ...S.propNum, fontWeight: 600 }}>{proper.ratio.toFixed(1)}%</td>
+                <td style={S.propUnit} />
+                <td style={S.propPy}>
+                  {proper.within10 ? '±10% 범위 이내' : '±10% 범위 초과'}
+                </td>
+              </tr>
+              <tr>
+                <td style={{ ...S.propKey, ...S.propFinal }}>⇒ 적정분양가</td>
+                <td style={{ ...S.propNum, ...S.propFinal, fontSize: 17 }}>{won(proper.price)}</td>
+                <td style={{ ...S.propUnit, ...S.propFinal }}>원/㎡</td>
+                <td style={{ ...S.propPy, ...S.propFinal }}>평당 {won(proper.price * PY)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div style={S.propWhy}>{proper.why}</div>
+
+          <div style={S.propAsk}>
+            <div style={S.propAskHead}>심사자 판단</div>
+            {/* ④ 는 자동이 아니다 — 타당성 인정은 사람이 한다 */}
+            <label style={{ ...S.propCheck, opacity: proper.within10 && sitePrice > avg ? 1 : 0.45 }}>
+              <input type="checkbox" checked={!!site.art4}
+                disabled={!(proper.within10 && sitePrice > avg)}
+                onChange={e => setSite({ art4: e.target.checked })} />
+              <span>
+                <b>제16조④ 타당성 인정</b> — ±10% 이내이고 입지여건·마감수준·인근 중개업소
+                방문조사 결과를 감안해 타당하다고 판단
+                {proper.within10 && sitePrice > avg
+                  ? <span style={S.propHint}> → 체크하면 적정분양가가 예정분양가 {won(sitePrice)} 이 됩니다</span>
+                  : <span style={S.propHint}> (예정분양가가 평균보다 높고 ±10% 이내일 때만 해당)</span>}
+              </span>
+            </label>
+            <label style={S.propCheck}>
+              <input type="checkbox" checked={!!site.unsoldZone}
+                onChange={e => setSite({ unsoldZone: e.target.checked })} />
+              <span>
+                <b>미분양관리지역 사업장</b> — 예정분양가가 적정분양가의 105% 이내여야 함 (제16조⑥)
+                {site.unsoldZone && (
+                  <b style={{ color: proper.ratio <= 105 ? T.ok : T.warn }}>
+                    {' '}→ 현재 {proper.ratio.toFixed(1)}% · {proper.ratio <= 105 ? '충족' : '초과'}
+                  </b>
+                )}
+              </span>
+            </label>
+          </div>
         </div>
       )}
 
