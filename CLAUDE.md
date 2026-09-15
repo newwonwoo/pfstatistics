@@ -189,7 +189,7 @@ GET api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getUrbtyOfctlLttotPblancMdl
 | 분양가 평균이 이상하게 낮음 | **민간임대가 섞였다.** 그 금액은 분양가가 아니라 임대보증금이다(자릿수가 다르다). 종류를 끝까지 들고 다니며 선택을 막을 것 |
 | 오피스텔·도시형이 하나도 안 잡힘 | **다른 API 다**(getUrbtyOfctlLttotPblanc…). APT 분양정보만 보면 안 보인다. 서울은 이쪽이 더 많다 |
 | 같은 단지가 두 줄 (조합원 취소분) | 재공고 묶음키가 괄호 **안 글자**를 안 지웠다. "○○(조합원 취소분)" 이 원공고와 따로 앉는다 |
-| 샌드박스 브라우저로 실사이트 확인 불가 | 브라우저의 외부 HTTPS 터널이 끊긴다(`ERR_CONNECTION_RESET`). 카카오 JS 키도 도메인 제한이라 localhost 불가. **같은 모양의 DOM 을 만들어 로직만 검증**하고, 카카오 DOM 은 화면 사유표시로 역추적한다 |
+| 샌드박스 브라우저로 실사이트 확인 불가 | **틀린 기록이었다(2026-09-15 정정).** Chromium 이 `HTTPS_PROXY` 를 안 쓰고 있었을 뿐이다. `chromium.launch({ proxy: { server: process.env.HTTPS_PROXY }, args: ['--ignore-certificate-errors'] })` 로 띄우면 **배포본이 그대로 열리고 카카오 지도도 뜬다**(도메인 제한 통과). 다만 프록시가 간헐적으로 502 `upstream request failed` 를 낸다 — 내 앱 오류로 오해하지 말고 재시도할 것. 로컬(localhost)은 여전히 카카오 JS 키 도메인 제한으로 지도가 안 뜬다 |
 
 ## 구조
 

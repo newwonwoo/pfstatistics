@@ -64,9 +64,11 @@ const S = {
   scroll: { overflowX: 'auto' },
   table: { borderCollapse: 'collapse', fontSize: 12.5, width: '100%', minWidth: 900 },
   th: { border: `1px solid ${T.sheetLine}`, background: T.sheetHead, padding: '7px 9px', fontWeight: 600, whiteSpace: 'nowrap', color: T.ink },
-  td: { border: `1px solid ${T.sheetLine}`, padding: '7px 9px', textAlign: 'center', ...mono },
-  tdL: { border: `1px solid ${T.sheetLine}`, padding: '7px 9px', textAlign: 'left' },
-  tdVal: { border: `1px solid ${T.sheetLine}`, padding: '7px 9px', textAlign: 'right', fontWeight: 700, background: '#fffdf0', ...mono },
+  td: { border: `1px solid ${T.sheetLine}`, padding: '7px 9px', textAlign: 'center', verticalAlign: 'middle', ...mono },
+  // 날짜·면적·종류가 좁은 열에서 두 줄로 접히면 표가 들쭉날쭉해진다
+  tdNo: { border: `1px solid ${T.sheetLine}`, padding: '7px 9px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', ...mono },
+  tdL: { border: `1px solid ${T.sheetLine}`, padding: '7px 9px', textAlign: 'left', verticalAlign: 'middle' },
+  tdVal: { border: `1px solid ${T.sheetLine}`, padding: '7px 9px', textAlign: 'right', verticalAlign: 'middle', fontWeight: 700, background: '#fffdf0', ...mono },
   rowOn: { background: '#eef5ff' },
   rowOut: { background: '#fafafa', color: T.muted },
   empty: { padding: '40px 20px', textAlign: 'center', color: T.muted, fontSize: 13, lineHeight: 1.8 },
@@ -428,7 +430,7 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
                         onChange={() => toggle(a.manageNo)} />
                     </td>
                     <td style={S.td}>{i + 1}</td>
-                    <td style={S.td}><span style={a.kind === '아파트' ? undefined : S.kind}>{a.kind}</span></td>
+                    <td style={S.tdNo}><span style={a.kind === '아파트' ? undefined : S.kind}>{a.kind}</span></td>
                     <td style={S.tdL}>
                       {a.url ? <a href={a.url} target="_blank" rel="noreferrer" style={S.link}>{a.name}</a> : a.name}
                       {a.builder && <span style={{ color: T.muted, fontSize: 11 }}> · {a.builder}{a.builderRank ? ` ${a.builderRank}위` : ''}</span>}
@@ -437,20 +439,20 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
                       </span></>}
                     </td>
                     <td style={S.tdL}>{a.address}</td>
-                    <td style={S.td}>{a.distance}m</td>
-                    <td style={S.td}>{a.saleStart ?? '-'}</td>
-                    <td style={S.td}>
+                    <td style={S.tdNo}>{a.distance}m</td>
+                    <td style={S.tdNo}>{a.saleStart ?? '-'}</td>
+                    <td style={S.tdNo}>
                       <span style={S.badge(a.timing === '1년 이내 분양개시' ? 'ok' : 'none')}>{a.timing ?? '-'}</span>
                     </td>
-                    <td style={S.td}>{a.totalHouseholds?.toLocaleString('ko-KR') ?? '-'}</td>
-                    <td style={S.td}>
+                    <td style={S.tdNo}>{a.totalHouseholds?.toLocaleString('ko-KR') ?? '-'}</td>
+                    <td style={S.tdNo}>
                       {areaBasis === 'supply'
                         ? (a.supplyMin ? `${m2(a.supplyMin)}~${m2(a.supplyMax)}㎡` : '-')
                         : (a.areaMin ? `${m2(a.areaMin)}~${m2(a.areaMax)}㎡` : '-')}
                     </td>
                     {isSale(a)
-                      ? <td style={S.tdVal}>{won(priceOf(a))}</td>
-                      : <td style={S.td} title="민간임대의 공급금액은 임대보증금입니다">
+                      ? <td style={{ ...S.tdVal, whiteSpace: 'nowrap' }}>{won(priceOf(a))}</td>
+                      : <td style={S.tdNo} title="민간임대의 공급금액은 임대보증금입니다">
                           <span style={S.pend}>임대보증금 {won(priceOf(a))}</span>
                         </td>}
                     <td style={S.td} title={`일치 : ${a.sim.hit.join(', ') || '없음'}\n불일치 : ${a.sim.miss.join(', ')}`}>
@@ -480,7 +482,8 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
 
         <div style={S.secTitle}>반경 {rLabel(data.radius)} 분양단지 위치</div>
         <RadiusMap
-          title={`비교사업장 · 반경 ${rLabel(data.radius)}`}
+          /* RadiusMap 이 제목 뒤에 "· 반경 Nkm" 을 스스로 붙인다 — 여기서 또 쓰면 두 번 나온다 */
+          title="비교사업장"
           center={{ lat: Number(coord.y), lng: Number(coord.x) }}
           radius={data.radius}
           markers={markers}
