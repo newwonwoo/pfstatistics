@@ -100,6 +100,22 @@ GET apis.data.go.kr/B551182/hospInfoServicev2/getHospBasisList
 탐색 창구: **`/api/hira?lat=&lng=&radius=`** (종별 분포·totalCount 를 그대로 준다).
 캡쳐가 1.5km "부재"인데 의원·치과가 15건 잡혔던 것이 이 기준의 근거다.
 
+### 분양가 — 청약홈 (DATA_GO_KR_KEY 필요)
+비교사업장의 **분양가**를 주는 유일한 공공 원천이다. 실거래는 이미 팔린 값이고, KB시세는 기축이다.
+```
+공고   GET api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail
+       ?page=&perPage=1000&cond[SUBSCRPT_AREA_CODE_NM::EQ]=경기
+주택형 GET api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancMdl
+       ?cond[HOUSE_MANAGE_NO::EQ]=2026000449
+```
+**HOUSE_TY 가 전용면적이다** — `"084.7459A"` = 전용 84.7459㎡ + 타입기호.
+`SUPLY_AR`(110.3043)은 **공급면적**이라 이걸 쓰면 단가가 25% 낮게 나온다.
+`LTTOT_TOP_AMOUNT`(89800)는 **만원** 단위. 세대수 = `SPSPLY_HSHLDCO`(특별) + `SUPLY_HSHLDCO`(일반).
+`RENT_SECD_NM='분양주택'` 만 남긴다(임대는 분양가가 없다).
+전국 2,875건 · 경기 913건 (2026-09 기준). perPage 1000 까지 받는다.
+탐색 창구: **`/api/applyhome?op=detail|model|raw`**, 수집: **`/api/apts?x=&y=&region=&radius=`**
+(`&probe=정규식` 을 붙이면 반경 밖 공고까지 지오코딩 결과·거리를 보여준다).
+
 ### 시공능력평가순위
 연 1회(8월) 공시라 API 불필요. **원본 공시를 통째로 적재**한다 (`tools/build-constructor-rank.mjs`).
 ```
@@ -117,6 +133,8 @@ GET apis.data.go.kr/B551182/hospInfoServicev2/getHospBasisList
   통계누리 "전남광주" · KB "광주(코드 12)" · 카카오 "전남광주통합특별시"(정식). 옛 것은 KB 에 "(구)광주광역시/(구)전라남도" 로 남아 있다.
   **KOSIS 두 통계표(주택보급률·소비심리)는 아직 광주/전남을 따로 집계한다** → 시군구로 가른다
   (옛 광주광역시 5개 구 = 동구·서구·남구·북구·광산구). `src/lib/sido.js` `statSido()`
+  **청약홈 분양정보도 마찬가지다**(실측: 광주 36건 / 전남 24건이 따로 잡힌다).
+  `src/collectors/applyhome.js` `noticeSido()` 가 같은 규칙으로 가른다.
 - **인천 개편** — 중구·동구·서구 → 영종구·제물포구·서해구·검단구 등.
 - `data/regions.json` 은 통계누리 최신월로 다시 생성한다(`tools/build-regions.mjs YYYYMM`).
   **낡으면 그 지역이 선택지에 아예 없다** ("검단구가 검색 안 된다" 가 그 증상이었다).
@@ -147,17 +165,20 @@ GET apis.data.go.kr/B551182/hospInfoServicev2/getHospBasisList
 | 지도가 두 번 만들어짐 | `markers` 를 `useEffect` 의존성에 그대로 넣으면 렌더마다 새 배열이라 재생성된다. JSON 비교로 고정할 것 |
 | `pkill -f next-server` 가 셸을 죽임 | 패턴이 **자기 명령줄에도 들어있다**. `pkill -f "[n]ext-server"` 로 쓸 것 |
 | 로컬에서 하이드레이션이 안 됨(입력이 먹통) | 옛 `next start` 가 포트를 잡고 **낡은 빌드**를 서빙 중이었다. 청크가 404/500 → React 미부착. 콘솔 404 를 먼저 볼 것 |
+| 분양가 단가가 25% 낮게 나옴 | 청약홈 `SUPLY_AR` 을 전용면적으로 착각. **전용면적은 `HOUSE_TY`** 다("084.7459A" = 84.7459㎡) |
+| 같은 단지가 비교표에 세 줄로 앉음 | 원공고·조합원취소분·잔여세대가 각각 공고로 올라온다. 표기도 조금씩 다르다("광주탄벌 서희스타힐스2단지" / "광주 탄벌 서희스타힐스 2단지", 시도 생략). **공백 지운 단지명 + 읍면동**으로 묶고 최신 공고만 남긴다 |
+| 비교사업장 수집이 느림 | 시도 공고를 전부 지오코딩하면 800건이다. **시군구 중심좌표로 1차로 거른다**(반경+25km) → 실측 832건 중 326건만 지번 조회 |
 | 샌드박스 브라우저로 실사이트 확인 불가 | 브라우저의 외부 HTTPS 터널이 끊긴다(`ERR_CONNECTION_RESET`). 카카오 JS 키도 도메인 제한이라 localhost 불가. **같은 모양의 DOM 을 만들어 로직만 검증**하고, 카카오 DOM 은 화면 사유표시로 역추적한다 |
 
 ## 구조
 
 ```
 config/indicators.json   지표 카탈로그 (원천·파라미터·골든값·원문링크) — 단일 진실공급원
-src/collectors/          molit · kb · kofia · kosis · constructor · kakao · hira(의료시설)
+src/collectors/          molit · kb · kofia · kosis · constructor · kakao · hira(의료시설) · applyhome(분양가)
 src/lib/                 http(재시도·표준봉투) · env · region(시군구코드) · geo(폴리곤거리)
-app/api/                 collect · facilities · kosis(탐색) · health(키진단) · config(JS키·배포커밋)
+app/api/                 collect · facilities · apts(비교사업장) · kosis/applyhome/hira(탐색) · health(키진단) · config(JS키·배포커밋)
                          selftest(골든 재현 감시, 매일 09시 cron, 실패시 503)
-app/                     page · SheetTabs · SheetView · EvidenceCard · RadiusMap · Overview
+app/                     page · SheetTabs · SheetView · CompareView(비교사업장) · EvidenceCard · RadiusMap · Overview
                          PolygonDrawer(사업지 경계) · kakaoSdk · storage/SavedList(브라우저 보관)
                          exportExcel(ExcelJS, 시트별 표+캡쳐이미지) · SourceHealth(원천 상태배지)
 tools/                   헤드리스 캡쳐/지도 — 로컬 배치 전용. 웹앱 번들에 넣지 말 것
@@ -215,6 +236,13 @@ docs/evidence-samples/   골든 캡쳐 11장
 - **시공사는 주소와 무관**하다. 주소 확정 후에도 바꿀 수 있어야 한다.
 - **자가진단은 두 가지 모드**를 쓴다. 고정 정답(`golden.value`)과 범위(`golden.sanityRange`).
   매일 변하는 값을 고정 정답으로 감시하면 경고가 상시화되어 진짜 이상을 놓친다.
+
+- **비교사업장 탭**(2026-09-14). 반경 1/2/3km 안에서 분양한 아파트를 청약홈에서 찾아
+  **전용면적 기준 ㎡당 분양가**를 내고, 고른 단지들의 **산술평균**을 실시간으로 보여준다.
+  단지 대표단가는 [세대수 가중]/[단순평균] 을 고르게 하고 **어느 쪽을 썼는지 화면·엑셀에 같이 적는다**
+  (실무 관행이 갈린다). 고른 단지는 면적별 세대수·분양가를 별도 그리드로 펼친다.
+  거리·반경은 다른 시트와 같은 규칙 — 경계 기준으로 그릴 때만 경계 최단거리로 잰다.
+  검증기록: `docs/QA-비교사업장.md`
 
 ## 미결 사항
 
