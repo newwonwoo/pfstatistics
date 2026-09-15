@@ -91,7 +91,8 @@ const S = {
 
 const won = (v) => (v == null ? '-' : Math.round(v).toLocaleString('ko-KR'));
 const m2 = (v) => (v == null ? '-' : v.toFixed(2));
-const PY = 3.305785;                                   // 1평 = 3.305785㎡
+/* 1평 = 400/121 ㎡. 3.305785 로 쓰면 6,050,000원/㎡ 이 평당 19,999,999 로 떨어진다 */
+const PY = 400 / 121;
 const RADII = [1000, 2000, 3000, 4000, 5000];
 const KIND_ORDER = ['아파트', '민간임대', '오피스텔', '도시형생활주택', '생활형숙박시설'];
 const rLabel = (r) => `${r / 1000}km`;

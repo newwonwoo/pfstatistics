@@ -147,7 +147,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, sheets
     const mode = compare.mode ?? 'weighted';
     const areaBasis = compare.areaBasis ?? 'supply';
     const site = compare.site ?? {};
-    const PY = 3.305785;
+    const PY = 400 / 121;   // 1평 = 400/121 ㎡ (반올림하면 평당 환산이 1원 어긋난다)
     // 화면과 같은 산식을 쓴다 — 면적기준(공급/전용) × 산식(가중/단순)
     const priceOf = (a) => (areaBasis === 'supply'
       ? (mode === 'weighted' ? a.weightedSupply : a.simpleSupply)
