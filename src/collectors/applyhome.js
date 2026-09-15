@@ -2,6 +2,7 @@ import { requireKey } from '../lib/env.js';
 import { getJson } from '../lib/http.js';
 import { distanceToPolygon, haversine } from '../lib/geo.js';
 import { sidoShort } from '../lib/sido.js';
+import { lookup as rankLookup } from './constructor.js';
 
 /**
  * 청약홈(한국부동산원) 분양정보 — 비교사업장의 **분양가** 원천.
@@ -115,19 +116,29 @@ export const fetchNotices = (sido, { from = null } = {}) => fetchAll(P_DETAIL, s
 /** 오피스텔·도시형생활주택·민간임대 공고 */
 export const fetchUrbty = (sido, { from = null } = {}) => fetchAll(P_URBTY, sido, from);
 
-/** 한 공고의 주택형별 상세 (전용면적 · 세대수 · 분양가) */
+/**
+ * 한 공고의 주택형별 상세.
+ *
+ * **심사 평가표는 공급면적 기준으로 ㎡당 분양가를 낸다**(실제 평가표 검산으로 확인).
+ *   Σ(공급세대수 × 세대당분양가) ÷ Σ(공급세대수 × 공급면적)
+ * 전용면적 기준으로 내면 같은 단지가 약 30% 높게 나온다 — 그래서 둘 다 낸다.
+ */
 export async function fetchModels(manageNo) {
   const d = await odcloud(P_MODEL, { 'cond[HOUSE_MANAGE_NO::EQ]': String(manageNo) }, { rows: 100 });
   return (d?.data ?? []).map(m => {
-    const area = areaOf(m.HOUSE_TY);
+    const area = areaOf(m.HOUSE_TY);                 // 전용면적 (HOUSE_TY "084.7459A")
+    const supply = Number(m.SUPLY_AR);               // 공급면적 (분양면적)
     const manwon = Number(m.LTTOT_TOP_AMOUNT);
     const households = Number(m.SPSPLY_HSHLDCO ?? 0) + Number(m.SUPLY_HSHLDCO ?? 0);
+    const won = Number.isFinite(manwon) ? manwon * 10000 : null;
     return {
       type: m.HOUSE_TY,
       area,                                   // 전용면적 ㎡
+      supplyArea: Number.isFinite(supply) && supply > 0 ? supply : null,
       households,
-      amount: Number.isFinite(manwon) ? manwon * 10000 : null,   // 원
-      unitPrice: area && Number.isFinite(manwon) ? (manwon * 10000) / area : null,  // 원/㎡
+      amount: won,                                                        // 원
+      unitPrice: area && won != null ? won / area : null,                 // 원/㎡ (전용)
+      unitPriceSupply: supply > 0 && won != null ? won / supply : null,   // 원/㎡ (공급) ← 심사 기준
     };
   }).filter(t => t.area);
 }
@@ -145,9 +156,12 @@ export async function fetchUrbtyModels(manageNo) {
     return {
       type: m.TP ?? String(m.MODEL_NO ?? ''),
       area: Number.isFinite(area) && area > 0 ? area : null,
+      // 이 원천은 전용면적(EXCLUSE_AR)만 준다 — 공급면적이 없어 심사기준 단가를 못 낸다
+      supplyArea: null,
       households,
       amount: Number.isFinite(manwon) ? manwon * 10000 : null,
       unitPrice: Number.isFinite(area) && area > 0 && Number.isFinite(manwon) ? (manwon * 10000) / area : null,
+      unitPriceSupply: null,
     };
   }).filter(t => t.area);
 }
@@ -164,21 +178,99 @@ const RENTAL_APT = new Set(['분양전환 가능임대', '분양전환 불가임
 
 /**
  * 단지 대표 ㎡당 분양가.
- *   weighted 세대수 가중평균 — 실제 분양수입에 가까운 값
- *   simple   주택형 단순평균 — 표에 적히는 평균
- * 어느 쪽을 쓰는지 화면에서 고르게 하려고 둘 다 낸다.
+ *
+ * **심사 평가표의 산식을 그대로 쓴다**(실제 평가표 검산으로 확정):
+ *   가중평균 ㎡당 분양가 = Σ(공급세대수 × 세대당분양가) ÷ Σ(공급세대수 × 공급면적)
+ *   탄벌A지구 : 388,234,677,655 ÷ 64,171.02 = 6,050,000 원/㎡ = 평당 20,000,000
+ *
+ * 전용면적 기준도 같이 낸다 — 같은 단지가 약 30% 높게 나오므로
+ * 어느 기준인지 화면·엑셀에 반드시 같이 적는다.
  */
 export function summarize(types) {
   const ok = types.filter(t => t.unitPrice != null);
-  if (!ok.length) return { weighted: null, simple: null, households: 0, areaMin: null, areaMax: null };
+  if (!ok.length) {
+    return { weighted: null, simple: null, weightedSupply: null, simpleSupply: null,
+             households: 0, areaMin: null, areaMax: null, supplyMin: null, supplyMax: null };
+  }
   const hh = ok.reduce((s, t) => s + t.households, 0);
+  const sup = ok.filter(t => t.supplyArea != null && t.amount != null);
+  const supHhArea = sup.reduce((s, t) => s + t.households * t.supplyArea, 0);
+  const supHhAmt = sup.reduce((s, t) => s + t.households * t.amount, 0);
   return {
+    // 전용면적 기준
     weighted: hh ? ok.reduce((s, t) => s + t.unitPrice * t.households, 0) / hh : null,
     simple: ok.reduce((s, t) => s + t.unitPrice, 0) / ok.length,
+    // 공급면적 기준 — 심사 평가표가 쓰는 값
+    weightedSupply: supHhArea > 0 ? supHhAmt / supHhArea : null,
+    simpleSupply: sup.length ? sup.reduce((s, t) => s + t.unitPriceSupply, 0) / sup.length : null,
     households: types.reduce((s, t) => s + t.households, 0),
     areaMin: Math.min(...ok.map(t => t.area)),
     areaMax: Math.max(...ok.map(t => t.area)),
+    supplyMin: sup.length ? Math.min(...sup.map(t => t.supplyArea)) : null,
+    supplyMax: sup.length ? Math.max(...sup.map(t => t.supplyArea)) : null,
   };
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * 인근 유사사업장 요건 (보증심사 실무기준)
+ *   ① 거리   단위사업장으로부터 2km(수도권·광역시는 1km) 이내
+ *   ② 시기   최근 1년 이내 **분양 개시**한 사업장 (없으면 분양중 + 준공)
+ *   ③ 유사도 아래 4개 중 2개 이상 일치 (3개 이상이면 우선 선정)
+ *            가.주택유형 나.단지규모 다.시공능력평가순위 라.택지유형
+ * ───────────────────────────────────────────────────────────── */
+
+/** 나. 단지규모 — 500세대 미만 / 500~999세대 / 1,000세대 이상 */
+export function sizeBand(n) {
+  if (!Number.isFinite(n) || n <= 0) return null;
+  if (n < 500) return '500세대 미만';
+  if (n < 1000) return '500~999세대';
+  return '1,000세대 이상';
+}
+
+/** 다. 시공능력평가순위 — 50위 이내 / 51~100 / 101~200 / 201~300 / 300위 밖 */
+export function rankBand(rank) {
+  if (!Number.isFinite(rank) || rank <= 0) return null;
+  if (rank <= 50) return '50위 이내';
+  if (rank <= 100) return '51~100위';
+  if (rank <= 200) return '101~200위';
+  if (rank <= 300) return '201~300위';
+  return '300위 밖';
+}
+
+/* 시공사 이름이 같으면 명부를 다시 뒤질 이유가 없다 */
+const rankCache = new Map();
+function builderRankOf(name) {
+  const key = String(name ?? '').trim();
+  if (!key) return null;
+  if (rankCache.has(key)) return rankCache.get(key);
+  let rank = null;
+  try {
+    // 컨소시엄은 쉼표로 이어 붙어 온다("(주)태영건설,(주)동원개발,…") — 첫 시공사를 대표로 본다
+    const head = key.split(/[,/·]/)[0].trim();
+    rank = rankLookup(head)?.hit?.순위 ?? null;
+  } catch { /* 명부 미적재 — 순위 없이 진행한다 */ }
+  rankCache.set(key, rank);
+  return rank;
+}
+
+/**
+ * ② 시기 구분.
+ *
+ * **"분양 개시일"은 관례상 공급계약시작일이다**(실무 Q&A 확인) —
+ * 모집공고일(RCRIT_PBLANC_DE)이 아니다. 청약홈은 `CNTRCT_CNCLS_BGNDE` 로 준다.
+ * 입주예정월이 지났으면 준공으로 본다.
+ */
+export function timingOf({ saleStart, moveIn }, now = new Date()) {
+  const d = saleStart ? new Date(saleStart) : null;
+  if (!d || Number.isNaN(+d)) return { timing: null, years: null };
+  const years = (now - d) / (365.25 * 24 * 3600 * 1000);
+  const ym = String(moveIn ?? '');
+  const moved = /^\d{6}$/.test(ym)
+    && (Number(ym.slice(0, 4)) * 12 + Number(ym.slice(4, 6)))
+       <= (now.getFullYear() * 12 + now.getMonth() + 1);
+  if (years < 0) return { timing: '분양예정', years };
+  if (years <= 1) return { timing: '1년 이내 분양개시', years };
+  return { timing: moved ? '준공' : '분양 진행중', years };
 }
 
 /* 같은 주소를 여러 번 물어볼 이유가 없다 (같은 단지가 재공고로 여러 건 들어온다) */
@@ -334,6 +426,8 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
       types = src === 'urbty' ? await fetchUrbtyModels(r.HOUSE_MANAGE_NO) : await fetchModels(r.HOUSE_MANAGE_NO);
     } catch { /* 상세 실패해도 단지는 남긴다 */ }
     const s = summarize(types);
+    const hh = Number(r.TOT_SUPLY_HSHLDCO) || null;
+    const rank = builderRankOf(r.CNSTRCT_ENTRPS_NM);
     return {
       src, kind,
       // 민간임대 금액은 임대보증금이다 — 분양가로 평균내면 안 된다
@@ -345,10 +439,21 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
       x: p.x, y: p.y,
       distance: d,
       noticeDate: r.RCRIT_PBLANC_DE,
+      // 규정상 "분양 개시일" = 공급계약시작일 (모집공고일이 아니다)
+      saleStart: r.CNTRCT_CNCLS_BGNDE ?? null,
+      ...timingOf({ saleStart: r.CNTRCT_CNCLS_BGNDE, moveIn: r.MVN_PREARNGE_YM }),
       moveIn: r.MVN_PREARNGE_YM,
       builder: r.CNSTRCT_ENTRPS_NM,
+      builderRank: rank,
       developer: r.BSNS_MBY_NM,
-      totalHouseholds: Number(r.TOT_SUPLY_HSHLDCO) || null,
+      totalHouseholds: hh,
+      // ③ 유사도 4항목 중 자동으로 알 수 있는 것 (택지유형은 원천에 없어 수기다)
+      sizeBand: sizeBand(hh),
+      rankBand: rankBand(rank),
+      houseType: kind === '아파트' ? '아파트' : '기타',
+      // 비고2 — 공공분양은 평균가격을 왜곡하므로 제외 대상으로 표시한다
+      publicSale: r.HOUSE_DTL_SECD_NM === '국민' || r.HOUSE_SECD_NM === '신혼희망타운',
+      detailKind: r.HOUSE_DTL_SECD_NM ?? null,
       url: r.PBLANC_URL,
       types,
       ...s,

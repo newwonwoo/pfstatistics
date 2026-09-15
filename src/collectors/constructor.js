@@ -81,9 +81,19 @@ export function ingest(filePath, year) {
   return { year, count: rows.length, sample: rows.slice(0, 3), skipped: raw.length - rows.length };
 }
 
-export function lookup(company, year) {
+/*
+ * 명부가 1.7MB 라 호출마다 다시 읽으면 비교사업장 한 번에 수십 MB 를 파싱한다.
+ * 파일이 바뀌지 않는 한 한 번만 읽는다(연 1회 공시라 런타임 중 바뀌지 않는다).
+ */
+let storeCache = null;
+function readStore() {
   if (!fs.existsSync(STORE)) throw new Error('적재된 순위표 없음 — tools/build-constructor-rank.mjs');
-  const store = JSON.parse(fs.readFileSync(STORE, 'utf8'));
+  if (!storeCache) storeCache = JSON.parse(fs.readFileSync(STORE, 'utf8'));
+  return storeCache;
+}
+
+export function lookup(company, year) {
+  const store = readStore();
   // 연도를 안 주면 적재된 공시 중 최신을 쓴다 (화면에서 평가연도를 받지 않는다)
   const y = (year && store[year]) ? year : Object.keys(store).sort().at(-1);
   const set = store[y];

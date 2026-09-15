@@ -119,5 +119,36 @@ export function scoreFacility(label, value) {
   return { ...t.base, reason: `${d}m — ${last}m 초과` };
 }
 
+/**
+ * 행렬 구간표 (분양가경쟁력).
+ *
+ * 분양가격지수(행) × 분양가격지수 제외 항목 점수 A(열) 로 점수가 정해진다.
+ * 지수가 **낮을수록** 좋은 점수다 — 본건이 주변보다 싸면 분양 가능성이 높다.
+ *
+ * @param {number} index  분양가격지수 = 본건 ÷ 비교평균 × 100
+ * @param {number} excl   분양가격지수 제외 항목 점수(A) — 내부망 평가표에서 가져온다
+ */
+export function scoreMatrix(key, index, excl) {
+  const t = TABLE[key];
+  if (!t || t.scope !== 'matrix') return null;
+  if (!Number.isFinite(index)) return { pending: true, text: '본건 분양가와 비교사업장 평균이 있어야 지수를 냅니다' };
+  if (!Number.isFinite(excl)) return { pending: true, text: '분양가격지수 제외 항목 점수(A) 를 입력하세요' };
+
+  const inBand = (b, v) =>
+    (b.gte == null || v >= b.gte) && (b.lt == null || v < b.lt);
+  const ri = t.rows.findIndex(r => inBand(r, index));
+  const ci = t.cols.findIndex(c => inBand(c, excl));
+  if (ri < 0 || ci < 0) return { pending: true, text: '구간표 범위를 벗어났습니다' };
+
+  const score = t.scores[ri][ci];
+  return {
+    score,
+    label: t.labels?.[String(score)] ?? '',
+    row: t.rows[ri].label,
+    col: t.cols[ci].label,
+    text: `분양가격지수 ${t.rows[ri].label} · 제외항목점수 ${t.cols[ci].label}`,
+  };
+}
+
 /** 구간표가 들어와 있는 항목인지 (없으면 화면에서 빗금을 유지한다) */
 export const hasTable = (key) => Boolean(TABLE[key]);
