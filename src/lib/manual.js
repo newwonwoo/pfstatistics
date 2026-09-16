@@ -23,6 +23,15 @@ export const PENDING_ITEMS = [
   { id: '부동산시장 소비심리지수', max: 15, note: '주택매매시장 소비심리지수 — 구간표 미수령 (골든 125.1 → 110~130미만 → 12점)' },
 ];
 
+/** 아직 안 된 항목이 어디서 채워지는지 — 화면에 갈 곳을 적어준다 */
+const GOTO = {
+  '교통환경': '[교통환경] 탭에서 시설을 수집하세요',
+  '주거편의': '[주거편의] 탭에서 시설을 수집하세요',
+  '교육환경': '[교육환경] 탭에서 시설을 수집하세요',
+  '브랜드경쟁력': '[통계 수집] 을 누르세요 — 시공능력평가순위가 필요합니다',
+  '주택담보대출금리': '[통계 수집] 을 누르세요 — CD(91일) 금리가 필요합니다',
+};
+
 export function manualSummary({ sheetInput = {}, data = null, facilities = null, manual = null } = {}) {
   const val = (id) => (data?.results ?? []).find(r => r.indicatorId === id && r.ok)?.value ?? null;
   const num = (sc) => (sc && !sc.pending && Number.isFinite(sc.score) ? sc.score : null);
@@ -38,7 +47,11 @@ export function manualSummary({ sheetInput = {}, data = null, facilities = null,
     { id: '교육환경', max: 5, sc: facilities ? scoreSheet('교육환경', facilities) : null },
     { id: '브랜드경쟁력', max: 5, sc: rank == null ? null : scoreRank('브랜드경쟁력', rank) },
     { id: '주택담보대출금리', max: 5, sc: loan },
-  ].map(r => ({ ...r, kind: 'auto', score: num(r.sc), why: r.sc?.pending ? r.sc.text : (r.sc?.text ?? '수집 대기') }));
+  ].map(r => ({
+    ...r, kind: 'auto', score: num(r.sc),
+    /* "수집 대기" 만 적으면 어디서 수집해야 하는지 알 수 없다 — 갈 곳을 적는다 */
+    why: r.sc?.pending ? r.sc.text : (r.sc?.text ?? GOTO[r.id] ?? '수집 대기'),
+  }));
 
   /* ② 값을 넣으면 구간표가 점수를 내는 것 */
   const scale = scoreWeighted('규모및배치', sheetInput.규모및배치 ?? {});

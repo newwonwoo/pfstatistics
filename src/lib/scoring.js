@@ -384,7 +384,7 @@ export function scoreWeighted(key, values = {}) {
 
   const missing = parts.filter(p => p.score == null).map(p => p.id);
   if (missing.length) {
-    return { pending: true, parts, missing, text: `${missing.join(' · ')} 를 입력하세요` };
+    return { pending: true, parts, missing, text: `${missing.join(' · ')} 입력 필요` };
   }
   const avg = parts.reduce((s, p) => s + p.score * p.weight, 0);
   const g = gradeOf(avg);

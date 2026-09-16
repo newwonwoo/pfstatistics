@@ -51,7 +51,7 @@ const S = {
   dscrBar: { display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap', margin: '14px 0 4px', fontSize: 12, color: T.ink2 },
 };
 
-export default function ReviewView({ region, addr, facilities, compare, rate, excl = null, value, onChange }) {
+export default function ReviewView({ region, addr, data, facilities, compare, rate, excl = null, value, onChange }) {
   const v = value ?? {};
   const set = (patch) => onChange?.({ ...v, ...patch });
   const put = (id, x) => set({ [id]: x });
@@ -61,6 +61,13 @@ export default function ReviewView({ region, addr, facilities, compare, rate, ex
   const pct = res && !res.pending ? res.rate : null;
 
   const r = useMemo(() => reviewScore({ manual: v, rate: pct ?? NaN }), [v, pct]);
+
+  /* 이 앱이 이미 수집한 값은 근거 칸에 띄워준다 — "수집한다" 고만 적으면 어디 있는지 모른다 */
+  const known = useMemo(() => {
+    const g = (id) => (data?.results ?? []).find(x => x.indicatorId === id && x.ok)?.value ?? null;
+    const rank = g('construction_capability_rank');
+    return rank == null ? {} : { '시공능력평가액순위': `이 앱이 수집한 순위 : ${rank}위` };
+  }, [data]);
   const t = tableOf('심사평점표');
 
   return (
@@ -99,7 +106,7 @@ export default function ReviewView({ region, addr, facilities, compare, rate, ex
           </thead>
           <tbody>
             {r.groups.map(g => (
-              <FragmentRows key={g.label} g={g} v={v} put={put} pct={pct} presale={r.presale} />
+              <FragmentRows key={g.label} g={g} v={v} put={put} pct={pct} presale={r.presale} known={known} />
             ))}
             <tr>
               <td style={S.gh} colSpan={2}>합 계</td>
@@ -166,7 +173,7 @@ export default function ReviewView({ region, addr, facilities, compare, rate, ex
 }
 
 /** 그룹 한 덩어리 — 첫 줄에 구분을 병합해 캡쳐의 모양을 그대로 낸다 */
-function FragmentRows({ g, v, put, pct, presale }) {
+function FragmentRows({ g, v, put, pct, presale, known = {} }) {
   return g.items.map((it, i) => (
     <tr key={it.id}>
       {i === 0 && (
@@ -195,6 +202,7 @@ function FragmentRows({ g, v, put, pct, presale }) {
         {it.auto && pct == null && <><span style={{ color: T.warn }}>초기예상분양률 탭에서 산정되면 자동으로 찹니다</span><br /></>}
         {it.forced && it.from != null && <><b style={{ color: T.warn }}>{it.from}점 → 0점</b><br /></>}
         {it.formula && <>{it.formula}<br /></>}
+        {known[it.id] && <><b style={{ color: T.ok }}>{known[it.id]}</b><br /></>}
         {it.known && <>확인된 구간 : <b style={{ color: T.ink2 }}>{it.known}</b><br /></>}
         {it.note}
         {it.over && <><br /><b style={{ color: T.warn }}>배점 {it.max}점을 넘습니다</b></>}

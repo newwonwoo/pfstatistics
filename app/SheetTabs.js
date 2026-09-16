@@ -20,15 +20,16 @@ export default function SheetTabs({ sheets, active, onSelect, status }) {
         const tone = s.tone === 'cover' ? '#6b7280' : s.tone === 'summary' ? '#b3261e' : null;
         return (
           <Fragment key={s.id}>
-          {newStage && (
-            <span style={{
-              alignSelf: 'stretch', display: 'flex', alignItems: 'flex-end',
-              padding: i === 0 ? '0 9px 9px 2px' : '0 9px 9px 11px',
-              marginLeft: i === 0 ? 0 : 5,
-              borderLeft: i === 0 ? 0 : `1px solid ${T.lineStrong}`,
-              fontSize: 10, fontWeight: 800, letterSpacing: '.05em',
-              color: T.muted, whiteSpace: 'nowrap',
-            }}>{s.stage}</span>
+          {/*
+            단계 이름을 여기 적었더니 **탭처럼 보이고** 탭 이름과 겹쳤다
+            ("수기입력 | 수기입력"). 단계는 위 STEP 줄이 이미 말해주므로
+            여기서는 **구분선만** 세워 성격이 바뀌는 자리를 표시한다.
+          */}
+          {newStage && i > 0 && (
+            <span aria-hidden style={{
+              alignSelf: 'stretch', width: 1, margin: '6px 7px 0',
+              background: T.lineStrong,
+            }} />
           )}
           <button
             onClick={() => onSelect(s.id)}

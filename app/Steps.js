@@ -10,7 +10,7 @@ import { T } from './theme';
 const S = {
   wrap: { display: 'flex', alignItems: 'stretch', gap: 0, marginBottom: 16, flexWrap: 'wrap' },
   step: (state) => ({
-    flex: '1 1 150px', minWidth: 150,
+    flex: '1 1 190px', minWidth: 178,
     padding: '9px 14px',
     borderTop: `2px solid ${state === 'done' ? T.ok : state === 'now' ? T.accent : T.line}`,
     background: state === 'now' ? T.accentSoft : 'transparent',
@@ -33,12 +33,12 @@ export default function Steps({ current, done }) {
    * 사람이 판단하는지가 안 보인다(사용자 지적 2026-09-16).
    */
   const steps = [
-    { id: 'input', label: '사업지 확정', stage: '자료수집', hint: '시도·시군구 선택 후 [주소 확정] — 바꾸려면 초기화' },
-    { id: 'boundary', label: '수집 기준', stage: '자료수집', hint: '경계 기준(지도에 경계 그리기) 또는 대표지번 중심 기준' },
-    { id: 'collect', label: '통계 · 시설 수집', stage: '자료수집', hint: '통계 → 주거편의 · 교통환경 · 교육환경 · 비교사업장' },
-    { id: 'manual', label: '수기입력', stage: '수기입력', hint: '규모및배치 · 평형구성 · 인근초기분양률 — 값만 넣으면 점수가 납니다' },
-    { id: 'rate', label: '분양률 산정', stage: '산정', hint: '항목 점수 → 종합평가 점수 → 초기예상분양률' },
-    { id: 'review', label: '심사평점 · 내보내기', stage: '평점', hint: '초기분양률 배점 + 사업성 수동입력 → 종합평점' },
+    { id: 'input', label: '사업지 확정', stage: '자료수집', hint: '시도·시군구 선택 후 [주소 확정]' },
+    { id: 'boundary', label: '수집 기준', stage: '자료수집', hint: '사업지 경계 또는 대표지번 중심' },
+    { id: 'collect', label: '통계 · 시설 수집', stage: '자료수집', hint: '통계 → 시설 → 비교사업장' },
+    { id: 'manual', label: '수기입력', stage: '수기입력', hint: '규모및배치 · 평형구성 · 인근초기분양률' },
+    { id: 'rate', label: '분양률 산정', stage: '산정', hint: '종합평가 점수 → 초기예상분양률' },
+    { id: 'review', label: '심사평점 · 내보내기', stage: '평점', hint: '초기분양률 배점 + 사업성 → 종합평점' },
   ];
   return (
     <div style={S.wrap}>

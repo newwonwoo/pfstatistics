@@ -55,7 +55,8 @@ const S = {
     border: `1px solid ${on ? T.accent : T.line}`, background: on ? T.accentSoft : '#fff',
     color: on ? T.accent : T.ink2,
   }),
-  warn: { marginTop: 10, padding: '9px 13px', background: T.warnSoft, border: '1px solid #f0dcb4', borderRadius: 6, fontSize: 11.5, color: T.warn, lineHeight: 1.65 },
+  /* 상시 표시되는 설명을 경고색으로 두면 진짜 경고를 놓친다 — 정보 톤으로 */
+  warn: { marginTop: 10, padding: '9px 13px', background: '#f7f9fb', border: `1px solid ${T.line}`, borderRadius: 6, fontSize: 11.5, color: T.ink2, lineHeight: 1.65 },
   note: { marginTop: 12, fontSize: 11.5, color: T.muted, lineHeight: 1.8 },
 };
 

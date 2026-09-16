@@ -152,7 +152,7 @@ export default function Home() {
     if (pending === undefined || basisMode !== 'polygon' || !(polygon?.length >= 3)) return;
     setMsg({ kind: 'ok', text: `경계 ${polygon.length}점 지정 완료 — [${pending ?? '시트'} 수집] 을 누르세요.` });
   }, [polygon?.length, basisMode, pending]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const [tab, setTab] = useState('지역미분양');
+  const [tab, setTab] = useState('교통환경');   // 자료수집 첫 시트에서 시작한다
   const [busy, setBusy] = useState(null);
   const [msg, setMsg] = useState(null);
   const [savedKey, setSavedKey] = useState(0);
@@ -616,7 +616,11 @@ export default function Home() {
         경계 그리기는 주소 확정 **바로 다음** 동작이다.
         사이에 보관 목록이 끼면 흐름이 끊긴다 — 순서를 흐름대로 둔다.
       */}
-      {coord && (
+      {/*
+        지도는 **자료수집 단계의 도구**다. 수기입력·산정·평점 탭에서는 쓸 일이 없는데
+        760px 을 차지해 탭이 화면 밖으로 밀린다 — 그 단계에서는 접는다.
+      */}
+      {coord && SHEETS.find(x => x.id === tab)?.stage === '자료수집' && (
         <PolygonDrawer
           center={{ lat: Number(coord.y), lng: Number(coord.x) }}
           polygon={polygon}
@@ -658,7 +662,7 @@ export default function Home() {
               : s.kind === 'review'
               ? (
                 <ReviewView
-                  region={region} addr={addr} facilities={facilities}
+                  region={region} addr={addr} data={data} facilities={facilities}
                   compare={compare} rate={rate} excl={mSum.excl}
                   value={review} onChange={setReview}
                 />
