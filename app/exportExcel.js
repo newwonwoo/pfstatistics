@@ -378,9 +378,9 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
       g.items.forEach((it, i) => {
         rows.push([
           i === 0 ? `${g.label} (${g.max})` : '',
-          it.id + (it.auto ? ' [자동]' : '') + (it.forced ? ' [0점 처리]' : '')
-            + (!it.auto && it.value !== '' && it.value != null ? ` (${it.value})` : ''),
+          it.id + (it.auto ? ' [자동]' : '') + (it.forced ? ' [0점 처리]' : ''),
           it.max,
+          it.auto ? (pct != null ? `${pct}%` : '') : (it.value ?? ''),
           it.score ?? '',
           [
             it.auto && pct != null ? `초기예상분양률 ${pct}% · ${rv.presale?.label}` : '',
@@ -391,18 +391,18 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
         ]);
       });
     }
-    rows.push(['합 계', '', rv.max, rv.total, rv.missing.length ? `미입력 : ${rv.missing.join(' · ')}` : '전 항목 입력됨']);
-    rows.push(['감 점', '', '', rv.deduct ?? '', '']);
-    rows.push(['종합평점', '', 100, rv.net ?? '', '합계 − 감점']);
-    rows.push(['심사등급', '', '', rv.gradeOf?.pending ? '' : rv.gradeOf.grade,
+    rows.push(['합 계', '', rv.max, '', rv.total, rv.missing.length ? `미입력 : ${rv.missing.join(' · ')}` : '전 항목 입력됨']);
+    rows.push(['감 점', '', '', rv.deduct ?? '', rv.deduct != null ? -rv.deduct : '', t?.deduct?.known ?? '']);
+    rows.push(['종합평점', '', 100, '', rv.net ?? '', '합계 − 감점']);
+    rows.push(['심사등급', '', '', '', rv.gradeOf?.pending ? '' : rv.gradeOf.grade,
                rv.gradeOf?.pending ? rv.gradeOf.text : `종합평점 ${rv.net}점 · ${rv.gradeOf.label}`]);
-    rows.push(['보증료율', '', '', rv.gradeOf?.pending || rv.gradeOf?.reject ? '' : `${rv.gradeOf.fee}%`,
+    rows.push(['보증료율', '', '', '', rv.gradeOf?.pending || rv.gradeOf?.reject ? '' : `${rv.gradeOf.fee}%`,
                rv.gradeOf?.reject ? '60점 미만 — 보증거절' : '심사등급에 따른 요율']);
 
     let r = writeTable(vw, 2, {
       title: '심사평점표',
       subtitle: `▶ 사업지 : ${facilities?.address ?? data.region}`,
-      columns: ['구분', '평가항목', '배점', '평점', '근거 · 산식'],
+      columns: ['구분', '평가항목', '배점', '값', '평점', '근거 · 산식'],
       rows,
     });
     vw.getCell(r + 2, 2).value =
@@ -416,8 +416,8 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
     }
     vw.getCell(r + 3, 2).value = '※ 사업수익률의 분양가는 Min(적정분양가, 예정분양가) — 적정분양가는 [비교사업장·분양가] 탭이 낸다';
     vw.getCell(r + 3, 2).font = { size: 9, color: { argb: 'FF666666' } };
-    vw.getColumn(2).width = 24; vw.getColumn(3).width = 28; vw.getColumn(4).width = 8;
-    vw.getColumn(5).width = 8; vw.getColumn(6).width = 78;
+    vw.getColumn(2).width = 24; vw.getColumn(3).width = 28; vw.getColumn(4).width = 7;
+    vw.getColumn(5).width = 11; vw.getColumn(6).width = 8; vw.getColumn(7).width = 74;
   }
 
   // ── 시트별 ──────────────────────────────────────────────

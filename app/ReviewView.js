@@ -102,7 +102,8 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
           <thead>
             <tr>
               <th style={S.th}>구분</th><th style={S.th}>평가항목</th>
-              <th style={S.th}>배점</th><th style={S.th}>평점</th><th style={S.th}>근거 · 산식</th>
+              <th style={S.th}>배점</th><th style={S.th}>값</th>
+              <th style={S.th}>평점</th><th style={S.th}>근거 · 산식</th>
             </tr>
           </thead>
           <tbody>
@@ -112,6 +113,7 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
             <tr>
               <td style={S.gh} colSpan={2}>합 계</td>
               <td style={S.sum}>{r.max}</td>
+              <td style={S.td} />
               <td style={S.sum}>
                 {/* 하나도 안 넣었는데 0 이 뜨면 "0점 평가" 로 읽힌다 */}
                 {r.missing.length === r.groups.flatMap(g => g.items).length
@@ -129,9 +131,10 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
               <td style={S.gh} colSpan={2}>감 점</td>
               <td style={S.td}>—</td>
               <td style={S.td}>
-                <input style={S.input(false)} type="number" placeholder="0"
+                <input style={S.input(false)} type="number" step="any" placeholder="0"
                   value={v.__deduct ?? ''} onChange={e => put('__deduct', e.target.value)} />
               </td>
+              <td style={S.td}>{r.deduct != null ? `−${r.deduct}` : <span style={S.pend}>—</span>}</td>
               <td style={S.tdWhy}>
                 {t?.deduct?.known && <>확인된 구간 : <b style={{ color: T.ink2 }}>{t.deduct.known}</b><br /></>}
                 {t?.deduct?.note}
@@ -140,12 +143,14 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
             <tr>
               <td style={S.gh} colSpan={2}>종합평점</td>
               <td style={S.final}>100</td>
+              <td style={S.final} />
               <td style={S.final}>{r.net ?? <span style={S.pend}>—</span>}</td>
               <td style={S.tdWhy}>합계 − 감점</td>
             </tr>
             <tr>
               <td style={S.gh} colSpan={2}>심사등급</td>
               <td style={S.td}>—</td>
+              <td style={S.td} />
               <td style={r.gradeOf?.pending ? S.td : S.final}>
                 {r.gradeOf?.pending ? <span style={S.pend}>—</span>
                   : <span style={{ color: r.gradeOf.reject ? T.warn : T.ink }}>{r.gradeOf.grade}</span>}
@@ -157,6 +162,7 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
             <tr>
               <td style={S.gh} colSpan={2}>보증료율</td>
               <td style={S.td}>—</td>
+              <td style={S.td} />
               <td style={r.gradeOf?.pending ? S.td : S.final}>
                 {r.gradeOf?.pending ? <span style={S.pend}>—</span>
                   : r.gradeOf.reject ? <span style={{ color: T.warn }}>—</span> : `${r.gradeOf.fee}%`}
@@ -197,9 +203,10 @@ function FragmentRows({ g, v, put, pct, presale, known = {} }) {
         {it.forced && <span style={S.badge('warn')}>0점 처리</span>}
       </td>
       <td style={S.td}>{it.max}</td>
-      <td style={it.auto || it.forced ? S.auto : S.td}>
-        {it.auto || it.forced
-          ? (it.score == null ? <span style={S.pend}>—</span> : it.score)
+      {/* 값 칸과 평점 칸을 나눈다 — 한 칸에 두면 넣은 값(10.64)이 점수처럼 보인다 */}
+      <td style={S.td}>
+        {it.auto
+          ? <span style={S.pend}>{pct != null ? `${pct}%` : '—'}</span>
           : it.select
             ? (
               <select style={S.select} value={v[it.id] ?? ''} onChange={e => put(it.id, e.target.value)}>
@@ -212,6 +219,9 @@ function FragmentRows({ g, v, put, pct, presale, known = {} }) {
                 placeholder={it.band ? (it.band.unit || '값') : '점수'}
                 value={v[it.id] ?? ''} onChange={e => put(it.id, e.target.value)} />
             )}
+      </td>
+      <td style={it.score != null ? S.auto : S.td}>
+        {it.score == null ? <span style={S.pend}>—</span> : it.score}
       </td>
       <td style={S.tdWhy}>
         {it.auto && pct != null && <><b style={{ color: T.ink2 }}>초기예상분양률 {pct}% · {presale?.label}</b><br /></>}
