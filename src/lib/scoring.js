@@ -36,6 +36,11 @@ function countWithin(facilities, radius, members) {
  *   count : {radius, atLeast} — members 중 몇 개가 그 반경 안에 있는가 (주거편의)
  */
 function matches(rule, facilities, members) {
+  /* within : 그 시설 하나의 최근접 거리로 판정 (지하철역) */
+  if (rule.within != null) {
+    const d = distOf(facilities, members?.[0]);
+    return d != null && d <= rule.within;
+  }
   if (rule.all) {
     return Object.entries(rule.all).every(([r, labels]) => allWithin(facilities, Number(r), labels));
   }
@@ -77,11 +82,10 @@ export function scoreGroup(sheetId, groupLabel, facilities) {
 }
 
 /**
- * POI 단위 점수 (지하철역처럼 그 시설 하나의 존재 여부로 판정하는 것).
+ * POI 단위 점수 (지하철역처럼 그 시설 하나의 거리로 판정하는 것).
  *
- * 지하철역은 골든 캡쳐에서 **부재일 때 1점**만 확인됐다.
- * 역이 있을 때의 구간은 아직 못 받았으므로 `pending` 으로 돌려 빗금을 유지한다 —
- * 추정해서 채우면 틀린 점수가 조용히 매겨진다.
+ * 2026-09-16 가이드북 원문으로 "존재" 구간을 받아 pending 을 풀었다.
+ * 100m/300m/500m/1km = 5/4/3/2점, 1km 부재 = 1점 — 6차선 왕복도로와 같은 표다.
  */
 export function scorePoi(label, facilities) {
   const t = TABLE[label];
@@ -149,6 +153,99 @@ export function scoreMatrix(key, index, excl) {
     text: `분양가격지수 ${t.rows[ri].label} · 제외항목점수 ${t.cols[ci].label}`,
   };
 }
+
+/**
+ * 여러 항목 점수의 **평균값**을 등급으로 바꾼다.
+ *
+ * 가이드북은 교통환경·주거편의를 "항목별로 평가 후 평균값 적용" 이라고 적는다.
+ * 그래서 상업·의료에 7점 행이 있어도 평균을 내면 5점 척도 안에 들어온다.
+ */
+export function gradeOf(avg) {
+  const t = TABLE['등급:5점척도'];
+  if (!t || !Number.isFinite(avg)) return null;
+  for (const b of t.bands) {
+    if ((b.gt == null || avg > b.gt) && (b.lte == null || avg <= b.lte)) return b.label;
+  }
+  return null;
+}
+
+/**
+ * 순위 구간표 (브랜드경쟁력).
+ * 규칙은 좋은 것부터 적혀 있고 `lte` 는 "그 순위 이내" 다.
+ */
+export function scoreRank(key, rank) {
+  const t = TABLE[key];
+  if (!t || t.scope !== 'rank') return null;
+  const n = Number(rank);
+  if (!Number.isFinite(n) || n <= 0) return { pending: true, text: '시공능력평가순위를 조회하지 못했습니다' };
+  for (const rule of t.rules) {
+    if (n <= rule.lte) return { score: rule.score, label: rule.label, text: rule.text, rule };
+  }
+  return { score: t.base.score, label: t.base.label, text: t.base.text, rule: null };
+}
+
+/**
+ * 값 구간표 (주택담보대출금리).
+ * `spread` 가 있으면 원천값에 더해 평가값을 만든다 — CD(91일) + 가산금리 1.57%.
+ * @returns applied 는 실제로 구간에 대본 값(=평가값)이다. 화면에 그대로 보여준다.
+ */
+export function scoreBand(key, raw) {
+  const t = TABLE[key];
+  if (!t || t.scope !== 'band') return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return { pending: true, text: '원천값이 없어 점수를 낼 수 없습니다' };
+  const applied = n + (t.spread ?? 0);
+  for (const rule of t.rules) {
+    if (applied < rule.lt) {
+      return { score: rule.score, label: rule.label, text: rule.text, applied, formula: t.formula, rule };
+    }
+  }
+  return { score: t.base.score, label: t.base.label, text: t.base.text, applied, formula: t.formula, rule: null };
+}
+
+/**
+ * 시트 평균점수 — 가이드북의 "항목별로 평가 후 **평균값** 적용".
+ *
+ *   교통환경 = (지하철역 + 6차선 왕복도로) / 2
+ *   주거편의 = (상업·의료 + 문화·공공·공원) / 2
+ *
+ * 한 항목이라도 판정이 안 되면 평균을 내지 않는다 — 빠진 항목을 0 으로 치면
+ * "아직 모르는 점수" 가 "아주 나쁜 점수" 로 둔갑한다.
+ */
+export function scoreAverage(sheetId, { facilities, manual } = {}) {
+  let parts = null;
+  if (sheetId === '교통환경') {
+    parts = [
+      { name: '지하철역', sc: scorePoi('지하철역', facilities) },
+      { name: '6차선 왕복도로', sc: scoreFacility('6차선 왕복도로', manual?.['6차선 왕복도로']) },
+    ];
+  } else if (sheetId === '주거편의') {
+    parts = [
+      { name: '상업·의료시설', sc: scoreGroup(sheetId, '상업시설 및 의료시설', facilities) },
+      { name: '문화·공공시설 및 공원', sc: scoreGroup(sheetId, '공원, 문화, 공공시설', facilities) },
+    ];
+  }
+  if (!parts) return null;
+
+  const bad = parts.filter(p => !p.sc || p.sc.pending || !Number.isFinite(p.sc.score));
+  if (bad.length) {
+    return { pending: true, text: `${bad.map(p => p.name).join(' · ')} 판정 전 — 평균은 전 항목이 판정돼야 냅니다` };
+  }
+  const avg = parts.reduce((t, p) => t + p.sc.score, 0) / parts.length;
+  /* 수기 입력을 아직 안 한 항목은 점수가 나와도 "확정" 이 아니다 — 평균 옆에 적어 둔다 */
+  const unset = parts.filter(p => p.sc.reason === '도로 미선택' || p.sc.reason === '차선 수 미입력');
+  return {
+    avg,
+    score: Number(avg.toFixed(2)),
+    label: gradeOf(avg),
+    text: `${parts.map(p => `${p.name} ${p.sc.score}`).join(' + ')} ÷ ${parts.length}`,
+    caution: unset.length ? `${unset.map(p => p.name).join(' · ')} 미입력 상태의 기본점수가 섞여 있습니다` : null,
+    parts,
+  };
+}
+
+/** 구간표 원본을 그대로 꺼낸다 (화면에 근거를 적을 때) */
+export const tableOf = (key) => TABLE[key] ?? null;
 
 /** 구간표가 들어와 있는 항목인지 (없으면 화면에서 빗금을 유지한다) */
 export const hasTable = (key) => Boolean(TABLE[key]);

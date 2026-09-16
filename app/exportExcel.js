@@ -16,7 +16,7 @@ const MARK_FILL = 'FFFFFDF0';
 const BORDER = { style: 'thin', color: { argb: 'FF9AA5B1' } };
 const box = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
 
-import { scoreSheet, scoreGroup, scoreFacility, scorePoi, scoreMatrix } from '../src/lib/scoring';
+import { scoreSheet, scoreGroup, scoreFacility, scorePoi, scoreMatrix, scoreAverage } from '../src/lib/scoring';
 
 const fmt = (v) =>
   typeof v === 'number' ? v : (v == null || v === '' ? '' : String(v));
@@ -312,6 +312,15 @@ export async function exportWorkbook({ data, facilities, manual, compare, sheets
         ];
       };
 
+      /* 가이드북: 항목별로 평가한 뒤 **평균값**으로 등급을 낸다 (교통환경·주거편의) */
+      const avgRow = (span) => {
+        const sc = facilities ? scoreAverage(s.id, { facilities, manual }) : null;
+        const pad = Array(span - 1).fill('');
+        if (!sc || sc.pending) return [spec.summaryRow, ...pad, '', sc?.pending ? sc.text : ''];
+        return [spec.summaryRow, ...pad, sc.score,
+                `${sc.score}점 · ${sc.label} (${sc.text})${sc.caution ? ` · ${sc.caution}` : ''}`];
+      };
+
       let rows = [];
       if (spec.layout === 'grouped') {
         for (const g of spec.groups) {
@@ -326,6 +335,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, sheets
           });
           rows.push([g.label + (sc?.pending ? ` · ${sc.text}` : ''), '', '', '', '', '']);
         }
+        if (spec.summaryRow) rows.push(avgRow(4));
       } else if (spec.layout === 'dual') {
         for (const f of spec.facilities) {
           const n = near(f.label);
@@ -346,7 +356,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, sheets
       } else {
         for (const f of spec.facilities) {
           if (f.manual) { rows.push(manualRow(f)); continue; }
-          // 지하철역 — 부재행만 구간표가 확인됐다. 존재하면 점수 대신 사유를 적는다
+          // 지하철역 — 100m/300m/500m/1km = 5/4/3/2점, 1km 부재 = 1점 (구간표 2026-09-16 수령)
           const sc = facilities ? scorePoi(f.label, facilities) : null;
           rows.push([
             f.label, f.criteria, cell(f.label), dist(f.label),
@@ -354,7 +364,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, sheets
             sc ? (sc.pending ? sc.text : `${sc.score}점 · ${sc.label}${sc.text ? ` (${sc.text})` : ''}`) : '',
           ]);
         }
-        if (spec.summaryRow) rows.push([spec.summaryRow, '', '', '', '', '']);
+        if (spec.summaryRow) rows.push(avgRow(4));
       }
 
       cursor = writeTable(ws, 2, {

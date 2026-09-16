@@ -1,7 +1,7 @@
 'use client';
 import { Fragment, useState } from 'react';
 import { buildSheet } from './sheets';
-import { scoreSheet, scoreGroup, scoreFacility, scorePoi } from '../src/lib/scoring';
+import { scoreSheet, scoreGroup, scoreFacility, scorePoi, scoreAverage } from '../src/lib/scoring';
 import { T, mono } from './theme';
 import EvidenceCard from './EvidenceCard';
 import RadiusMap from './RadiusMap';
@@ -55,6 +55,37 @@ function Cell({ v, highlight }) {
   if (v == null) return <td style={S.td}><span style={S.pend}>수집 대기</span></td>;
   if (v === '') return <td style={S.blank} />;
   return <td style={highlight ? S.tdVal : S.td}>{v}</td>;
+}
+
+/**
+ * 평균점수 행.
+ *
+ * 가이드북은 교통환경·주거편의를 "항목별로 평가 후 **평균값** 적용" 이라고 적는다.
+ * 그래서 상업·의료에 7점 행이 있어도 평균을 내면 5점 척도 안에 들어온다.
+ * 한 항목이라도 판정 전이면 평균을 내지 않고 사유를 적는다.
+ */
+function AvgRow({ sheetId, facilities, manual, label, span, S }) {
+  const sc = facilities ? scoreAverage(sheetId, { facilities, manual }) : null;
+  if (!sc || sc.pending) {
+    return (
+      <tr>
+        <td style={S.tdL} colSpan={span}>{label}</td>
+        <td style={S.blank} />
+        <td style={S.td}>{sc?.pending ? <span style={S.pend}>{sc.text}</span> : null}</td>
+      </tr>
+    );
+  }
+  return (
+    <tr>
+      <td style={S.tdL} colSpan={span}>{label}</td>
+      <td style={S.tdVal}>{sc.score}</td>
+      <td style={S.td}>
+        {sc.score}점 · {sc.label}
+        <span style={S.why}> ({sc.text})</span>
+        {sc.caution && <><br /><span style={S.pend}>{sc.caution}</span></>}
+      </td>
+    </tr>
+  );
 }
 
 export default function SheetView({ sheetId, data, facilities, manual, onManual, radiusBasis = 'polygon', onRadiusBasis }) {
@@ -218,10 +249,8 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                   </tr>
                 ))}
                 {spec.summaryRow && (
-                  <tr>
-                    <td style={S.tdL} colSpan={4}>{spec.summaryRow}</td>
-                    <td style={S.blank} /><td style={S.blank} />
-                  </tr>
+                  <AvgRow sheetId={sheetId} facilities={facilities} manual={manual}
+                          label={spec.summaryRow} span={4} S={S} />
                 )}
               </>)}
 
@@ -260,6 +289,10 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                   </tr>
                 </Fragment>
               ); })}
+              {spec.layout === 'grouped' && spec.summaryRow && (
+                <AvgRow sheetId={sheetId} facilities={facilities} manual={manual}
+                        label={spec.summaryRow} span={4} S={S} />
+              )}
 
               {/* 교육환경 — 500m / 1km 2단 판정 */}
               {spec.layout === 'dual' && (<>

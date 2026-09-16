@@ -98,6 +98,7 @@ const S = {
   propAskHead: { fontSize: 11, fontWeight: 700, color: T.muted, letterSpacing: '.04em', marginBottom: 7 },
   propCheck: { display: 'flex', gap: 7, alignItems: 'flex-start', fontSize: 11.5, color: T.ink2, lineHeight: 1.7, marginTop: 4 },
   propHint: { color: T.muted },
+  regScope: { marginTop: 7, paddingTop: 7, borderTop: `1px dashed ${T.line}`, fontSize: 11.5, color: T.ink2, lineHeight: 1.7 },
   badge: (tone) => ({
     fontSize: 10.5, fontWeight: 700, padding: '2px 7px', borderRadius: 4, whiteSpace: 'nowrap',
     background: tone === 'ok' ? T.okSoft : tone === 'warn' ? T.warnSoft : '#f1f3f5',
@@ -279,6 +280,17 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
         <div><span style={S.regKey}>② 시기</span> {REG.시기}</div>
         <div><span style={S.regKey}>③ 유사도</span> {REG.유사도}</div>
         <div><span style={S.regKey}>제외</span> {REG.제외}</div>
+        {/*
+          같은 "인근 단지" 라는 말을 쓰지만 초기분양률의 선정기준은 이것과 다르다
+          (준공 단지를 안 쓰고, 유사도를 브랜드로 보고, 못 찾으면 최하위 배점).
+          이 목록을 그쪽에 돌려 쓰면 틀린다 — 어느 규정의 목록인지 못박아 둔다.
+          대조표: docs/규정-인근단지-선정기준.md
+        */}
+        <div style={S.regScope}>
+          이 선정기준은 <b>분양가 적정성(제16조)</b> 전용입니다 —
+          인근아파트 <b>초기분양률</b>은 선정기준이 달라(준공 단지 제외 · 유사도를 브랜드로 판단 ·
+          미존재시 최하위 배점) 이 목록을 그대로 쓸 수 없습니다.
+        </div>
       </div>
 
       <div style={S.bar}>

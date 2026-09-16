@@ -8,6 +8,8 @@
  * 집계는 이번 범위가 아니다. 수집된 값과 증빙만 채운다.
  */
 
+import { scoreRank, scoreBand } from '../src/lib/scoring';
+
 /** 이 앱이 실제로 수집하는 시트만 남긴다. 수기입력 시트(표지·종합·규모및배치·평형구성)는 제외. */
 export const SHEETS = [
   { id: '교통환경',     label: '교통환경',     kind: 'poi' },
@@ -74,24 +76,51 @@ export function buildSheet(sheetId, { byId, region, period, company }) {
         ]],
         evidence: ['kb_apt_price_index'],
       };
-    case '브랜드경쟁력':
+    case '브랜드경쟁력': {
+      /* 구간표 수령(2026-09-16) — 1~10/11~20/21~50/51~100/101위이하 = 5/4/3/2/1점 */
+      const rank = val('construction_capability_rank');
+      const sc = rank == null ? null : scoreRank('브랜드경쟁력', rank);
       return {
         title: '브랜드경쟁력 (시공능력평가순위)', subject: region,
         columns: ['상호', '시공능력평가순위', '평가기준', '평가점수', '평가'],
-        rows: [[company ?? '', val('construction_capability_rank') == null ? null : `${val('construction_capability_rank')}위`, '', '', '']],
-        footnote: '※ 시공자의 모회사가 책임준공 약정하고, 모회사 브랜드 사용시에는 모회사의 등급을 적용가능',
+        rows: [[
+          company ?? '',
+          rank == null ? null : `${rank}위`,
+          sc && !sc.pending ? sc.text : '',
+          sc && !sc.pending ? `${sc.score}점` : '',
+          sc && !sc.pending ? sc.label : '',
+        ]],
+        footnote: '※ 시공능력평가순위는 토목건축공사업 기준. 시행사와 시공자가 다른 경우 상위등급을 적용하며,'
+          + ' 시공자의 모회사가 책임준공 약정하고 모회사 브랜드 사용시에는 모회사의 등급을 적용가능',
         evidence: ['construction_capability_rank'],
       };
-    case '부동산시장':
+    }
+    case '부동산시장': {
+      /*
+       * 평가항목은 CD금리 자체가 아니라 **주택담보대출금리** 다 (가이드북 원문·골든 캡쳐 09 확인).
+       *   주택담보대출금리 = CD(91일)금리 + 가산금리 1.57%
+       * 골든 검산: 3.12 + 1.57 = 4.69% → 4.2%~4.8%미만 → 3점 보통.
+       */
+      const cd = val('cd_rate_91');
+      const sc = cd == null ? null : scoreBand('주택담보대출금리', cd);
       return {
         title: '부동산시장', subject: region,
         columns: ['평가항목', '지역', '수치', '평가기준', '평가점수', '평가'],
         rows: [
-          ['CD(91일) 금리', '전국', val('cd_rate_91') == null ? null : `${val('cd_rate_91')}%`, '', '', ''],
+          [
+            '주택담보대출금리', '전국',
+            cd == null ? null : `CD ${cd}% + 1.57% = ${sc.applied.toFixed(2)}%`,
+            sc && !sc.pending ? sc.text : '',
+            sc && !sc.pending ? `${sc.score}점` : '',
+            sc && !sc.pending ? sc.label : '',
+          ],
           ['부동산시장 소비심리지수', region.split(' ')[0], val('consumer_sentiment'), '', '', ''],
         ],
+        footnote: '※ 주택담보대출금리는 CD(91일)금리 + 가산금리 1.57% 를 적용하여 산정'
+          + ' · 소비심리지수는 「주택매매시장 소비심리지수」 적용(임대사업장은 「주택전세시장 소비심리지수」)',
         evidence: ['cd_rate_91', 'consumer_sentiment'],
       };
+    }
     /*
      * 교통환경 (캡쳐 01) — 항목마다 독립 판정, 하단에 평균점수 행.
      * 컬럼: 평가항목 | 평가기준 | 시설명 | 거리 | 점수 | 평가점수 및 평가
@@ -147,6 +176,8 @@ export function buildSheet(sheetId, { byId, region, period, company }) {
             ],
           },
         ],
+        /* 가이드북: 두 그룹을 평가한 뒤 **평균값**으로 등급을 낸다 */
+        summaryRow: '평균점수',
       };
 
     /*
