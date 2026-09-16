@@ -317,8 +317,10 @@ export async function exportWorkbook({ data, facilities, manual, compare, sheets
         const sc = facilities ? scoreAverage(s.id, { facilities, manual }) : null;
         const pad = Array(span - 1).fill('');
         if (!sc || sc.pending) return [spec.summaryRow, ...pad, '', sc?.pending ? sc.text : ''];
-        return [spec.summaryRow, ...pad, sc.score,
-                `${sc.score}점 · ${sc.label} (${sc.text})${sc.caution ? ` · ${sc.caution}` : ''}`];
+        /* 점수 칸은 평균값, 평가 칸은 등급 대표점수 (골든 캡쳐 01·02) */
+        return [spec.summaryRow, ...pad, sc.avg,
+                `평가점수 ${sc.score}점 · ${sc.label} (평균 ${sc.avg} = ${sc.text})`
+                + `${sc.caution ? ` · ${sc.caution}` : ''}`];
       };
 
       let rows = [];

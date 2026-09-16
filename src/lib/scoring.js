@@ -164,7 +164,7 @@ export function gradeOf(avg) {
   const t = TABLE['등급:5점척도'];
   if (!t || !Number.isFinite(avg)) return null;
   for (const b of t.bands) {
-    if ((b.gt == null || avg > b.gt) && (b.lte == null || avg <= b.lte)) return b.label;
+    if ((b.gt == null || avg > b.gt) && (b.lte == null || avg <= b.lte)) return b;
   }
   return null;
 }
@@ -209,6 +209,11 @@ export function scoreBand(key, raw) {
  *   교통환경 = (지하철역 + 6차선 왕복도로) / 2
  *   주거편의 = (상업·의료 + 문화·공공·공원) / 2
  *
+ * **평가표에 적히는 평가점수는 평균값이 아니라 그 등급의 대표점수다.**
+ * 골든 캡쳐 01: 1 + 4 → 평균 2.5 → 보통 → 평가점수 **3점** (2.5 가 아니다).
+ * 골든 캡쳐 02: 1 + 2 → 평균 1.5 → 열악 → 평가점수 **2점**.
+ * 평균을 그대로 점수 칸에 넣으면 총점 합산이 소수로 어긋난다.
+ *
  * 한 항목이라도 판정이 안 되면 평균을 내지 않는다 — 빠진 항목을 0 으로 치면
  * "아직 모르는 점수" 가 "아주 나쁜 점수" 로 둔갑한다.
  */
@@ -232,12 +237,13 @@ export function scoreAverage(sheetId, { facilities, manual } = {}) {
     return { pending: true, text: `${bad.map(p => p.name).join(' · ')} 판정 전 — 평균은 전 항목이 판정돼야 냅니다` };
   }
   const avg = parts.reduce((t, p) => t + p.sc.score, 0) / parts.length;
+  const band = gradeOf(avg);
   /* 수기 입력을 아직 안 한 항목은 점수가 나와도 "확정" 이 아니다 — 평균 옆에 적어 둔다 */
   const unset = parts.filter(p => p.sc.reason === '도로 미선택' || p.sc.reason === '차선 수 미입력');
   return {
-    avg,
-    score: Number(avg.toFixed(2)),
-    label: gradeOf(avg),
+    avg: Number(avg.toFixed(2)),      // 평균점수 — 평가표의 "평균점수" 칸
+    score: band?.score ?? null,       // 평가점수 — **등급 대표점수**이지 평균이 아니다
+    label: band?.label ?? '',
     text: `${parts.map(p => `${p.name} ${p.sc.score}`).join(' + ')} ÷ ${parts.length}`,
     caution: unset.length ? `${unset.map(p => p.name).join(' · ')} 미입력 상태의 기본점수가 섞여 있습니다` : null,
     parts,

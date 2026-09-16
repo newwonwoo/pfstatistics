@@ -75,13 +75,17 @@ function AvgRow({ sheetId, facilities, manual, label, span, S }) {
       </tr>
     );
   }
+  /*
+    점수 칸에는 **평균값**, 평가 칸에는 **등급 대표점수**를 적는다 (골든 캡쳐 01·02).
+    평균 2.5 → 보통 → 평가점수 3점. 평균을 그대로 점수로 쓰면 총점이 소수로 어긋난다.
+  */
   return (
     <tr>
       <td style={S.tdL} colSpan={span}>{label}</td>
-      <td style={S.tdVal}>{sc.score}</td>
+      <td style={S.tdVal}>{sc.avg}</td>
       <td style={S.td}>
-        {sc.score}점 · {sc.label}
-        <span style={S.why}> ({sc.text})</span>
+        <b>평가점수 {sc.score}점</b> · {sc.label}
+        <span style={S.why}> (평균 {sc.avg} = {sc.text})</span>
         {sc.caution && <><br /><span style={S.pend}>{sc.caution}</span></>}
       </td>
     </tr>
