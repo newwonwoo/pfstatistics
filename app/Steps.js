@@ -20,16 +20,24 @@ const S = {
     fontSize: 10.5, fontWeight: 800, letterSpacing: '.06em',
     color: state === 'done' ? T.ok : state === 'now' ? T.accent : T.muted,
   }),
+  stage: { marginLeft: 7, padding: '1px 6px', borderRadius: 3, background: '#eef2f7',
+           color: '#5a6472', fontSize: 9.5, fontWeight: 800, letterSpacing: '.04em' },
   label: { fontSize: 12.5, fontWeight: 700, marginTop: 2 },
   hint: { fontSize: 11, color: T.muted, marginTop: 2, lineHeight: 1.45 },
 };
 
 export default function Steps({ current, done }) {
+  /*
+   * 절차가 셋으로 갈린다 — **자료수집 → 분양률 산정 → 심사평점**.
+   * 성격이 다른 일을 한 줄에 평평하게 놓으면 어디까지가 자동이고 어디부터
+   * 사람이 판단하는지가 안 보인다(사용자 지적 2026-09-16).
+   */
   const steps = [
-    { id: 'input', label: '사업지 확정', hint: '시도·시군구 선택 후 [주소 확정] — 바꾸려면 초기화' },
-    { id: 'boundary', label: '수집 기준', hint: '경계 기준(지도에 경계 그리기) 또는 대표지번 중심 기준' },
-    { id: 'collect', label: '통계 · 시설 수집', hint: '통계 → 주거편의 · 교통환경 · 교육환경' },
-    { id: 'result', label: '확인 · 내보내기', hint: '시트별 검토 후 엑셀 다운로드' },
+    { id: 'input', label: '사업지 확정', stage: '자료수집', hint: '시도·시군구 선택 후 [주소 확정] — 바꾸려면 초기화' },
+    { id: 'boundary', label: '수집 기준', stage: '자료수집', hint: '경계 기준(지도에 경계 그리기) 또는 대표지번 중심 기준' },
+    { id: 'collect', label: '통계 · 시설 수집', stage: '자료수집', hint: '통계 → 주거편의 · 교통환경 · 교육환경 · 비교사업장' },
+    { id: 'rate', label: '분양률 산정', stage: '산정', hint: '항목 점수 → 종합평가 점수 → 초기예상분양률' },
+    { id: 'review', label: '심사평점 · 내보내기', stage: '평점', hint: '초기분양률 배점 + 사업성 수동입력 → 종합평점' },
   ];
   return (
     <div style={S.wrap}>
@@ -39,6 +47,8 @@ export default function Steps({ current, done }) {
           <div key={s.id} style={S.step(state)}>
             <div style={S.no(state)}>
               {state === 'done' ? '완료' : `STEP ${i + 1}`}
+              {/* 단계가 바뀌는 자리에만 묶음 이름을 적는다 — 매 칸에 적으면 읽히지 않는다 */}
+              {steps[i - 1]?.stage !== s.stage && <span style={S.stage}>{s.stage}</span>}
             </div>
             <div style={S.label}>{s.label}</div>
             <div style={S.hint}>{s.hint}</div>

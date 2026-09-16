@@ -1,17 +1,36 @@
 'use client';
+import { Fragment } from 'react';
 import { T } from './theme';
 
-/** 엑셀 하단 시트탭을 그대로 옮긴 네비게이션. 순서는 캡쳐와 동일하다. */
+/**
+ * 엑셀 하단 시트탭을 그대로 옮긴 네비게이션. 순서는 캡쳐와 동일하다.
+ *
+ * **단계가 다른 탭을 평평하게 늘어놓지 않는다**(사용자 지적 2026-09-16) —
+ * 자료수집(원천에서 긁는 것) · 분양률 산정(그 결과로 계산하는 것) ·
+ * 심사평점(사람이 판단을 얹는 것) 은 성격이 다르다.
+ * 묶음이 바뀌는 자리에 이름표를 세워 어디서 성격이 바뀌는지 보이게 한다.
+ */
 export default function SheetTabs({ sheets, active, onSelect, status }) {
   return (
-    <div style={{ display: 'flex', gap: 2, overflowX: 'auto', padding: '0 2px', borderBottom: `1px solid ${T.lineStrong}` }}>
-      {sheets.map((s) => {
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, overflowX: 'auto', padding: '0 2px', borderBottom: `1px solid ${T.lineStrong}` }}>
+      {sheets.map((s, i) => {
+        const newStage = s.stage && sheets[i - 1]?.stage !== s.stage;
         const on = s.id === active;
         const st = status?.[s.id];
         const tone = s.tone === 'cover' ? '#6b7280' : s.tone === 'summary' ? '#b3261e' : null;
         return (
+          <Fragment key={s.id}>
+          {newStage && (
+            <span style={{
+              alignSelf: 'stretch', display: 'flex', alignItems: 'flex-end',
+              padding: i === 0 ? '0 9px 9px 2px' : '0 9px 9px 11px',
+              marginLeft: i === 0 ? 0 : 5,
+              borderLeft: i === 0 ? 0 : `1px solid ${T.lineStrong}`,
+              fontSize: 10, fontWeight: 800, letterSpacing: '.05em',
+              color: T.muted, whiteSpace: 'nowrap',
+            }}>{s.stage}</span>
+          )}
           <button
-            key={s.id}
             onClick={() => onSelect(s.id)}
             style={{
               position: 'relative', whiteSpace: 'nowrap', cursor: 'pointer',
@@ -33,6 +52,7 @@ export default function SheetTabs({ sheets, active, onSelect, status }) {
               }} />
             )}
           </button>
+          </Fragment>
         );
       })}
     </div>
