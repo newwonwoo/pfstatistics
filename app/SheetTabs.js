@@ -1,5 +1,5 @@
 'use client';
-import { Fragment } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { T } from './theme';
 
 /**
@@ -11,8 +11,38 @@ import { T } from './theme';
  * 묶음이 바뀌는 자리에 이름표를 세워 어디서 성격이 바뀌는지 보이게 한다.
  */
 export default function SheetTabs({ sheets, active, onSelect, status }) {
+  /*
+    탭이 12개라 한 줄에 안 들어간다. 잘린 채로 두면 **왼쪽에 탭이 더 있는 줄 모른다** —
+    양끝에 페이드를 걸어 "더 있다" 를 보이게 하고, 고른 탭은 보이는 자리로 끌어온다.
+  */
+  const ref = useRef(null);
+  const [edge, setEdge] = useState({ left: false, right: false });
+  const measure = () => {
+    const el = ref.current;
+    if (!el) return;
+    setEdge({ left: el.scrollLeft > 4, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4 });
+  };
+  useEffect(() => {
+    measure();
+    const el = ref.current;
+    el?.addEventListener('scroll', measure, { passive: true });
+    window.addEventListener('resize', measure);
+    return () => { el?.removeEventListener('scroll', measure); window.removeEventListener('resize', measure); };
+  }, []);
+  useEffect(() => {
+    ref.current?.querySelector('[data-on="1"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    measure();
+  }, [active]);
+
+  const fade = (side, on) => ({
+    position: 'absolute', top: 0, bottom: 1, [side]: 0, width: 28, pointerEvents: 'none',
+    opacity: on ? 1 : 0, transition: 'opacity .15s',
+    background: `linear-gradient(to ${side === 'left' ? 'right' : 'left'}, ${T.bg}, transparent)`,
+  });
+
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, overflowX: 'auto', padding: '0 2px', borderBottom: `1px solid ${T.lineStrong}` }}>
+    <div style={{ position: 'relative' }}>
+    <div ref={ref} style={{ display: 'flex', alignItems: 'flex-end', gap: 2, overflowX: 'auto', padding: '0 2px', borderBottom: `1px solid ${T.lineStrong}`, scrollbarWidth: 'none' }}>
       {sheets.map((s, i) => {
         const newStage = s.stage && sheets[i - 1]?.stage !== s.stage;
         const on = s.id === active;
@@ -32,6 +62,7 @@ export default function SheetTabs({ sheets, active, onSelect, status }) {
             }} />
           )}
           <button
+            data-on={on ? '1' : '0'}
             onClick={() => onSelect(s.id)}
             style={{
               position: 'relative', whiteSpace: 'nowrap', cursor: 'pointer',
@@ -56,6 +87,9 @@ export default function SheetTabs({ sheets, active, onSelect, status }) {
           </Fragment>
         );
       })}
+    </div>
+      <span aria-hidden style={fade('left', edge.left)} />
+      <span aria-hidden style={fade('right', edge.right)} />
     </div>
   );
 }

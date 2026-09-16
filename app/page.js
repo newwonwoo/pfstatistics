@@ -402,10 +402,14 @@ export default function Home() {
     : 'review';
 
   /*
-   * 경계를 쓰는 시트면 펴 두되, **이미 그렸으면 접는다** — 다 그린 지도가 500px 을
-   * 차지할 이유가 없다. 손잡이에 "경계 N점 지정됨" 이 남아 언제든 다시 편다.
+   * 경계를 쓰는 시트면 펴 두되, **이미 그렸거나 중심 기준을 골랐으면 접는다** —
+   * 다 그린 지도, 안 쓸 지도가 500px 을 차지할 이유가 없다.
+   * 손잡이에 현재 기준이 남아 언제든 다시 편다.
    */
-  const mapWanted = Boolean(SHEETS.find(x => x.id === tab)?.map) && !(polygon?.length >= 3);
+  const mapWanted = Boolean(SHEETS.find(x => x.id === tab)?.map)
+    && !(polygon?.length >= 3)
+    /* [대표지번 중심 기준] 을 골랐으면 경계를 그릴 뜻이 없다 — 지도를 펴 둘 이유도 없다 */
+    && basisMode !== 'point';
   /* [사업지 경계 기준] 을 고르면 접혀 있어도 펴야 한다 — 안 그리면 그릴 곳이 안 보인다 */
   const mapOpen = drawNow ? true : (mapOpenManual ?? mapWanted);
   const setMapOpen = (fn) => setMapOpenManual(typeof fn === 'function' ? fn(mapOpen) : fn);
