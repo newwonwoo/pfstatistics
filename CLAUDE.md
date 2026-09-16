@@ -200,9 +200,11 @@ GET api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getUrbtyOfctlLttotPblancMdl
 config/indicators.json   지표 카탈로그 (원천·파라미터·골든값·원문링크) — 단일 진실공급원
 src/collectors/          molit · kb · kofia · kosis · constructor · kakao · hira(의료시설) · applyhome(분양가)
 src/lib/                 http(재시도·표준봉투) · env · region(시군구코드) · geo(폴리곤거리)
+                         scoring(구간표 판정·분양률 급간) · compare(분양가경쟁력 산식 단일지점)
 app/api/                 collect · facilities · apts(비교사업장) · kosis/applyhome/hira(탐색) · health(키진단) · config(JS키·배포커밋)
                          selftest(골든 재현 감시, 매일 09시 cron, 실패시 503)
-app/                     page · SheetTabs · SheetView · CompareView(비교사업장) · EvidenceCard · RadiusMap · Overview
+app/                     page · SheetTabs · SheetView · CompareView(비교사업장) · RateView(초기예상분양률)
+                         EvidenceCard · RadiusMap · Overview
                          PolygonDrawer(사업지 경계) · kakaoSdk · storage/SavedList(브라우저 보관)
                          exportExcel(ExcelJS, 시트별 표+캡쳐이미지) · SourceHealth(원천 상태배지)
 tools/                   헤드리스 캡쳐/지도 — 로컬 배치 전용. 웹앱 번들에 넣지 말 것
@@ -300,6 +302,25 @@ docs/evidence-samples/   골든 캡쳐 11장
     공공시설(시·군·구청사·도서관). 이 앱은 사용자 확정에 따라 의료시설을 **병원급 이상**으로 넓게 본다(더 보수적).
   · 미반영(범위 밖): **규모및배치**(총세대수×0.5+용적률×0.25+건폐율×0.25) · **평형구성**(가중치 1.73/3.41/6.66) ·
     **인근아파트 초기분양률**(10/8/6/4/2) · **수용·환지 사업지구 특례**(지구면적별 하한 등급) — 전부 수기입력 시트다.
+
+- **초기예상분양률 = 평가표의 결론**(2026-09-16). 급간표 수령.
+  **이 앱이 채우는 모든 시트가 결국 이 한 숫자를 내기 위한 근거다** —
+  가이드북 캡쳐 머리글이 「분양률 산정을 위한 평가기준」, 실제 평가표 파일명이
+  「3. (탄벌A지구) **초기분양률 산정근거**_최종.xlsx」 다.
+  ```
+  종합평가 점수 = 분양가격지수 제외 항목 점수(A) + 분양가경쟁력 점수
+  95↑ 100% · 85~95 90% · 75~85 80% · 65~75 70% · 55~65 60% · 45~55 50% · 35~45 40% · 35미만 30%
+  오피스텔·도시형생활주택은 같은 점수에서 **한 칸씩 낮다**(정확히 10%p)
+  100세대 미만 사업장은 **60% 상한**(전지역 해당)
+  ```
+  골든 검산: A 56 + 분양가경쟁력 9 = **65점 → 70%**.
+  **같은 "초기분양률" 이 두 곳에 나온다 — 섞지 말 것.**
+  · 「인근아파트 초기 분양률(10)」 = **입력 항목**. 옆 단지를 조사해 매기는 점수.
+  · 「초기예상분양률(%)」 = **산정 결과**. 종합평가 점수에서 나오는 본건의 예상 분양률.
+  **A 는 이 앱이 계산하지 않는다** — 자동수집 못 하는 항목(규모및배치·평형구성·인근초기분양률)이
+  A 안에 들어 있다. 비교사업장 탭의 [본건 제원] 에 내부망 평가표 값을 입력받고,
+  이 앱이 스스로 낸 항목 점수를 **대조표로 나란히** 보여준다.
+  분양가경쟁력 산식은 **`src/lib/compare.js` 한 곳**에만 둔다 — 두 탭이 같은 함수를 써야 갈리지 않는다.
 
 ## 미결 사항
 
