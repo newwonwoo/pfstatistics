@@ -6,6 +6,7 @@ import { T } from './theme';
 import Steps from './Steps';
 import SheetTabs from './SheetTabs';
 import CompareView from './CompareView';
+import RateView from './RateView';
 import SheetView from './SheetView';
 import Overview from './Overview';
 import SavedList from './SavedList';
@@ -136,6 +137,7 @@ export default function Home() {
   const [radiusBasis, setRadiusBasis] = useState('polygon');
   // 비교사업장 — 반경·선택·수집결과를 한 덩어리로 들고 있는다(보관·내보내기도 이걸 그대로 읽는다)
   const [compare, setCompare] = useState(null);
+  const [rate, setRate] = useState(null);       // 초기예상분양률 탭 (주택종류·세대수)
   useEffect(() => { if (basisMode) setRadiusBasis(basisMode); }, [basisMode]);
 
   // 경계를 다 그리면 다음에 누를 곳을 알려준다 (수집 버튼은 위 단계 줄에 하나만 둔다)
@@ -292,7 +294,7 @@ export default function Home() {
   // ── 보관 / 내보내기 ───────────────────────────────────────
   function saveRecord() {
     if (!data) return;
-    const ok = store.save({ data, facilities, addr, manual, compare });
+    const ok = store.save({ data, facilities, addr, manual, compare, rate });
     setSavedKey(k => k + 1);
     setMsg(ok
       ? { kind: 'ok', text: `이 브라우저에 보관했습니다 — ${data.region} · ${data.period}` }
@@ -304,6 +306,7 @@ export default function Home() {
     setData(rec.data);
     setFacilities(rec.facilities ?? null);
     setCompare(rec.compare ?? null);
+    setRate(rec.rate ?? null);
     setPolygon(rec.facilities?.polygon ?? null);
     setCoord(rec.facilities?.coord ?? null);
     setGeo(rec.facilities?.geo ?? null); setPick(0);
@@ -328,7 +331,7 @@ export default function Home() {
     try {
       const { exportWorkbook } = await import('./exportExcel');
       await exportWorkbook({
-        data, facilities, manual, compare: compare && { ...compare, addr }, sheets: SHEETS, buildSheet,
+        data, facilities, manual, compare: compare && { ...compare, addr }, rate, sheets: SHEETS, buildSheet,
         getCardEl: (id) => document.querySelector(`[data-evidence="${id}"]`),
         onProgress: (label) => setMsg({ kind: 'warn', text: `엑셀 생성 중 — ${label}` }),
       });
@@ -619,7 +622,15 @@ export default function Home() {
               position: 'absolute', left: -99999, top: 0, width: 1100, pointerEvents: 'none',
             }}
           >
-            {s.kind === 'comp'
+            {s.kind === 'rate'
+              ? (
+                <RateView
+                  region={region} addr={addr} data={data} facilities={facilities} manual={manual}
+                  company={data?.company} compare={compare}
+                  value={rate} onChange={setRate}
+                />
+              )
+              : s.kind === 'comp'
               ? (
                 <CompareView
                   addr={addr} coord={coord} region={region} polygon={polygon}

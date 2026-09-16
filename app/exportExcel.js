@@ -16,7 +16,8 @@ const MARK_FILL = 'FFFFFDF0';
 const BORDER = { style: 'thin', color: { argb: 'FF9AA5B1' } };
 const box = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
 
-import { scoreSheet, scoreGroup, scoreFacility, scorePoi, scoreMatrix, scoreAverage } from '../src/lib/scoring';
+import { scoreSheet, scoreGroup, scoreFacility, scorePoi, scoreMatrix, scoreAverage, scoreRank, scoreBand, expectedSaleRate } from '../src/lib/scoring';
+import { compareSummary } from '../src/lib/compare';
 
 const fmt = (v) =>
   typeof v === 'number' ? v : (v == null || v === '' ? '' : String(v));
@@ -110,7 +111,7 @@ function writeTable(ws, startRow, { title, subtitle, columns, rows, markCell }) 
  * @param {Array} p.sheets      SHEETS
  * @param {Function} p.getCardEl  (indicatorId) => HTMLElement  증빙 카드 DOM
  */
-export async function exportWorkbook({ data, facilities, manual, compare, sheets, buildSheet, getCardEl, onProgress }) {
+export async function exportWorkbook({ data, facilities, manual, compare, rate, sheets, buildSheet, getCardEl, onProgress }) {
   const ExcelJS = (await import('exceljs')).default ?? (await import('exceljs'));
   const wb = new ExcelJS.Workbook();
   wb.creator = 'PF 보증심사 통계 자동수집';
@@ -264,6 +265,68 @@ export async function exportWorkbook({ data, facilities, manual, compare, sheets
         cw.addImage(imgId, { tl: { col: 1, row: crow }, ext: { width: 620, height: h } });
       }
     }
+  }
+
+  /*
+    ── 초기예상분양률 ──────────────────────────────────────
+    평가표의 결론이라 **맨 앞 가까이** 둔다. 화면의 값을 그대로 옮긴다 —
+    종합평가 점수 = 제외항목점수(A) + 분양가경쟁력, 그 점수를 급간표에 댄 결과.
+  */
+  {
+    onProgress?.('초기예상분양률');
+    const cmp = compareSummary(compare);
+    const compScore = cmp.sc && !cmp.sc.pending ? cmp.sc.score : null;
+    const exclRaw = compare?.site?.exclScore;
+    const excl = Number(exclRaw);
+    const hasExcl = Number.isFinite(excl) && String(exclRaw ?? '').trim() !== '';
+    const total = hasExcl && compScore != null ? excl + compScore : null;
+    const series = rate?.series ?? '주택';
+    const hh = rate?.households ?? '';
+    const res = expectedSaleRate(total ?? NaN, { series, households: hh });
+
+    const rw = wb.addWorksheet('초기예상분양률', { views: [{ showGridLines: false }] });
+    let r = writeTable(rw, 2, {
+      title: '초기예상분양률',
+      subtitle: `▶ 사업지 : ${facilities?.address ?? data.region}`,
+      columns: ['구분', '값', '단위', '근거'],
+      rows: [
+        ['① 분양가격지수 제외 항목 점수 (A)', hasExcl ? excl : '', '점',
+         hasExcl ? '비교사업장 탭 [본건 제원] 입력값' : '미입력'],
+        ['② 분양가경쟁력', compScore ?? '', '점',
+         compScore != null ? `분양가격지수 ${cmp.index.toFixed(2)} · ${cmp.sc.label}` : (cmp.sc?.text ?? '미산출')],
+        ['⇒ 종합평가 점수', total ?? '', '점', total != null ? res.band : ''],
+        ['⇒ 초기예상분양률', total != null && !res.pending ? `${res.rate}%` : '', '',
+         total != null && !res.pending
+           ? `${res.series} 급간` + (res.capped ? ` · ${res.capped.from}% 에서 상한 적용 (${res.capped.text})` : '')
+           : (res?.text ?? '산정 대기')],
+      ],
+    });
+    if (hh) { rw.getCell(r + 1, 2).value = `※ 총 세대수 ${hh} 세대 — 100세대 미만이면 60% 상한`; rw.getCell(r + 1, 2).font = { size: 9, color: { argb: 'FF666666' } }; r += 1; }
+    rw.getCell(r + 2, 2).value = '※ 「인근아파트 초기 분양률(10)」은 옆 단지를 조사해 매기는 입력 항목이고,'
+      + ' 위 초기예상분양률은 본건의 산정 결과다 — 서로 다른 값이다';
+    rw.getCell(r + 2, 2).font = { size: 9, color: { argb: 'FF666666' } };
+
+    // 이 앱이 자동으로 낸 항목 점수 — A 를 눈으로 맞춰보기 위한 대조표
+    const gv = (id) => (data?.results ?? []).find(x => x.indicatorId === id && x.ok)?.value ?? null;
+    const done = (sc) => (sc && !sc.pending && Number.isFinite(sc.score) ? sc.score : '');
+    const rank = gv('construction_capability_rank');
+    const cd = gv('cd_rate_91');
+    const loan = cd == null ? null : scoreBand('주택담보대출금리', cd);
+    writeTable(rw, r + 4, {
+      title: '참고 — 이 앱이 낸 항목 점수',
+      columns: ['평가항목', '배점', '점수', '근거'],
+      rows: [
+        ['교통환경', 5, done(facilities ? scoreAverage('교통환경', { facilities, manual }) : null), '지하철역·6차선 왕복도로 평균'],
+        ['주거편의', 5, done(facilities ? scoreAverage('주거편의', { facilities, manual }) : null), '상업·의료 / 문화·공공·공원 평균'],
+        ['교육환경', 5, done(facilities ? scoreSheet('교육환경', facilities) : null), '초·중·고 반경'],
+        ['브랜드경쟁력', 5, done(rank == null ? null : scoreRank('브랜드경쟁력', rank)), rank == null ? '수집 대기' : `${data.company ?? ''} ${rank}위`],
+        ['주택담보대출금리', 5, done(loan), loan && !loan.pending ? `CD ${cd}% + 1.57% = ${loan.applied.toFixed(2)}%` : '수집 대기'],
+        ['규모 및 배치', 5, '', '수기입력 시트 — 이 앱의 범위 밖'],
+        ['평형구성', 5, '', '수기입력 시트 — 이 앱의 범위 밖'],
+        ['인근아파트 초기 분양률', 10, '', '옆 단지의 실제 분양률 조사 — 공공 원천 없음'],
+      ],
+    });
+    rw.getColumn(2).width = 34; rw.getColumn(3).width = 12; rw.getColumn(4).width = 8; rw.getColumn(5).width = 62;
   }
 
   // ── 시트별 ──────────────────────────────────────────────

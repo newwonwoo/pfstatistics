@@ -250,6 +250,39 @@ export function scoreAverage(sheetId, { facilities, manual } = {}) {
   };
 }
 
+/**
+ * 종합평가 점수 → **초기예상분양률(%)**.
+ *
+ * 이 앱이 채우는 모든 시트가 결국 이 한 숫자를 내기 위한 근거다
+ * (가이드북 머리글이 「분양률 산정을 위한 평가기준」, 실제 평가표 파일명이 「초기분양률 산정근거」).
+ *
+ * 오피스텔·도시형생활주택은 같은 점수에서 한 칸씩 낮다.
+ * 100세대 미만 사업장은 60% 를 넘을 수 없다 — 넘으면 깎고 **깎았다는 사실을 남긴다**.
+ *
+ * @param {number} total       종합평가 점수 = 제외항목점수(A) + 분양가경쟁력 점수
+ * @param {string} series      '주택' | '오피스텔'
+ * @param {number} households  총 세대수 (100세대 미만 상한 판정용, 없으면 미적용)
+ */
+export function expectedSaleRate(total, { series = '주택', households = null } = {}) {
+  const t = TABLE['초기예상분양률'];
+  if (!t) return null;
+  if (!Number.isFinite(total)) {
+    return { pending: true, text: '종합평가 점수가 있어야 분양률을 냅니다' };
+  }
+  const s = t.series[series] ?? t.series['주택'];
+  const band = s.bands.find(b => b.gte == null || total >= b.gte);
+  if (!band) return { pending: true, text: '급간표 범위를 벗어났습니다' };
+
+  let rate = band.rate;
+  let capped = null;
+  const n = Number(households);
+  if (Number.isFinite(n) && n > 0 && n < t.cap.householdsUnder && rate > t.cap.maxRate) {
+    capped = { from: rate, to: t.cap.maxRate, text: t.cap.text };
+    rate = t.cap.maxRate;
+  }
+  return { rate, raw: band.rate, band: band.label, series: s.label, capped, total };
+}
+
 /** 구간표 원본을 그대로 꺼낸다 (화면에 근거를 적을 때) */
 export const tableOf = (key) => TABLE[key] ?? null;
 
