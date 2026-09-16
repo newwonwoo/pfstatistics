@@ -81,6 +81,19 @@ const S = {
     border: `1px solid ${sure ? '#c8d5fb' : '#f0dcb4'}`,
     color: sure ? T.ink2 : T.warn,
   }),
+  /*
+   * 지도를 항상 펴 두면 탭이 1330px 아래로 밀린다(실측). 경계를 쓰지 않는 시트에서는 접는다.
+   * 언마운트하면 카카오 지도를 다시 만들어야 하므로 **높이만 0** 으로 접는다 —
+   * 안쪽 지도 컨테이너는 크기를 유지해 다시 펴도 그대로 뜬다.
+   */
+  drawerWrap: (open) => (open ? undefined : { height: 0, overflow: 'hidden', opacity: 0, pointerEvents: 'none' }),
+  mapToggle: {
+    display: 'flex', alignItems: 'center', gap: 10, width: '100%', marginTop: 12,
+    padding: '9px 14px', borderRadius: T.radius, cursor: 'pointer', textAlign: 'left',
+    background: T.panel, border: `1px solid ${T.line}`, fontSize: 12.5, color: T.ink, fontFamily: 'inherit',
+  },
+  mapToggleNote: { color: T.muted, fontSize: 11.5 },
+  mapToggleArrow: { marginLeft: 'auto', color: T.muted, fontSize: 11.5, fontWeight: 700 },
   matchSel: { padding: '5px 8px', border: `1px solid ${T.line}`, borderRadius: 5, fontSize: 12, background: '#fff', maxWidth: 460 },
   arrow: { color: T.muted, fontSize: 16, fontWeight: 700, userSelect: 'none' },
   spacer: { marginLeft: 'auto' },
@@ -158,6 +171,8 @@ export default function Home() {
     setMsg({ kind: 'ok', text: `경계 ${polygon.length}점 지정 완료 — [${pending ?? '시트'} 수집] 을 누르세요.` });
   }, [polygon?.length, basisMode, pending]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [tab, setTab] = useState('교통환경');   // 자료수집 첫 시트에서 시작한다
+  /* 지도는 탭을 화면 밖으로 밀어낸다 — 경계를 쓰는 시트에서만 펴 둔다 */
+  const [mapOpenManual, setMapOpenManual] = useState(null);
   const [busy, setBusy] = useState(null);
   const [msg, setMsg] = useState(null);
   const [savedKey, setSavedKey] = useState(0);
@@ -385,6 +400,12 @@ export default function Home() {
     : mSum.excl == null ? 'manual'
     : ratePct == null ? 'rate'
     : 'review';
+
+  /* 경계를 쓰는 시트면 자동으로 펴고, 사용자가 손으로 접었으면 그 뜻을 따른다 */
+  const mapWanted = Boolean(SHEETS.find(x => x.id === tab)?.map);
+  /* [사업지 경계 기준] 을 고르면 접혀 있어도 펴야 한다 — 안 그리면 그릴 곳이 안 보인다 */
+  const mapOpen = drawNow ? true : (mapOpenManual ?? mapWanted);
+  const setMapOpen = (fn) => setMapOpenManual(typeof fn === 'function' ? fn(mapOpen) : fn);
 
   const status = useMemo(() => {
     const m = {};
@@ -623,7 +644,18 @@ export default function Home() {
         지도는 **자료수집 단계의 도구**다. 수기입력·산정·평점 탭에서는 쓸 일이 없는데
         760px 을 차지해 탭이 화면 밖으로 밀린다 — 그 단계에서는 접는다.
       */}
-      {coord && SHEETS.find(x => x.id === tab)?.stage === '자료수집' && (
+      {coord && (
+        <button style={S.mapToggle} onClick={() => setMapOpen(o => !o)}>
+          <span style={{ fontWeight: 700 }}>사업지 경계 지도</span>
+          <span style={S.mapToggleNote}>
+            {polygon?.length >= 3 ? `경계 ${polygon.length}점 지정됨 — 경계 기준으로 잽니다`
+              : '경계 미지정 — 대표지번 중심으로 잽니다'}
+          </span>
+          <span style={S.mapToggleArrow}>{mapOpen ? '접기 ▲' : '펴기 ▼'}</span>
+        </button>
+      )}
+      {coord && (
+        <div style={S.drawerWrap(mapOpen)}>
         <PolygonDrawer
           center={{ lat: Number(coord.y), lng: Number(coord.x) }}
           polygon={polygon}
@@ -633,6 +665,7 @@ export default function Home() {
           confirmed={!!facilities}
           busy={busy === 'poi' || POI_SHEETS.includes(busy)}
         />
+        </div>
       )}
 
       <SavedList onOpen={openRecord} refreshKey={savedKey} />
@@ -640,7 +673,7 @@ export default function Home() {
       {data && <Overview data={data} onJump={setTab} />}
 
       <div style={{ marginTop: 20 }}>
-        <SheetTabs sheets={SHEETS} active={tab} onSelect={setTab} status={status} />
+        <SheetTabs sheets={SHEETS} active={tab} onSelect={(id) => { setTab(id); setMapOpenManual(null); }} status={status} />
         {/*
           모든 시트를 항상 마운트해 둔다.
           엑셀 내보내기가 각 시트의 증빙 카드와 지도를 캡쳐하는데,

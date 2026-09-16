@@ -115,9 +115,8 @@ export default function PolygonDrawer({ center, polygon, onChange, busy, autoDra
           전체 지우기
         </button>
         <span style={S.hint}>
-          {pts.length < 3
-            ? '사업지 경계를 3점 이상 찍으면 경계 기준으로 거리를 잽니다.'
-            : `${pts.length}점 — 경계 기준 판정`}
+          {pts.length >= 3 ? `${pts.length}점 — 경계 기준 판정`
+            : '3점 이상 찍으면 경계 최단거리로 잽니다 (실측 100m 넘게 차이납니다)'}
         </span>
       </div>
 
@@ -140,10 +139,12 @@ export default function PolygonDrawer({ center, polygon, onChange, busy, autoDra
           수집 버튼은 위 단계 줄에 이미 있다. 여기 또 두면 같은 동작이 두 군데가 된다.
           여기서는 지금 상태와 다음에 누를 곳만 알려준다.
         */}
-        <span style={S.ready(pts.length >= 3)}>
+        <span style={S.ready(pts.length >= 3 || (!drawing && !pendingSheet))}>
           {busy ? '수집 중…'
-            : pts.length < 3 ? `경계를 ${3 - pts.length}점 더 찍으세요`
-            : `경계 지정 완료 — 위 [${pendingSheet ?? '시트'} 수집] 을 누르세요`}
+            : pts.length >= 3 ? `경계 지정 완료 — 위 [${pendingSheet ?? '시트'} 수집] 을 누르세요`
+            /* 경계 기준을 고른 상태에서만 지시문을 쓴다 — 아니면 "해야 할 일" 로 보인다 */
+            : (drawing || pendingSheet) ? `경계를 ${3 - pts.length}점 더 찍으세요`
+            : '경계 그리기는 선택입니다 — 안 그리면 대표지번 중심으로 잽니다'}
         </span>
       </div>
     </div>

@@ -12,11 +12,11 @@ import { scoreRank, scoreBand } from '../src/lib/scoring';
 
 /** 이 앱이 실제로 수집하는 시트만 남긴다. 수기입력 시트(표지·종합·규모및배치·평형구성)는 제외. */
 export const SHEETS = [
-  { id: '교통환경',     label: '교통환경',     kind: 'poi',  stage: '자료수집' },
-  { id: '주거편의',     label: '주거편의',     kind: 'poi',  stage: '자료수집' },
-  { id: '교육환경',     label: '교육환경',     kind: 'poi',  stage: '자료수집' },
+  { id: '교통환경',     label: '교통환경',     kind: 'poi',  stage: '자료수집', map: true },
+  { id: '주거편의',     label: '주거편의',     kind: 'poi',  stage: '자료수집', map: true },
+  { id: '교육환경',     label: '교육환경',     kind: 'poi',  stage: '자료수집', map: true },
   /* 탭 이름에 '분양가' 를 넣는다 — 실무자가 찾는 말은 '분양가 적정성' 이다. 시트명(id)은 그대로 둔다 */
-  { id: '비교사업장',   label: '비교사업장 · 분양가', kind: 'comp', stage: '자료수집' },
+  { id: '비교사업장',   label: '비교사업장 · 분양가', kind: 'comp', stage: '자료수집', map: true },
   { id: '지역미분양',   label: '지역미분양',   kind: 'stat', stage: '자료수집' },
   { id: '지역수요',     label: '지역수요',     kind: 'stat', stage: '자료수집' },
   { id: '지역경쟁력',   label: '지역경쟁력',   kind: 'stat', stage: '자료수집' },
