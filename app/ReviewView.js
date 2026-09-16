@@ -45,7 +45,7 @@ const S = {
     background: tone === 'ok' ? T.okSoft : tone === 'warn' ? T.warnSoft : '#f1f3f5',
     color: tone === 'ok' ? T.ok : tone === 'warn' ? T.warn : T.muted,
   }),
-  pend: { color: T.muted, fontStyle: 'italic', fontWeight: 400 },
+  pend: { color: T.muted, fontStyle: 'italic', fontWeight: 400, whiteSpace: 'nowrap' },
   scroll: { overflowX: 'auto' },
   note: { marginTop: 12, fontSize: 11.5, color: T.muted, lineHeight: 1.8 },
   dscrBar: { display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap', margin: '14px 0 4px', fontSize: 12, color: T.ink2 },
@@ -105,11 +105,15 @@ export default function ReviewView({ region, addr, facilities, compare, rate, va
               <td style={S.gh} colSpan={2}>합 계</td>
               <td style={S.sum}>{r.max}</td>
               <td style={S.sum}>
-                {r.missing.length ? <span style={S.pend}>{r.total}</span> : r.total}
+                {/* 하나도 안 넣었는데 0 이 뜨면 "0점 평가" 로 읽힌다 */}
+                {r.missing.length === r.groups.flatMap(g => g.items).length
+                  ? <span style={S.pend}>—</span>
+                  : r.missing.length ? <span style={S.pend}>{r.total}</span> : r.total}
               </td>
               <td style={S.tdWhy}>
                 {r.missing.length
-                  ? <>미입력 {r.missing.length}개 — <span style={{ color: T.warn }}>{r.missing.join(' · ')}</span></>
+                  ? <>수동입력 <b style={{ color: T.warn }}>{r.missing.length}개</b> 남음
+                      {r.missing.length <= 3 && <> — {r.missing.join(' · ')}</>}</>
                   : '전 항목 입력됨'}
               </td>
             </tr>
@@ -131,7 +135,7 @@ export default function ReviewView({ region, addr, facilities, compare, rate, va
             <tr>
               <td style={S.gh} colSpan={2}>심사등급 · 보증료율</td>
               <td style={S.td}>—</td>
-              <td style={S.td}><span style={S.pend}>구간표 미수령</span></td>
+              <td style={{ ...S.td, whiteSpace: 'nowrap' }}><span style={S.pend}>미수령</span></td>
               <td style={S.tdWhy}>
                 {t?.grade?.text}
                 {t?.grade?.known && <> · 확인된 것 : <b style={{ color: T.ink2 }}>{t.grade.known}</b></>}
@@ -180,8 +184,9 @@ function FragmentRows({ g, v, put, pct, presale }) {
         {it.auto || it.forced
           ? (it.score == null ? <span style={S.pend}>—</span> : it.score)
           : (
+            {/* placeholder 에 배점을 넣으면 **이미 채워진 것처럼 보인다** — 실측으로 확인했다 */}
             <input style={S.input(it.over)} type="number" min="0" max={it.max}
-              placeholder={String(it.max)}
+              placeholder="점수"
               value={v[it.id] ?? ''} onChange={e => put(it.id, e.target.value)} />
           )}
       </td>
