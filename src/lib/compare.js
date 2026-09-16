@@ -1,4 +1,4 @@
-import { scoreMatrix } from './scoring';
+import { scoreMatrix, expectedSaleRate } from './scoring';
 
 /**
  * 비교사업장 탭이 만든 상태(`compare`)에서 **분양가경쟁력 점수**까지 한 번에 낸다.
@@ -37,4 +37,32 @@ export function compareSummary(v) {
   const sc = scoreMatrix('분양가경쟁력', index ?? NaN, Number(site.exclScore));
 
   return { avg, sitePrice, index, sc, chosen };
+}
+
+/**
+ * 종합평가 점수 = 분양가격지수 제외 항목 점수(A) + 분양가경쟁력 점수.
+ *
+ * A 는 이 앱이 계산하지 않는다 — 자동수집 못 하는 항목(규모및배치·평형구성·인근초기분양률)이
+ * 그 안에 들어 있어 비교사업장 탭의 [본건 제원] 에서 입력받는다.
+ */
+export function totalScoreOf(compare) {
+  const cmp = compareSummary(compare);
+  const compScore = cmp.sc && !cmp.sc.pending ? cmp.sc.score : null;
+  const raw = compare?.site?.exclScore;
+  const excl = Number(raw);
+  const hasExcl = Number.isFinite(excl) && String(raw ?? '').trim() !== '';
+  return { cmp, compScore, excl: hasExcl ? excl : null, total: hasExcl && compScore != null ? excl + compScore : null };
+}
+
+/**
+ * 초기예상분양률 — 평가표의 결론.
+ * 초기예상분양률 탭과 심사평점표 탭이 **같은 숫자**를 써야 하므로 여기 한 곳에서 낸다.
+ */
+export function expectedRateOf(compare, rate) {
+  const { total, ...rest } = totalScoreOf(compare);
+  const res = expectedSaleRate(total ?? NaN, {
+    series: rate?.series ?? '주택',
+    households: rate?.households ?? null,
+  });
+  return { ...rest, total, res };
 }

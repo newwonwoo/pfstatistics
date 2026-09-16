@@ -24,6 +24,8 @@ export const SHEETS = [
   { id: '부동산시장',   label: '부동산시장',   kind: 'stat' },
   /* 평가표의 결론 — 다른 시트의 항목 점수가 모여 여기서 분양률이 나온다. 맨 뒤에 둔다 */
   { id: '초기예상분양률', label: '초기예상분양률', kind: 'rate', tone: 'summary' },
+  /* 최종 산출물 — 초기예상분양률이 여기서 점수가 되어 종합평점으로 들어간다 */
+  { id: '심사평점표', label: '심사평점표', kind: 'review', tone: 'summary' },
 ];
 
 const n = (v, d = 0) =>

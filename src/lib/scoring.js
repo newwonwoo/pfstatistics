@@ -283,6 +283,82 @@ export function expectedSaleRate(total, { series = '주택', households = null }
   return { rate, raw: band.rate, band: band.label, series: s.label, capped, total };
 }
 
+/**
+ * 초기예상분양률(%) → **심사평점표 「초기분양률」 배점**.
+ * 100% 22 · 90~100 21 · 80~90 19 · 70~80 16 · 60~70 13 · 50~60 10 · 50미만 0.
+ */
+export function scorePresaleRate(rate) {
+  const t = TABLE['초기분양률배점'];
+  if (!t) return null;
+  if (!Number.isFinite(rate)) return { pending: true, text: '초기예상분양률이 있어야 점수를 냅니다' };
+  const rule = t.rules.find(r => r.gte == null || rate >= r.gte);
+  return { score: rule.score, label: rule.label, max: t.max, rule };
+}
+
+/**
+ * 최종 심사평점표.
+ *
+ * **이 앱이 만든 초기예상분양률이 여기서 점수가 되어 최종 평점으로 들어간다.**
+ * 사업성(사업수익률·누적DSCR·자기자금 투입규모)은 수동입력이다 — 사업수지표에서 나오는
+ * 값이라 이 앱이 수집하는 원천에 없다.
+ *
+ * 0점 처리 규칙을 **자동으로 적용**한다:
+ *   초기분양률 50% 미만 **또는** 누적DSCR 1.00 미만 → 두 항목 평점을 모두 0점.
+ * 이건 실무자가 잊기 쉬운 연동이라 화면이 대신 걸어준다(적용됐다는 사실은 반드시 남긴다).
+ *
+ * @param {object} manual  수동입력 점수 { 사업수익률: 20, ... } 및 dscr 실측값
+ * @param {number} rate    초기예상분양률(%) — 자동 산출값
+ */
+export function reviewScore({ manual = {}, rate = null } = {}) {
+  const t = TABLE['심사평점표'];
+  if (!t) return null;
+
+  const presale = scorePresaleRate(Number.isFinite(rate) ? rate : NaN);
+  const z = t.zeroRule;
+  const dscr = Number(manual.__dscr);
+  const lowRate = Number.isFinite(rate) && rate < z.rateUnder;
+  const lowDscr = Number.isFinite(dscr) && dscr < z.dscrUnder;
+  const zeroed = lowRate || lowDscr;
+
+  const groups = t.groups.map(g => {
+    const items = g.items.map(it => {
+      const forced = zeroed && z.zeroItems.includes(it.id);
+      let score = null;
+      let from = null;
+      if (it.auto && it.id === '초기분양률') {
+        score = presale?.pending ? null : presale.score;
+      } else {
+        const v = manual[it.id];
+        score = v === '' || v == null ? null : Number(v);
+        if (!Number.isFinite(score)) score = null;
+      }
+      if (forced && score != null) { from = score; score = 0; }
+      else if (forced) { score = 0; }
+      const over = score != null && score > it.max;
+      return { ...it, score, forced, from, over, band: it.auto ? presale?.label : null };
+    });
+    const max = items.reduce((s, i) => s + i.max, 0);
+    const got = items.filter(i => i.score != null).reduce((s, i) => s + i.score, 0);
+    const missing = items.filter(i => i.score == null).map(i => i.id);
+    return { label: g.label, max, got, missing, items };
+  });
+
+  const max = groups.reduce((s, g) => s + g.max, 0);
+  const total = groups.reduce((s, g) => s + g.got, 0);
+  const missing = groups.flatMap(g => g.missing);
+  const deduct = Number(manual.__deduct);
+  const net = missing.length ? null : total - (Number.isFinite(deduct) ? deduct : 0);
+
+  return {
+    groups, max, total, missing,
+    deduct: Number.isFinite(deduct) ? deduct : null,
+    net,
+    presale,
+    zero: zeroed ? { lowRate, lowDscr, text: z.text, items: z.zeroItems } : null,
+    grade: t.grade,
+  };
+}
+
 /** 구간표 원본을 그대로 꺼낸다 (화면에 근거를 적을 때) */
 export const tableOf = (key) => TABLE[key] ?? null;
 

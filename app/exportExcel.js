@@ -16,8 +16,8 @@ const MARK_FILL = 'FFFFFDF0';
 const BORDER = { style: 'thin', color: { argb: 'FF9AA5B1' } };
 const box = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
 
-import { scoreSheet, scoreGroup, scoreFacility, scorePoi, scoreMatrix, scoreAverage, scoreRank, scoreBand, expectedSaleRate } from '../src/lib/scoring';
-import { compareSummary } from '../src/lib/compare';
+import { scoreSheet, scoreGroup, scoreFacility, scorePoi, scoreMatrix, scoreAverage, scoreRank, scoreBand, expectedSaleRate, reviewScore, tableOf } from '../src/lib/scoring';
+import { compareSummary, expectedRateOf } from '../src/lib/compare';
 
 const fmt = (v) =>
   typeof v === 'number' ? v : (v == null || v === '' ? '' : String(v));
@@ -111,7 +111,7 @@ function writeTable(ws, startRow, { title, subtitle, columns, rows, markCell }) 
  * @param {Array} p.sheets      SHEETS
  * @param {Function} p.getCardEl  (indicatorId) => HTMLElement  증빙 카드 DOM
  */
-export async function exportWorkbook({ data, facilities, manual, compare, rate, sheets, buildSheet, getCardEl, onProgress }) {
+export async function exportWorkbook({ data, facilities, manual, compare, rate, review, sheets, buildSheet, getCardEl, onProgress }) {
   const ExcelJS = (await import('exceljs')).default ?? (await import('exceljs'));
   const wb = new ExcelJS.Workbook();
   wb.creator = 'PF 보증심사 통계 자동수집';
@@ -327,6 +327,61 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
       ],
     });
     rw.getColumn(2).width = 34; rw.getColumn(3).width = 12; rw.getColumn(4).width = 8; rw.getColumn(5).width = 62;
+  }
+
+  /*
+    ── 심사평점표 ─────────────────────────────────────────
+    최종 산출물. 이 앱이 만든 초기예상분양률이 여기서 점수가 되어 종합평점에 들어간다.
+    사업성·시공자 항목은 수동입력이라 화면에 넣은 값을 그대로 옮긴다.
+  */
+  {
+    onProgress?.('심사평점표');
+    const { total: rateTotal, res } = expectedRateOf(compare, rate);
+    const pct = res && !res.pending ? res.rate : null;
+    const rv = reviewScore({ manual: review ?? {}, rate: pct ?? NaN });
+    const t = tableOf('심사평점표');
+
+    const vw = wb.addWorksheet('심사평점표', { views: [{ showGridLines: false }] });
+    const rows = [];
+    for (const g of rv.groups) {
+      g.items.forEach((it, i) => {
+        rows.push([
+          i === 0 ? `${g.label} (${g.max})` : '',
+          it.id + (it.auto ? ' [자동]' : '') + (it.forced ? ' [0점 처리]' : ''),
+          it.max,
+          it.score ?? '',
+          [
+            it.auto && pct != null ? `초기예상분양률 ${pct}% · ${rv.presale?.label}` : '',
+            it.forced && it.from != null ? `${it.from}점 → 0점` : '',
+            it.formula ?? '', it.known ? `확인된 구간 : ${it.known}` : '', it.note ?? '',
+          ].filter(Boolean).join(' / '),
+        ]);
+      });
+    }
+    rows.push(['합 계', '', rv.max, rv.total, rv.missing.length ? `미입력 : ${rv.missing.join(' · ')}` : '전 항목 입력됨']);
+    rows.push(['감 점', '', '', rv.deduct ?? '', '']);
+    rows.push(['종합평점', '', 100, rv.net ?? '', '합계 − 감점']);
+    rows.push(['심사등급 · 보증료율', '', '', '', `${t?.grade?.text ?? ''}${t?.grade?.known ? ` · 확인된 것 : ${t.grade.known}` : ''}`]);
+
+    let r = writeTable(vw, 2, {
+      title: '심사평점표',
+      subtitle: `▶ 사업지 : ${facilities?.address ?? data.region}`,
+      columns: ['구분', '평가항목', '배점', '평점', '근거 · 산식'],
+      rows,
+    });
+    vw.getCell(r + 2, 2).value =
+      `※ 산정 흐름 : 시트별 항목 점수 → 종합평가 ${rateTotal ?? '—'}점 → 초기예상분양률 ${pct != null ? pct + '%' : '—'}`
+      + ` → 초기분양률 배점 ${rv.presale?.pending ? '—' : rv.presale.score + '점'} → 종합평점`;
+    vw.getCell(r + 2, 2).font = { size: 9, color: { argb: 'FF666666' } };
+    if (rv.zero) {
+      vw.getCell(r + 3, 2).value = `※ 0점 처리 적용 — ${rv.zero.text}`;
+      vw.getCell(r + 3, 2).font = { size: 9, bold: true, color: { argb: 'FFB3261E' } };
+      r += 1;
+    }
+    vw.getCell(r + 3, 2).value = '※ 사업수익률의 분양가는 Min(적정분양가, 예정분양가) — 적정분양가는 [비교사업장·분양가] 탭이 낸다';
+    vw.getCell(r + 3, 2).font = { size: 9, color: { argb: 'FF666666' } };
+    vw.getColumn(2).width = 24; vw.getColumn(3).width = 28; vw.getColumn(4).width = 8;
+    vw.getColumn(5).width = 8; vw.getColumn(6).width = 78;
   }
 
   // ── 시트별 ──────────────────────────────────────────────

@@ -1,8 +1,8 @@
 'use client';
 import { useMemo } from 'react';
 import { T, mono } from './theme';
-import { expectedSaleRate, scoreAverage, scoreSheet, scoreRank, scoreBand, tableOf } from '../src/lib/scoring';
-import { compareSummary } from '../src/lib/compare';
+import { scoreAverage, scoreSheet, scoreRank, scoreBand, tableOf } from '../src/lib/scoring';
+import { expectedRateOf } from '../src/lib/compare';
 
 /**
  * 초기예상분양률 — **평가표 전체의 결론**.
@@ -69,17 +69,10 @@ export default function RateView({ region, addr, data, facilities, manual, compa
   const households = v.households ?? '';
   const set = (patch) => onChange?.({ ...v, series, households, ...patch });
 
-  /* 분양가경쟁력은 비교사업장 탭이 이미 낸다 — 같은 함수를 써서 숫자가 갈리지 않게 한다 */
-  const cmp = useMemo(() => compareSummary(compare), [compare]);
-  const compScore = cmp.sc && !cmp.sc.pending ? cmp.sc.score : null;
-
-  /* A(제외 항목 점수)는 비교사업장 탭의 [본건 제원] 입력을 그대로 읽는다 */
-  const exclRaw = compare?.site?.exclScore;
-  const excl = Number(exclRaw);
-  const hasExcl = Number.isFinite(excl) && String(exclRaw ?? '').trim() !== '';
-
-  const total = hasExcl && compScore != null ? excl + compScore : null;
-  const res = expectedSaleRate(total ?? NaN, { series, households });
+  /* 산식은 src/lib/compare.js 한 곳에만 둔다 — 심사평점표 탭과 같은 숫자를 써야 한다 */
+  const { cmp, compScore, excl, total, res } =
+    useMemo(() => expectedRateOf(compare, { series, households }), [compare, series, households]);
+  const hasExcl = excl != null;
 
   /* 이 앱이 스스로 낸 항목 점수 — A 를 눈으로 맞춰보기 위한 대조표 */
   const rows = useMemo(() => {
