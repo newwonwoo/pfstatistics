@@ -184,7 +184,7 @@ function FragmentRows({ g, v, put, pct, presale }) {
         {it.auto || it.forced
           ? (it.score == null ? <span style={S.pend}>—</span> : it.score)
           : (
-            {/* placeholder 에 배점을 넣으면 **이미 채워진 것처럼 보인다** — 실측으로 확인했다 */}
+            /* placeholder 에 배점을 넣으면 이미 채워진 것처럼 보인다 — 배포본 실측으로 확인했다 */
             <input style={S.input(it.over)} type="number" min="0" max={it.max}
               placeholder="점수"
               value={v[it.id] ?? ''} onChange={e => put(it.id, e.target.value)} />
