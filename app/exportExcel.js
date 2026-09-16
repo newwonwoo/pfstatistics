@@ -16,7 +16,7 @@ const MARK_FILL = 'FFFFFDF0';
 const BORDER = { style: 'thin', color: { argb: 'FF9AA5B1' } };
 const box = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
 
-import { scoreSheet, scoreGroup, scoreFacility, scorePoi, scoreMatrix, scoreAverage, scoreRank, scoreBand, expectedSaleRate, reviewScore, tableOf } from '../src/lib/scoring';
+import { scoreSheet, scoreGroup, scoreFacility, scorePoi, scoreMatrix, scoreAverage, expectedSaleRate, reviewScore, tableOf } from '../src/lib/scoring';
 import { compareSummary, expectedRateOf } from '../src/lib/compare';
 import { manualSummary } from '../src/lib/manual';
 
@@ -305,26 +305,14 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
       + ' 위 초기예상분양률은 본건의 산정 결과다 — 서로 다른 값이다';
     rw.getCell(r + 2, 2).font = { size: 9, color: { argb: 'FF666666' } };
 
-    // 이 앱이 자동으로 낸 항목 점수 — A 를 눈으로 맞춰보기 위한 대조표
-    const gv = (id) => (data?.results ?? []).find(x => x.indicatorId === id && x.ok)?.value ?? null;
-    const done = (sc) => (sc && !sc.pending && Number.isFinite(sc.score) ? sc.score : '');
-    const rank = gv('construction_capability_rank');
-    const cd = gv('cd_rate_91');
-    const loan = cd == null ? null : scoreBand('주택담보대출금리', cd);
-    writeTable(rw, r + 4, {
-      title: '참고 — 이 앱이 낸 항목 점수',
-      columns: ['평가항목', '배점', '점수', '근거'],
-      rows: [
-        ['교통환경', 5, done(facilities ? scoreAverage('교통환경', { facilities, manual }) : null), '지하철역·6차선 왕복도로 평균'],
-        ['주거편의', 5, done(facilities ? scoreAverage('주거편의', { facilities, manual }) : null), '상업·의료 / 문화·공공·공원 평균'],
-        ['교육환경', 5, done(facilities ? scoreSheet('교육환경', facilities) : null), '초·중·고 반경'],
-        ['브랜드경쟁력', 5, done(rank == null ? null : scoreRank('브랜드경쟁력', rank)), rank == null ? '수집 대기' : `${data.company ?? ''} ${rank}위`],
-        ['주택담보대출금리', 5, done(loan), loan && !loan.pending ? `CD ${cd}% + 1.57% = ${loan.applied.toFixed(2)}%` : '수집 대기'],
-        ['규모 및 배치', 5, '', '수기입력 시트 — 이 앱의 범위 밖'],
-        ['평형구성', 5, '', '수기입력 시트 — 이 앱의 범위 밖'],
-        ['인근아파트 초기 분양률', 10, '', '옆 단지의 실제 분양률 조사 — 공공 원천 없음'],
-      ],
-    });
+    /*
+      여기 「참고 — 이 앱이 낸 항목 점수」 표를 또 두었었다. 항목 구성이 낡아
+      규모및배치·평형구성·인근초기분양률을 "이 앱의 범위 밖" 으로 비워 두었는데,
+      지금은 수기입력 시트가 값을 받아 점수를 낸다 — **같은 파일 안에서 두 표가 서로 다른 말**을 했다.
+      A 의 항목별 내역은 [수기입력] 시트 한 곳에만 둔다.
+    */
+    rw.getCell(r + 5, 2).value = '※ A 의 항목별 점수와 근거는 [수기입력] 시트에 있다';
+    rw.getCell(r + 5, 2).font = { size: 9, color: { argb: 'FF666666' } };
     rw.getColumn(2).width = 34; rw.getColumn(3).width = 12; rw.getColumn(4).width = 8; rw.getColumn(5).width = 62;
   }
 

@@ -43,8 +43,8 @@ export function compareSummary(v, excl = null) {
 /**
  * 종합평가 점수 = 분양가격지수 제외 항목 점수(A) + 분양가경쟁력 점수.
  *
- * A 는 이 앱이 계산하지 않는다 — 자동수집 못 하는 항목(규모및배치·평형구성·인근초기분양률)이
- * 그 안에 들어 있어 비교사업장 탭의 [본건 제원] 에서 입력받는다.
+ * A 는 **수기입력 탭**이 단일 지점으로 만든다(`src/lib/manual.js`) — 자동수집분 7개 +
+ * 값을 넣으면 구간표가 점수를 내는 3개 + 구간표 미수령 2개. 여기서 또 받지 않는다.
  */
 export function totalScoreOf(compare, excl = null) {
   const cmp = compareSummary(compare, excl);

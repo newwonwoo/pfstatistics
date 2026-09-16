@@ -1,7 +1,7 @@
 'use client';
 import { useMemo } from 'react';
 import { T, mono } from './theme';
-import { scoreAverage, scoreSheet, scoreRank, scoreBand, tableOf } from '../src/lib/scoring';
+import { tableOf } from '../src/lib/scoring';
 import { expectedRateOf } from '../src/lib/compare';
 
 /**
@@ -65,7 +65,7 @@ const SERIES = [
   { id: '오피스텔', label: '오피스텔 · 도시형생활주택' },
 ];
 
-export default function RateView({ region, addr, data, facilities, manual, company, compare, excl: exclProp = null, manualSum = null, sheetInput = null, value, onChange }) {
+export default function RateView({ region, addr, facilities, compare, excl: exclProp = null, manualSum = null, sheetInput = null, value, onChange }) {
   const v = value ?? {};
   const series = v.series ?? '주택';
   /*
@@ -79,33 +79,6 @@ export default function RateView({ region, addr, data, facilities, manual, compa
   const { cmp, compScore, excl, total, res } =
     useMemo(() => expectedRateOf(compare, { series }, exclProp, sheetInput), [compare, series, exclProp, sheetInput]);
   const hasExcl = excl != null;
-
-  /* 이 앱이 스스로 낸 항목 점수 — A 를 눈으로 맞춰보기 위한 대조표 */
-  const rows = useMemo(() => {
-    const val = (id) => (data?.results ?? []).find(r => r.indicatorId === id && r.ok)?.value ?? null;
-    const traffic = facilities ? scoreAverage('교통환경', { facilities, manual }) : null;
-    const living = facilities ? scoreAverage('주거편의', { facilities, manual }) : null;
-    const edu = facilities ? scoreSheet('교육환경', facilities) : null;
-    const rank = val('construction_capability_rank');
-    const brand = rank == null ? null : scoreRank('브랜드경쟁력', rank);
-    const cd = val('cd_rate_91');
-    const loan = cd == null ? null : scoreBand('주택담보대출금리', cd);
-    const done = (sc) => (sc && !sc.pending && Number.isFinite(sc.score) ? sc.score : null);
-    return [
-      { name: '교통환경', max: 5, score: done(traffic), memo: traffic?.pending ? traffic.text : traffic?.text },
-      { name: '주거편의', max: 5, score: done(living), memo: living?.pending ? living.text : living?.text },
-      { name: '교육환경', max: 5, score: done(edu), memo: edu?.text ?? '' },
-      { name: '브랜드경쟁력', max: 5, score: done(brand), memo: brand ? (brand.pending ? brand.text : `${company ?? ''} ${rank}위 · ${brand.text}`) : '수집 대기' },
-      { name: '주택담보대출금리', max: 5, score: done(loan), memo: loan ? (loan.pending ? loan.text : `CD ${cd}% + 1.57% = ${loan.applied.toFixed(2)}% · ${loan.text}`) : '수집 대기' },
-      { name: '규모 및 배치', max: 5, score: null, memo: '수기입력 시트 — 이 앱의 범위 밖' },
-      { name: '평형구성', max: 5, score: null, memo: '수기입력 시트 — 이 앱의 범위 밖' },
-      { name: '인근아파트 초기 분양률', max: 10, score: null, memo: '옆 단지의 실제 분양률 조사 — 공공 원천 없음' },
-      { name: '지역미분양 · 지역수요 · 지역경쟁력 · 소비심리지수', max: null, score: null, memo: '구간표 일부 미수령 — 수치는 각 시트에서 수집됨' },
-    ];
-  }, [data, facilities, manual, company]);
-
-  const auto = rows.filter(r => r.score != null);
-  const autoSum = auto.reduce((s, r) => s + r.score, 0);
 
   const t = tableOf('초기예상분양률');
   const bands = t?.series?.[series]?.bands ?? [];
@@ -223,7 +196,8 @@ export default function RateView({ region, addr, data, facilities, manual, compa
       */}
       <div style={S.secTitle}>A 는 어떻게 만들어지나</div>
       <div style={S.intro}>
-        A 안에는 이 앱이 자동으로 내는 항목(교통환경 · 주거편의 · 교육환경 · 브랜드경쟁력 · 주택담보대출금리)과
+        A 안에는 이 앱이 자동으로 내는 항목(교통환경 · 주거편의 · 교육환경 · 브랜드경쟁력 ·
+        주택담보대출금리 · 지역경쟁력 · 소비심리지수)과
         값을 넣으면 점수가 나는 항목(규모 및 배치 · 평형구성 · 인근아파트 초기 분양률),
         그리고 구간표를 아직 못 받아 점수를 직접 넣는 항목이 함께 들어 있습니다.<br />
         <b>항목별 점수와 합계는 [수기입력] 탭에서 한자리에 봅니다.</b>

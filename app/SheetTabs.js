@@ -34,15 +34,30 @@ export default function SheetTabs({ sheets, active, onSelect, status }) {
     measure();
   }, [active]);
 
+  /*
+    **페이드만으로는 못 넘어간다.** 가로 스크롤바를 숨겨 둔 데다 휠은 세로로만 굴러서,
+    마우스만 쓰는 실무자는 오른쪽 끝의 [심사평점표] — 최종 산출물 — 에 갈 방법이 없었다.
+    페이드를 누를 수 있게 만들고 휠도 가로로 받는다.
+  */
+  const nudge = (dir) => ref.current?.scrollBy({ left: dir * 220, behavior: 'smooth' });
+  const onWheel = (e) => {
+    const el = ref.current;
+    if (!el || el.scrollWidth <= el.clientWidth) return;
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+    el.scrollLeft += e.deltaY;
+  };
+
   const fade = (side, on) => ({
-    position: 'absolute', top: 0, bottom: 1, [side]: 0, width: 28, pointerEvents: 'none',
-    opacity: on ? 1 : 0, transition: 'opacity .15s',
-    background: `linear-gradient(to ${side === 'left' ? 'right' : 'left'}, ${T.bg}, transparent)`,
+    position: 'absolute', top: 0, bottom: 1, [side]: 0, width: 30,
+    display: on ? 'flex' : 'none', alignItems: 'center',
+    justifyContent: side === 'left' ? 'flex-start' : 'flex-end',
+    border: 0, padding: 0, cursor: 'pointer', color: T.ink2, fontSize: 15, fontWeight: 700,
+    background: `linear-gradient(to ${side === 'left' ? 'right' : 'left'}, ${T.bg} 55%, transparent)`,
   });
 
   return (
     <div style={{ position: 'relative' }}>
-    <div ref={ref} style={{ display: 'flex', alignItems: 'flex-end', gap: 2, overflowX: 'auto', padding: '0 2px', borderBottom: `1px solid ${T.lineStrong}`, scrollbarWidth: 'none' }}>
+    <div ref={ref} onWheel={onWheel} style={{ display: 'flex', alignItems: 'flex-end', gap: 2, overflowX: 'auto', padding: '0 2px', borderBottom: `1px solid ${T.lineStrong}`, scrollbarWidth: 'none' }}>
       {sheets.map((s, i) => {
         const newStage = s.stage && sheets[i - 1]?.stage !== s.stage;
         const on = s.id === active;
@@ -88,8 +103,10 @@ export default function SheetTabs({ sheets, active, onSelect, status }) {
         );
       })}
     </div>
-      <span aria-hidden style={fade('left', edge.left)} />
-      <span aria-hidden style={fade('right', edge.right)} />
+      <button type="button" aria-label="이전 시트" title="이전 시트"
+        style={fade('left', edge.left)} onClick={() => nudge(-1)}>‹</button>
+      <button type="button" aria-label="다음 시트" title="다음 시트"
+        style={fade('right', edge.right)} onClick={() => nudge(1)}>›</button>
     </div>
   );
 }

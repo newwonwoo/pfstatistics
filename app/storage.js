@@ -36,6 +36,7 @@ export function list() {
     addr: r.addr ?? null,
     okCount: r.data?.okCount ?? 0, total: r.data?.total ?? 0,
     hasFacilities: Boolean(r.facilities),
+    hasInput: Boolean(r.sheetInput || r.review),
     savedAt: r.savedAt,
   }));
 }
@@ -45,7 +46,7 @@ export function load(id) {
 }
 
 /** 같은 사업장·조회월이면 덮어쓰고 맨 앞으로 올린다 */
-export function save({ data, facilities, addr, manual, compare }) {
+export function save({ data, facilities, addr, manual, compare, rate, review, sheetInput }) {
   if (!data) return false;
   const id = recordId(data);
   const rec = {
@@ -53,6 +54,14 @@ export function save({ data, facilities, addr, manual, compare }) {
     addr: addr ?? null, data, facilities: facilities ?? null,
     manual: manual ?? null,   // 수기판정(6차선 왕복도로 등)도 같이 보관해야 재현된다
     compare: compare ?? null, // 비교사업장 — 고른 단지까지 같이 보관해야 평균이 재현된다
+    /*
+      수기입력·초기예상분양률·심사평점표 입력은 **손으로 넣은 값이라 재조회로 되살릴 수 없다.**
+      전에는 page.js 가 넘기는데 여기서 받지 않아 통째로 버려졌다 —
+      보관본을 다시 열면 A·종합평점이 빈 채로 나왔다(실측).
+    */
+    sheetInput: sheetInput ?? null, // 규모및배치 · 평형구성 · 인근초기분양률 · 점수 직접
+    rate: rate ?? null,             // 주택 종류 등 분양률 산정 설정
+    review: review ?? null,         // 심사평점표 입력값
     savedAt: new Date().toISOString(),
   };
   const rest = read().filter(r => r.id !== id);

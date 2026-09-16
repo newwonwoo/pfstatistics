@@ -106,7 +106,12 @@ const S = {
 };
 
 /** 반경시설 시트 — 수집도 화면도 이 단위로 움직인다 */
-const POI_SHEETS = ['주거편의', '교통환경', '교육환경'];
+/*
+  단계 줄의 수집 버튼 순서는 **탭 순서와 같아야 한다.**
+  손으로 적어두었더니 주거편의가 교통환경보다 앞에 서서, 탭은 교통환경부터인데
+  버튼은 주거편의부터인 상태로 오래 굴러갔다 — SHEETS 에서 끌어와 갈릴 일을 없앤다.
+*/
+const POI_SHEETS = SHEETS.filter(s => s.kind === 'poi').map(s => s.id);
 
 /** "경기도 광주시" → { sido, sgg } (보관본 복원용) */
 function splitRegion(r) {
@@ -130,9 +135,16 @@ export default function Home() {
    * 주소 한 칸에 통으로 받으면 "광주시"가 광주광역시로, "고성군"이 강원·경남 중
    * 아무데나 잡힐 수 있는데 사용자는 그걸 알 방법이 없다.
    */
+  /*
+    **빈 칸으로 시작한다.** 전에는 골든 표본(경기도 광주시 탄벌동 203-4 · 제일건설(주))이
+    초기값으로 박혀 있었다. 개발 중엔 편했지만 실무자가 앱을 열면 **남의 사업장이
+    이미 입력된 것처럼 보인다** — 그대로 [주소 확정] 을 눌러도 아무 경고가 없다.
+    placeholder 에 그럴듯한 값을 넣지 말라던 것과 같은 함정이다(CLAUDE.md).
+    조회월은 /api/latest 가 원천 최신월로 채운다.
+  */
   const [form, setForm] = useState({
-    sido: '경기도', sgg: '광주시', detail: '탄벌동 203-4',
-    ym: '202607', company: '제일건설(주)',
+    sido: '', sgg: '', detail: '',
+    ym: '', company: '',
   });
   const [data, setData] = useState(null);           // 통계 수집 결과
   const [facilities, setFacilities] = useState(null); // 반경시설 수집 결과
@@ -222,7 +234,13 @@ export default function Home() {
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? '수집 실패');
       setData(j);
-      setMsg({ kind: 'ok', text: `통계 ${j.okCount}/${j.total} 수집 완료` });
+      /*
+        시공사를 안 넣으면 시공능력평가순위만 조용히 빠져 6/7 이 된다.
+        초기 폼을 비우고 나서는 실제로 그렇게 되기 쉬우므로 무엇이 빠졌는지 말한다.
+      */
+      setMsg(String(form.company).trim()
+        ? { kind: 'ok', text: `통계 ${j.okCount}/${j.total} 수집 완료` }
+        : { kind: 'warn', text: `통계 ${j.okCount}/${j.total} 수집 완료 — 시공사를 안 넣어 시공능력평가순위(브랜드경쟁력)가 빠졌습니다. 상호를 넣고 다시 [통계 수집] 을 누르세요.` });
     } catch (e) { setMsg({ kind: 'err', text: e.message }); }
     finally { setBusy(null); }
   }
@@ -375,6 +393,12 @@ export default function Home() {
   const poiDone = (sheet) =>
     Object.values(facilities?.facilities ?? {}).some(v => v.sheet === sheet);
   const allPoi = POI_SHEETS.every(poiDone);
+  /*
+    비교사업장도 **자료수집 단계**다. 이걸 빼고 STEP 2 를 완료로 표시했더니
+    분양가경쟁력이 빈 채로 다음 단계가 열렸고, 단계 줄에 그 탭으로 가는 길도 없었다.
+    반경·종류를 고르는 자리가 탭 안이라 수집 버튼은 탭에 두고, 단계 줄에는 **가는 길**만 둔다.
+  */
+  const compDone = Boolean(compare?.data);
 
   /*
    * 절차는 자료수집에서 끝나지 않는다 — **수집 → 분양률 산정 → 심사평점**.
@@ -390,13 +414,13 @@ export default function Home() {
 
   const done = [
     ...(fixed ? ['input'] : []),
-    ...(data && allPoi ? ['collect'] : []),
+    ...(data && allPoi && compDone ? ['collect'] : []),
     ...(mSum.excl != null ? ['manual'] : []),
     ...(ratePct != null ? ['rate'] : []),
     ...(reviewRes?.net != null ? ['review'] : []),
   ];
   const current = !fixed ? 'input'
-    : !data || !allPoi ? 'collect'
+    : !data || !allPoi || !compDone ? 'collect'
     : mSum.excl == null ? 'manual'
     : ratePct == null ? 'rate'
     : 'review';
@@ -589,6 +613,15 @@ export default function Home() {
                   {busy === sh ? '수집 중…' : `${sh} 수집`}
                 </button>
               ))}
+
+              {/* 반경·종류를 고른 뒤 수집해야 해서 버튼은 탭 안에 있다 — 여기서는 그 탭으로 보낸다 */}
+              <button
+                style={S.btn({ primary: !!data && allPoi && !compDone, done: compDone })}
+                onClick={() => setTab('비교사업장')} disabled={!!busy}
+              >
+                {compDone && <span style={S.check}>✓</span>}
+                {compDone ? '비교사업장 · 분양가' : '비교사업장 · 분양가 →'}
+              </button>
             </>
           )}
 
@@ -690,6 +723,8 @@ export default function Home() {
         {SHEETS.map(s => (
           <div
             key={s.id}
+            /* 모든 시트가 한 DOM 에 같이 있다 — 시트를 특정할 수 있는 이름표를 둔다 */
+            data-sheet={s.id}
             aria-hidden={s.id !== tab}
             style={s.id === tab ? undefined : {
               position: 'absolute', left: -99999, top: 0, width: 1100, pointerEvents: 'none',
@@ -713,8 +748,8 @@ export default function Home() {
               : s.kind === 'rate'
               ? (
                 <RateView
-                  region={region} addr={addr} data={data} facilities={facilities} manual={manual}
-                  company={data?.company} compare={compare} excl={mSum.excl} manualSum={mSum} sheetInput={sheetInput}
+                  region={region} addr={addr} facilities={facilities}
+                  compare={compare} excl={mSum.excl} manualSum={mSum} sheetInput={sheetInput}
                   value={rate} onChange={setRate}
                 />
               )

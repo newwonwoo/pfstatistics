@@ -47,6 +47,10 @@ const S = {
     color: tone === 'ok' ? T.ok : tone === 'warn' ? T.warn : T.muted,
   }),
   pend: { color: T.muted, fontStyle: 'italic', fontWeight: 400, whiteSpace: 'nowrap' },
+  take: {
+    marginLeft: 7, padding: '2px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+    border: `1px solid ${T.accent}`, borderRadius: 4, background: T.accentSoft, color: T.accent,
+  },
   scroll: { overflowX: 'auto' },
   note: { marginTop: 12, fontSize: 11.5, color: T.muted, lineHeight: 1.8 },
   dscrBar: { display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap', margin: '14px 0 4px', fontSize: 12, color: T.ink2 },
@@ -63,11 +67,19 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
 
   const r = useMemo(() => reviewScore({ manual: v, rate: pct ?? NaN }), [v, pct]);
 
-  /* 이 앱이 이미 수집한 값은 근거 칸에 띄워준다 — "수집한다" 고만 적으면 어디 있는지 모른다 */
+  /*
+    이 앱이 이미 수집한 값은 근거 칸에 띄우고 **한 번에 넣을 수 있게** 한다.
+    전에는 "이 앱이 수집한 순위 : 17위" 라고 적어만 두고 손으로 다시 치게 했다 —
+    옮겨 적다 틀리면 평점이 통째로 어긋난다. 그렇다고 말없이 채우면
+    "입력 안 한 칸이 채워진 것처럼 보임" 함정에 걸리므로 **버튼을 눌러야** 들어간다.
+    (공동시공은 시공자별로 따로 평점을 내야 해서 자동채택이 늘 옳지도 않다)
+  */
   const known = useMemo(() => {
     const g = (id) => (data?.results ?? []).find(x => x.indicatorId === id && x.ok)?.value ?? null;
     const rank = g('construction_capability_rank');
-    return rank == null ? {} : { '시공능력평가액순위': `이 앱이 수집한 순위 : ${rank}위` };
+    return rank == null ? {} : {
+      '시공능력평가액순위': { text: `이 앱이 수집한 순위 : ${rank}위`, value: String(rank), label: `${rank}위 넣기` },
+    };
   }, [data]);
   const t = tableOf('심사평점표');
 
@@ -232,7 +244,17 @@ function FragmentRows({ g, v, put, pct, presale, known = {} }) {
           && <><b style={{ color: T.ok }}>{it.band} → {it.score}점</b><br /></>}
         {!it.auto && it.score == null && typeof it.band === 'string' && it.band
           && <><b style={{ color: T.warn }}>{it.band}</b><br /></>}
-        {known[it.id] && <>{known[it.id]}<br /></>}
+        {known[it.id] && (
+          <>
+            {known[it.id].text}
+            {String(v[it.id] ?? '') !== known[it.id].value && (
+              <button type="button" style={S.take} onClick={() => put(it.id, known[it.id].value)}>
+                {known[it.id].label}
+              </button>
+            )}
+            <br />
+          </>
+        )}
         {it.known && <>확인된 구간 : <b style={{ color: T.ink2 }}>{it.known}</b><br /></>}
         {it.note}
         {it.over && <><br /><b style={{ color: T.warn }}>배점 {it.max}점을 넘습니다</b></>}

@@ -32,7 +32,7 @@ export default function SavedList({ onOpen, refreshKey }) {
       </div>
       {open && (
         <div style={S.body}>
-          {items.length === 0 && <div style={S.empty}>아직 저장된 조회가 없습니다. 수집 후 [저장]을 누르세요.</div>}
+          {items.length === 0 && <div style={S.empty}>아직 보관한 조회가 없습니다. 수집 후 [이 조회 보관] 을 누르세요.</div>}
           {items.map(it => (
             <div key={it.id} style={S.row}>
               <span style={S.main}>
@@ -42,10 +42,15 @@ export default function SavedList({ onOpen, refreshKey }) {
               <span style={S.meta}>
                 {it.okCount}/{it.total}
                 {it.hasFacilities ? ' · 시설' : ''}
+                {it.hasInput ? ' · 수기입력' : ''}
                 {' · '}{new Date(it.savedAt).toLocaleDateString('ko-KR')}
               </span>
               <button style={S.btn} onClick={() => onOpen(store.load(it.id))}>열기</button>
-              <button style={S.del} onClick={() => { store.remove(it.id); setItems(store.list()); }}>삭제</button>
+              {/* 보관본은 재조회로 되살릴 수 없는 수기입력까지 들고 있다 — 한 번 묻는다 */}
+              <button style={S.del} onClick={() => {
+                if (!confirm(`${it.region} · ${it.period} 보관본을 지웁니다. 되돌릴 수 없습니다.`)) return;
+                store.remove(it.id); setItems(store.list());
+              }}>삭제</button>
             </div>
           ))}
           <div style={S.note}>
