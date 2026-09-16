@@ -32,6 +32,12 @@ const REG = {
 const HOUSE_TYPES = ['아파트', '주상복합', '기타'];
 const SIZE_BANDS = ['500세대 미만', '500~999세대', '1,000세대 이상'];
 const RANK_BANDS = ['50위 이내', '51~100위', '101~200위', '201~300위', '300위 밖'];
+/* 이 앱이 시공능력평가순위를 이미 수집한다 — 순위를 구간으로 옮기는 일을 사람에게 시키지 않는다 */
+const rankBandOf = (rank) => {
+  const n = Number(rank);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n <= 50 ? '50위 이내' : n <= 100 ? '51~100위' : n <= 200 ? '101~200위' : n <= 300 ? '201~300위' : '300위 밖';
+};
 const LAND_TYPES = ['민간택지', '공공택지', '신도시', '기타'];
 
 const S = {
@@ -49,6 +55,10 @@ const S = {
     border: `1px solid ${T.accent}`, background: busy ? '#dfe6ef' : T.accent, color: busy ? T.muted : '#fff',
   }),
   ghost: { padding: '6px 13px', fontSize: 11.5, fontWeight: 700, borderRadius: 6, cursor: 'pointer', border: `1px solid ${T.accent}`, background: '#fff', color: T.accent },
+  take: {
+    marginTop: 4, alignSelf: 'flex-start', padding: '2px 8px', fontSize: 10.5, fontWeight: 700, cursor: 'pointer',
+    border: `1px solid ${T.accent}`, borderRadius: 4, background: T.accentSoft, color: T.accent,
+  },
   label: { fontSize: 11.5, color: T.muted },
   reg: { padding: '11px 14px', marginBottom: 14, borderRadius: 7, background: '#f7f9fc', border: `1px solid ${T.line}`, fontSize: 11.5, color: T.ink2, lineHeight: 1.85 },
   regKey: { display: 'inline-block', minWidth: 52, fontWeight: 700, color: T.muted },
@@ -384,6 +394,16 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
               <option value="">선택</option>
               {RANK_BANDS.map(x => <option key={x} value={x}>{x}</option>)}
             </select>
+            {/*
+              순위를 알면서 구간을 또 고르게 하지 않는다. 말없이 채우면 입력값과 구분이 안 되므로
+              **누를 때만** 들어간다 — 공동시공처럼 다른 시공자로 볼 때가 있어 자동채택이 늘 옳지도 않다.
+            */}
+            {rankBandOf(companyRank) && site.rankBand !== rankBandOf(companyRank) && (
+              <button type="button" style={S.take}
+                onClick={() => setSite({ rankBand: rankBandOf(companyRank) })}>
+                {rankBandOf(companyRank)} 넣기
+              </button>
+            )}
           </label>
           <label style={S.field}>
             <span style={S.label}>라. 택지유형</span>
@@ -414,13 +434,24 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
             {items.length}건 표시{kinds.length === 0 && ' · 종류를 하나 이상 고르세요'}
           </span>
           {items.length > 0 && (
-            <button style={{ ...S.ghost, marginLeft: 'auto', opacity: siteFilled ? 1 : 0.5 }}
-              onClick={autoPick} disabled={!siteFilled}
-              title={siteFilled
-                ? '유사도 2개 이상 · 공공분양/10년 경과 제외 · 1년 이내 분양개시 우선 · 3개 이상 일치 우선'
-                : '위 [본건 제원] 을 채워야 유사도를 판정할 수 있습니다'}>
-              규정대로 자동선택
-            </button>
+            /*
+              못 누르는 이유를 title 에만 적어뒀더니, 마우스를 올리기 전에는
+              **왜 회색인지 알 수 없었다**. 이유를 옆에 그대로 적는다.
+            */
+            <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+              {!siteFilled && (
+                <span style={{ ...S.label, fontWeight: 400 }}>
+                  위 [본건 제원] 을 채우면 유사도로 골라줍니다
+                </span>
+              )}
+              <button style={{ ...S.ghost, opacity: siteFilled ? 1 : 0.5 }}
+                onClick={autoPick} disabled={!siteFilled}
+                title={siteFilled
+                  ? '유사도 2개 이상 · 공공분양/10년 경과 제외 · 1년 이내 분양개시 우선 · 3개 이상 일치 우선'
+                  : '위 [본건 제원] 을 채워야 유사도를 판정할 수 있습니다'}>
+                규정대로 자동선택
+              </button>
+            </span>
           )}
         </div>
       )}
