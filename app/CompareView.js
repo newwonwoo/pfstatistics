@@ -59,6 +59,10 @@ const S = {
     marginTop: 4, alignSelf: 'flex-start', padding: '2px 8px', fontSize: 10.5, fontWeight: 700, cursor: 'pointer',
     border: `1px solid ${T.accent}`, borderRadius: 4, background: T.accentSoft, color: T.accent,
   },
+  autoMsg: {
+    flexBasis: '100%', marginTop: 8, padding: '8px 12px', borderRadius: 6,
+    background: '#f7f9fb', border: `1px solid ${T.line}`, fontSize: 11.5, color: T.ink2, lineHeight: 1.6,
+  },
   label: { fontSize: 11.5, color: T.muted },
   reg: { padding: '11px 14px', marginBottom: 14, borderRadius: 7, background: '#f7f9fc', border: `1px solid ${T.line}`, fontSize: 11.5, color: T.ink2, lineHeight: 1.85 },
   regKey: { display: 'inline-block', minWidth: 52, fontWeight: 700, color: T.muted },
@@ -133,6 +137,7 @@ const baseRadius = (region) =>
 export default function CompareView({ addr, coord, region, polygon, radiusBasis, company, companyRank, excl = null, manualSum = null, value, onChange }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [autoMsg, setAutoMsg] = useState(null);   // [규정대로 자동선택] 이 무엇을 했는지
 
   const v = value ?? {};
   const radius = v.radius ?? baseRadius(region);
@@ -216,12 +221,31 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
    *   2) 1년 이내 분양개시 사업장이 있으면 그것만 (시기 우선)
    *   3) 3개 이상 일치가 있으면 그것만 (유사도 우선)
    */
+  /*
+    눌렀는데 **아무 일도 안 일어나는** 자리였다. 유사도 2개 이상이 하나도 없으면
+    고른 것을 조용히 비웠다 — 손으로 골라둔 단지까지 같이 날아가고 사유도 안 남았다.
+    (실측: 본건 제원 중 시공순위만 채운 상태로 누르면 5건 중 0건이 남는다)
+    0건이면 **지우지 않고** 왜 0건인지 말한다.
+  */
   const autoPick = () => {
-    let c = items.filter(a => isSale(a) && a.sim.n >= 2 && !a.publicSale && !(a.years > 10));
+    const sale = items.filter(isSale);
+    const excluded = sale.filter(a => a.publicSale || a.years > 10).length;
+    let c = sale.filter(a => a.sim.n >= 2 && !a.publicSale && !(a.years > 10));
+    if (!c.length) {
+      setAutoMsg(`규정 요건(유사도 2개 이상 일치)을 채우는 단지가 없습니다`
+        + `${excluded ? ` (공공분양·10년 경과로 제외한 ${excluded}건 별도)` : ''}`
+        + ` — [본건 제원] 을 더 채우면 일치 항목이 늘어납니다. 고른 단지는 그대로 두었습니다.`);
+      return;
+    }
     const fresh = c.filter(a => a.timing === '1년 이내 분양개시');
-    if (fresh.length) c = fresh;
+    const usedFresh = fresh.length > 0;
+    if (usedFresh) c = fresh;
     const three = c.filter(a => a.sim.n >= 3);
-    if (three.length) c = three;
+    const usedThree = three.length > 0;
+    if (usedThree) c = three;
+    setAutoMsg(`${c.length}곳을 골랐습니다 — 유사도 ${usedThree ? '3개 이상' : '2개 이상'} 일치`
+      + `${usedFresh ? ' · 1년 이내 분양개시 우선' : ''}`
+      + `${excluded ? ` · 공공분양·10년 경과 ${excluded}건 제외` : ''}`);
     set({ picked: c.map(a => a.manageNo) });
   };
 
@@ -452,6 +476,9 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
                 규정대로 자동선택
               </button>
             </span>
+          )}
+          {autoMsg && (
+            <div style={S.autoMsg}>{autoMsg}</div>
           )}
         </div>
       )}
