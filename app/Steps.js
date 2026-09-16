@@ -34,8 +34,11 @@ export default function Steps({ current, done }) {
    */
   const steps = [
     { id: 'input', label: '사업지 확정', stage: '자료수집', hint: '시도·시군구 선택 후 [주소 확정]' },
-    { id: 'boundary', label: '수집 기준', stage: '자료수집', hint: '사업지 경계 또는 대표지번 중심' },
-    { id: 'collect', label: '통계 · 시설 수집', stage: '자료수집', hint: '통계 → 시설 → 비교사업장' },
+    /*
+      「수집 기준」을 독립 단계로 뒀더니 실제와 어긋났다 — 기준은 **시설 수집 버튼을 누를 때**
+      묻는 것이라, 통계 수집이 끝나도 단계 줄은 계속 2단계를 가리켰다. 수집 안으로 넣는다.
+    */
+    { id: 'collect', label: '통계 · 시설 수집', stage: '자료수집', hint: '시설은 누를 때 경계/중심 기준을 묻습니다' },
     { id: 'manual', label: '수기입력', stage: '수기입력', hint: '규모및배치 · 평형구성 · 인근초기분양률' },
     { id: 'rate', label: '분양률 산정', stage: '산정', hint: '종합평가 점수 → 초기예상분양률' },
     { id: 'review', label: '심사평점 · 내보내기', stage: '평점', hint: '초기분양률 배점 + 사업성 → 종합평점' },

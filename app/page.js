@@ -356,8 +356,6 @@ export default function Home() {
     Object.values(facilities?.facilities ?? {}).some(v => v.sheet === sheet);
   const allPoi = POI_SHEETS.every(poiDone);
 
-  // 기준이 정해졌으면(경계면 3점 이상까지) 2단계 완료로 본다
-  const basisReady = basisMode === 'point' || (basisMode === 'polygon' && polygon?.length >= 3);
   /*
    * 절차는 자료수집에서 끝나지 않는다 — **수집 → 분양률 산정 → 심사평점**.
    * 뒤 두 단계가 단계 줄에 없으면 "수집하면 끝" 으로 읽힌다(사용자 지적 2026-09-16).
@@ -372,14 +370,12 @@ export default function Home() {
 
   const done = [
     ...(fixed ? ['input'] : []),
-    ...(basisReady ? ['boundary'] : []),
     ...(data && allPoi ? ['collect'] : []),
     ...(mSum.excl != null ? ['manual'] : []),
     ...(ratePct != null ? ['rate'] : []),
     ...(reviewRes?.net != null ? ['review'] : []),
   ];
   const current = !fixed ? 'input'
-    : !basisReady ? 'boundary'
     : !data || !allPoi ? 'collect'
     : mSum.excl == null ? 'manual'
     : ratePct == null ? 'rate'
