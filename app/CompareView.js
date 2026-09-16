@@ -494,6 +494,54 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
         </div>
       )}
 
+      {/*
+        아직 산정할 수 없어도 **자리는 보여준다.**
+        전에는 조건이 갖춰지기 전까지 이 표가 통째로 없어서
+        "분양가 적정성은 어디 있냐" 가 됐다 — 없는 것과 대기 중인 것은 다르다.
+      */}
+      {!proper && (
+        <div style={{ ...S.propBox, opacity: 0.85 }}>
+          <div style={S.propHead}>
+            <span>적정분양가 산정</span>
+            <span style={S.propClause}>주택분양보증 심사지침 제16조</span>
+          </div>
+          <table style={S.propTable}>
+            <tbody>
+              <tr>
+                <td style={S.propKey}>① 비교사업장 평균가격</td>
+                <td style={{ ...S.propNum, color: avg == null ? T.muted : T.ink }}>{avg == null ? '—' : won(avg)}</td>
+                <td style={S.propUnit}>원/㎡</td>
+                <td style={S.propPy}>{avg == null ? '아래 표에서 비교사업장을 고르세요' : `평당 ${won(avg * PY)}`}</td>
+              </tr>
+              <tr>
+                <td style={S.propKey}>② 본건 예정분양가</td>
+                <td style={{ ...S.propNum, color: sitePrice == null ? T.muted : T.ink }}>{sitePrice == null ? '—' : won(sitePrice)}</td>
+                <td style={S.propUnit}>원/㎡</td>
+                <td style={S.propPy}>{sitePrice == null ? '위 [본건 제원] 에 입력하세요' : `평당 ${won(sitePrice * PY)}`}</td>
+              </tr>
+              <tr>
+                <td style={S.propKey}>② ÷ ①</td>
+                <td style={{ ...S.propNum, color: T.muted }}>—</td>
+                <td style={S.propUnit} />
+                <td style={S.propPy} />
+              </tr>
+              <tr>
+                <td style={{ ...S.propKey, ...S.propFinal }}>⇒ 적정분양가</td>
+                <td style={{ ...S.propNum, ...S.propFinal, color: T.muted }}>—</td>
+                <td style={{ ...S.propUnit, ...S.propFinal }}>원/㎡</td>
+                <td style={{ ...S.propPy, ...S.propFinal }} />
+              </tr>
+            </tbody>
+          </table>
+          <div style={{ ...S.propWhy, color: T.muted }}>
+            {avg == null && sitePrice == null
+              ? '반경 안의 분양단지를 수집해 비교사업장을 고르고, 본건 예정분양가를 입력하면 여기서 적정분양가가 산정됩니다.'
+              : avg == null
+                ? '비교사업장을 고르면 평균가격이 잡히고 적정분양가가 산정됩니다.'
+                : '본건 예정분양가를 입력하면 적정분양가가 산정됩니다.'}
+          </div>
+        </div>
+      )}
       {!data && (
         <div style={S.empty}>
           사업지 주소를 확정한 뒤 반경을 고르고 [수집] 을 누르세요.<br />
