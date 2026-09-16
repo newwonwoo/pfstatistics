@@ -193,13 +193,25 @@ export function scoreBand(key, raw) {
   const t = TABLE[key];
   if (!t || t.scope !== 'band') return null;
   const n = Number(raw);
-  if (!Number.isFinite(n)) return { pending: true, text: '원천값이 없어 점수를 낼 수 없습니다' };
+  if (raw === '' || raw == null || !Number.isFinite(n)) {
+    return { pending: true, text: '원천값이 없어 점수를 낼 수 없습니다' };
+  }
   const applied = n + (t.spread ?? 0);
+
+  /* `lt` 로 적힌 표(주택담보대출금리)와 `gte` 로 적힌 표(지역경쟁력·소비심리지수)를 둘 다 받는다 */
   for (const rule of t.rules) {
-    if (applied < rule.lt) {
-      return { score: rule.score, label: rule.label, text: rule.text, applied, formula: t.formula, rule };
+    const hit = rule.lt != null ? applied < rule.lt
+      : rule.gte != null ? applied >= rule.gte
+      : true;
+    if (hit) {
+      return {
+        score: rule.score, label: rule.label ?? rule.text, grade: rule.grade,
+        text: rule.text ?? rule.label, applied, unit: t.unit, max: t.max,
+        formula: t.formula, rule,
+      };
     }
   }
+  if (!t.base) return { pending: true, text: '구간표 범위를 벗어났습니다' };
   return { score: t.base.score, label: t.base.label, text: t.base.text, applied, formula: t.formula, rule: null };
 }
 

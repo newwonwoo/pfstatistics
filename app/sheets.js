@@ -71,17 +71,24 @@ export function buildSheet(sheetId, { byId, region, period, company }) {
         ],
         evidence: ['housing_supply_ratio'],
       };
-    case '지역경쟁력':
+    case '지역경쟁력': {
+      /* 구간표 수령(2026-09-16) — 0.6↑5 / 0.3↑4 / 0.1↑3 / -0.06↑2 / 그 밖 1 */
+      const kb = val('kb_apt_price_index');
+      const sc = kb == null ? null : scoreBand('지역경쟁력', kb);
       return {
         title: '지역경쟁력 (월별 아파트 매매가격 종합지수)', subject: region,
         columns: ['평가항목', '지역', '전월대비 증감률', '평가기준', '평가점수', '평가'],
         rows: [[
           '매매가격 종합지수 전월대비 증감률', region,
-          val('kb_apt_price_index') == null ? null : `${Number(val('kb_apt_price_index')).toFixed(2)}%`,
-          '', '', '',
+          kb == null ? null : `${Number(kb).toFixed(3)}%`,
+          sc && !sc.pending ? sc.label : '',
+          sc && !sc.pending ? `${sc.score}점` : '',
+          sc && !sc.pending ? sc.grade : '',
         ]],
+        footnote: '※ 해당지역 고시자료가 없는 경우에는 상급 행정구역(특별시·광역시·시도)의 증감률을 적용',
         evidence: ['kb_apt_price_index'],
       };
+    }
     case '브랜드경쟁력': {
       /* 구간표 수령(2026-09-16) — 1~10/11~20/21~50/51~100/101위이하 = 5/4/3/2/1점 */
       const rank = val('construction_capability_rank');
@@ -120,7 +127,17 @@ export function buildSheet(sheetId, { byId, region, period, company }) {
             sc && !sc.pending ? `${sc.score}점` : '',
             sc && !sc.pending ? sc.label : '',
           ],
-          ['부동산시장 소비심리지수', region.split(' ')[0], val('consumer_sentiment'), '', '', ''],
+          (() => {
+            /* 구간표 수령(2026-09-16) — 130↑15 / 110↑12 / 90↑9 / 70↑6 / 그 밖 3 */
+            const cs = val('consumer_sentiment');
+            const s2 = cs == null ? null : scoreBand('소비심리지수', cs);
+            return [
+              '부동산시장 소비심리지수', region.split(' ')[0], cs,
+              s2 && !s2.pending ? s2.label : '',
+              s2 && !s2.pending ? `${s2.score}점` : '',
+              s2 && !s2.pending ? s2.grade : '',
+            ];
+          })(),
         ],
         footnote: '※ 주택담보대출금리는 CD(91일)금리 + 가산금리 1.57% 를 적용하여 산정'
           + ' · 소비심리지수는 「주택매매시장 소비심리지수」 적용(임대사업장은 「주택전세시장 소비심리지수」)',

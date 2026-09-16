@@ -19,8 +19,6 @@ import {
 export const PENDING_ITEMS = [
   { id: '지역미분양', max: null, note: '미분양비율 — 구간표 미수령' },
   { id: '지역수요', max: null, note: '주택보급률 · 인구유입요인 — 구간표 미수령' },
-  { id: '지역경쟁력', max: null, note: '매매가격종합지수 증감률 — 상위 구간 미수령' },
-  { id: '부동산시장 소비심리지수', max: 15, note: '주택매매시장 소비심리지수 — 구간표 미수령 (골든 125.1 → 110~130미만 → 12점)' },
 ];
 
 /** 아직 안 된 항목이 어디서 채워지는지 — 화면에 갈 곳을 적어준다 */
@@ -30,6 +28,8 @@ const GOTO = {
   '교육환경': '[교육환경] 탭에서 시설을 수집하세요',
   '브랜드경쟁력': '[통계 수집] 을 누르세요 — 시공능력평가순위가 필요합니다',
   '주택담보대출금리': '[통계 수집] 을 누르세요 — CD(91일) 금리가 필요합니다',
+  '지역경쟁력': '[통계 수집] 을 누르세요 — KB 매매지수 증감률이 필요합니다',
+  '부동산시장 소비심리지수': '[통계 수집] 을 누르세요 — 소비심리지수가 필요합니다',
 };
 
 export function manualSummary({ sheetInput = {}, data = null, facilities = null, manual = null } = {}) {
@@ -39,6 +39,9 @@ export function manualSummary({ sheetInput = {}, data = null, facilities = null,
   const rank = val('construction_capability_rank');
   const cd = val('cd_rate_91');
   const loan = cd == null ? null : scoreBand('주택담보대출금리', cd);
+  /* 2026-09-16 구간표 수령 — 수집한 값에서 바로 점수가 난다(전에는 점수를 직접 받았다) */
+  const kb = val('kb_apt_price_index');
+  const cs = val('consumer_sentiment');
 
   /* ① 원천에서 자동으로 나는 것 */
   const auto = [
@@ -47,10 +50,17 @@ export function manualSummary({ sheetInput = {}, data = null, facilities = null,
     { id: '교육환경', max: 5, sc: facilities ? scoreSheet('교육환경', facilities) : null },
     { id: '브랜드경쟁력', max: 5, sc: rank == null ? null : scoreRank('브랜드경쟁력', rank) },
     { id: '주택담보대출금리', max: 5, sc: loan },
+    { id: '지역경쟁력', max: 5, sc: kb == null ? null : scoreBand('지역경쟁력', kb) },
+    { id: '부동산시장 소비심리지수', max: 15, sc: cs == null ? null : scoreBand('소비심리지수', cs) },
   ].map(r => ({
     ...r, kind: 'auto', score: num(r.sc),
     /* "수집 대기" 만 적으면 어디서 수집해야 하는지 알 수 없다 — 갈 곳을 적는다 */
-    why: r.sc?.pending ? r.sc.text : (r.sc?.text ?? GOTO[r.id] ?? '수집 대기'),
+    why: r.sc?.pending ? r.sc.text
+      : r.sc == null ? (GOTO[r.id] ?? '수집 대기')
+      : (r.sc.applied != null && r.sc.label
+          ? `${r.sc.applied}${r.sc.unit === '%' ? '%' : ''} · ${r.sc.label}${r.sc.grade ? ` · ${r.sc.grade}` : ''}`
+          /* 교육환경처럼 `text` 가 없는 구간표도 있다 — undefined 를 화면에 찍지 않는다 */
+          : (r.sc.text ?? (r.sc.label ? `${r.sc.score}점 · ${r.sc.label}` : '판정 완료'))),
   }));
 
   /* ② 값을 넣으면 구간표가 점수를 내는 것 */
