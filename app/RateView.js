@@ -39,6 +39,8 @@ const S = {
   final: { borderTop: `2px solid ${T.lineStrong}`, background: '#fffdf0', paddingTop: 10, paddingBottom: 10 },
   why: { padding: '9px 16px 12px', fontSize: 12, color: T.ink2, lineHeight: 1.7 },
 
+  read: { display: 'flex', alignItems: 'baseline', gap: 7, fontSize: 14, fontWeight: 700, ...mono },
+  readNote: { fontSize: 10.5, fontWeight: 400, color: T.muted, fontFamily: 'inherit' },
   input: { width: 110, padding: '5px 8px', fontSize: 12.5, textAlign: 'right', border: `1px solid ${T.line}`, borderRadius: 4, background: '#fffdf0', color: T.ink, fontFamily: 'inherit', ...mono },
 
   rate: { display: 'flex', alignItems: 'baseline', gap: 12, padding: '18px 20px', flexWrap: 'wrap' },
@@ -63,15 +65,19 @@ const SERIES = [
   { id: '오피스텔', label: '오피스텔 · 도시형생활주택' },
 ];
 
-export default function RateView({ region, addr, data, facilities, manual, company, compare, excl: exclProp = null, manualSum = null, value, onChange }) {
+export default function RateView({ region, addr, data, facilities, manual, company, compare, excl: exclProp = null, manualSum = null, sheetInput = null, value, onChange }) {
   const v = value ?? {};
   const series = v.series ?? '주택';
-  const households = v.households ?? '';
-  const set = (patch) => onChange?.({ ...v, series, households, ...patch });
+  /*
+    총 세대수를 여기서 또 묻고 있었다 — 수기입력 탭의 [규모 및 배치] 가 이미 받는 값이다.
+    같은 값을 두 번 물으면 서로 달라졌을 때 어느 쪽이 맞는지 알 수 없다.
+  */
+  const households = sheetInput?.규모및배치?.총세대수 ?? '';
+  const set = (patch) => onChange?.({ ...v, series, ...patch });
 
   /* 산식은 src/lib/compare.js 한 곳에만 둔다 — 심사평점표 탭과 같은 숫자를 써야 한다 */
   const { cmp, compScore, excl, total, res } =
-    useMemo(() => expectedRateOf(compare, { series, households }, exclProp), [compare, series, households, exclProp]);
+    useMemo(() => expectedRateOf(compare, { series }, exclProp, sheetInput), [compare, series, exclProp, sheetInput]);
   const hasExcl = excl != null;
 
   /* 이 앱이 스스로 낸 항목 점수 — A 를 눈으로 맞춰보기 위한 대조표 */
@@ -126,8 +132,12 @@ export default function RateView({ region, addr, data, facilities, manual, compa
           ))}
         </span>
         <span style={S.label}>총 세대수</span>
-        <input style={S.input} type="number" min="0" placeholder="선택"
-          value={households} onChange={e => set({ households: e.target.value })} />
+        <span style={S.read}>
+          {households ? `${Number(households).toLocaleString('ko-KR')} 세대` : '—'}
+          <span style={S.readNote}>
+            {households ? '수기입력 탭 [규모 및 배치] 값' : '수기입력 탭 [규모 및 배치] 에서 받습니다'}
+          </span>
+        </span>
         <span style={{ ...S.label, fontWeight: 400 }}>100세대 미만이면 60% 상한이 걸립니다</span>
       </div>
 
@@ -208,42 +218,19 @@ export default function RateView({ region, addr, data, facilities, manual, compa
       </div>
 
       {/*
-        A 를 이 앱이 계산하지 않는 이유를 표로 보여준다 — 자동으로 낸 항목과
-        아직 못 내는 항목을 나란히 놓아야 "왜 직접 넣어야 하나" 에 답이 된다.
+        전에는 여기에 「이 앱이 낸 항목 점수」 표를 또 두었는데, 수기입력 탭의 A 산출표와
+        같은 내용이다. 같은 표가 두 곳에 있으면 어느 쪽이 맞는지 의심하게 된다 — 한쪽만 남긴다.
       */}
-      <div style={S.secTitle}>참고 — 이 앱이 낸 항목 점수</div>
-      <table style={S.ref}>
-        <thead>
-          <tr>
-            <th style={S.th}>평가항목</th><th style={S.th}>배점</th><th style={S.th}>점수</th><th style={S.th}>근거</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(r => (
-            <tr key={r.name}>
-              <td style={S.tdL}>{r.name}</td>
-              <td style={S.td}>{r.max ?? <span style={S.small}>미수령</span>}</td>
-              {r.score != null
-                ? <td style={{ ...S.td, fontWeight: 700, background: '#fffdf0' }}>{r.score}</td>
-                : <td style={S.blank} />}
-              <td style={{ ...S.td, textAlign: 'left', fontFamily: 'inherit' }}>
-                <span style={S.small}>{r.memo}</span>
-              </td>
-            </tr>
-          ))}
-          <tr>
-            <td style={S.tdL}>이 앱이 자동으로 낸 합계</td>
-            <td style={S.td}>{auto.reduce((s, r) => s + (r.max ?? 0), 0)}</td>
-            <td style={{ ...S.td, fontWeight: 700, background: '#fffdf0' }}>{auto.length ? autoSum : '—'}</td>
-            <td style={{ ...S.td, textAlign: 'left', fontFamily: 'inherit' }}>
-              <span style={S.small}>
-                A 의 일부입니다. 나머지(수기입력 시트·구간표 미수령 항목)는 내부망 평가표에서 가져와야
-                하므로 <b>A 는 직접 입력</b>합니다 — 이 합계와 대조해 보세요.
-              </span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div style={S.secTitle}>A 는 어떻게 만들어지나</div>
+      <div style={S.intro}>
+        A 안에는 이 앱이 자동으로 내는 항목(교통환경 · 주거편의 · 교육환경 · 브랜드경쟁력 · 주택담보대출금리)과
+        값을 넣으면 점수가 나는 항목(규모 및 배치 · 평형구성 · 인근아파트 초기 분양률),
+        그리고 구간표를 아직 못 받아 점수를 직접 넣는 항목이 함께 들어 있습니다.<br />
+        <b>항목별 점수와 합계는 [수기입력] 탭에서 한자리에 봅니다.</b>
+        {manualSum?.missing?.length
+          ? <span style={{ color: T.warn }}> — 지금 {manualSum.missing.length}개가 비어 있어 A 가 확정되지 않았습니다.</span>
+          : null}
+      </div>
     </div>
   );
 }

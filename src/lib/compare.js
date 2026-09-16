@@ -56,11 +56,15 @@ export function totalScoreOf(compare, excl = null) {
  * 초기예상분양률 — 평가표의 결론.
  * 초기예상분양률 탭과 심사평점표 탭이 **같은 숫자**를 써야 하므로 여기 한 곳에서 낸다.
  */
-export function expectedRateOf(compare, rate, excl = null) {
+export function expectedRateOf(compare, rate, excl = null, sheetInput = null) {
   const { total, ...rest } = totalScoreOf(compare, excl);
   const res = expectedSaleRate(total ?? NaN, {
     series: rate?.series ?? '주택',
-    households: rate?.households ?? null,
+    /*
+      총 세대수는 **수기입력 탭의 [규모 및 배치]** 가 단일 지점이다.
+      호출부마다 따로 넘기면 어떤 탭에서는 60% 상한이 걸리고 어떤 탭에서는 안 걸린다.
+    */
+    households: sheetInput?.규모및배치?.총세대수 ?? rate?.households ?? null,
   });
   return { ...rest, total, res };
 }

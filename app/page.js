@@ -365,7 +365,7 @@ export default function Home() {
   /* A(제외 항목 점수)는 수기입력 탭이 단일 지점으로 만든다 */
   const mSum = useMemo(() => manualSummary({ sheetInput: sheetInput ?? {}, data, facilities, manual }),
     [sheetInput, data, facilities, manual]);
-  const rateRes = useMemo(() => expectedRateOf(compare, rate, mSum.excl), [compare, rate, mSum.excl]);
+  const rateRes = useMemo(() => expectedRateOf(compare, rate, mSum.excl, sheetInput), [compare, rate, mSum.excl, sheetInput]);
   const ratePct = rateRes.res && !rateRes.res.pending ? rateRes.res.rate : null;
   const reviewRes = useMemo(
     () => reviewScore({ manual: review ?? {}, rate: ratePct ?? NaN }), [review, ratePct]);
@@ -663,7 +663,7 @@ export default function Home() {
               ? (
                 <ReviewView
                   region={region} addr={addr} data={data} facilities={facilities}
-                  compare={compare} rate={rate} excl={mSum.excl}
+                  compare={compare} rate={rate} excl={mSum.excl} sheetInput={sheetInput}
                   value={review} onChange={setReview}
                 />
               )
@@ -671,7 +671,7 @@ export default function Home() {
               ? (
                 <RateView
                   region={region} addr={addr} data={data} facilities={facilities} manual={manual}
-                  company={data?.company} compare={compare} excl={mSum.excl} manualSum={mSum}
+                  company={data?.company} compare={compare} excl={mSum.excl} manualSum={mSum} sheetInput={sheetInput}
                   value={rate} onChange={setRate}
                 />
               )

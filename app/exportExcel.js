@@ -280,7 +280,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
     const hasExcl = excl != null;
     const total = hasExcl && compScore != null ? excl + compScore : null;
     const series = rate?.series ?? '주택';
-    const hh = rate?.households ?? '';
+    const hh = sheetInput?.규모및배치?.총세대수 ?? '';
     const res = expectedSaleRate(total ?? NaN, { series, households: hh });
 
     const rw = wb.addWorksheet('초기예상분양률', { views: [{ showGridLines: false }] });
@@ -367,7 +367,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
   */
   {
     onProgress?.('심사평점표');
-    const { total: rateTotal, res } = expectedRateOf(compare, rate, excl);
+    const { total: rateTotal, res } = expectedRateOf(compare, rate, excl, sheetInput);
     const pct = res && !res.pending ? res.rate : null;
     const rv = reviewScore({ manual: review ?? {}, rate: pct ?? NaN });
     const t = tableOf('심사평점표');

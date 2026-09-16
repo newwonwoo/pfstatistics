@@ -51,13 +51,13 @@ const S = {
   dscrBar: { display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap', margin: '14px 0 4px', fontSize: 12, color: T.ink2 },
 };
 
-export default function ReviewView({ region, addr, data, facilities, compare, rate, excl = null, value, onChange }) {
+export default function ReviewView({ region, addr, data, facilities, compare, rate, excl = null, sheetInput = null, value, onChange }) {
   const v = value ?? {};
   const set = (patch) => onChange?.({ ...v, ...patch });
   const put = (id, x) => set({ [id]: x });
 
   /* 초기예상분양률은 그 탭과 **같은 함수**로 낸다 — 두 화면의 숫자가 갈리면 안 된다 */
-  const { total: rateTotal, res } = useMemo(() => expectedRateOf(compare, rate, excl), [compare, rate, excl]);
+  const { total: rateTotal, res } = useMemo(() => expectedRateOf(compare, rate, excl, sheetInput), [compare, rate, excl, sheetInput]);
   const pct = res && !res.pending ? res.rate : null;
 
   const r = useMemo(() => reviewScore({ manual: v, rate: pct ?? NaN }), [v, pct]);
