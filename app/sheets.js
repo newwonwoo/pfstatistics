@@ -23,6 +23,8 @@ export const SHEETS = [
   { id: '브랜드경쟁력', label: '브랜드경쟁력', kind: 'stat', stage: '자료수집' },
   { id: '부동산시장',   label: '부동산시장',   kind: 'stat', stage: '자료수집' },
   /* 평가표의 결론 — 다른 시트의 항목 점수가 모여 여기서 분양률이 나온다. 맨 뒤에 둔다 */
+  /* 구간표가 있는 항목은 값만 받아 점수를 낸다 — 남는 수기입력은 구간표 미수령분뿐 */
+  { id: '수기입력', label: '수기입력', kind: 'manual', stage: '수기입력' },
   { id: '초기예상분양률', label: '초기예상분양률', kind: 'rate', tone: 'summary', stage: '분양률 산정' },
   /* 최종 산출물 — 초기예상분양률이 여기서 점수가 되어 종합평점으로 들어간다 */
   { id: '심사평점표', label: '심사평점표', kind: 'review', tone: 'summary', stage: '심사평점' },

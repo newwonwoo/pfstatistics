@@ -63,7 +63,7 @@ const SERIES = [
   { id: '오피스텔', label: '오피스텔 · 도시형생활주택' },
 ];
 
-export default function RateView({ region, addr, data, facilities, manual, company, compare, value, onChange }) {
+export default function RateView({ region, addr, data, facilities, manual, company, compare, excl: exclProp = null, manualSum = null, value, onChange }) {
   const v = value ?? {};
   const series = v.series ?? '주택';
   const households = v.households ?? '';
@@ -71,7 +71,7 @@ export default function RateView({ region, addr, data, facilities, manual, compa
 
   /* 산식은 src/lib/compare.js 한 곳에만 둔다 — 심사평점표 탭과 같은 숫자를 써야 한다 */
   const { cmp, compScore, excl, total, res } =
-    useMemo(() => expectedRateOf(compare, { series, households }), [compare, series, households]);
+    useMemo(() => expectedRateOf(compare, { series, households }, exclProp), [compare, series, households, exclProp]);
   const hasExcl = excl != null;
 
   /* 이 앱이 스스로 낸 항목 점수 — A 를 눈으로 맞춰보기 위한 대조표 */
@@ -143,7 +143,9 @@ export default function RateView({ region, addr, data, facilities, manual, compa
               <td style={{ ...S.num, color: hasExcl ? T.ink : T.muted }}>{hasExcl ? excl : '—'}</td>
               <td style={S.unit}>점</td>
               <td style={S.memo}>
-                {hasExcl ? '비교사업장 탭 [본건 제원] 에 입력한 값' : '비교사업장 탭 [본건 제원] 의 «제외 항목 점수(A)» 에 입력하세요'}
+                {hasExcl
+                  ? (manualSum?.source === 'override' ? '[수기입력] 탭에서 직접 입력한 값' : '[수기입력] 탭에서 자동 합산')
+                  : `[수기입력] 탭에서 A 를 완성하세요${manualSum?.missing?.length ? ` — ${manualSum.missing.length}개 남음` : ''}`}
               </td>
             </tr>
             <tr>

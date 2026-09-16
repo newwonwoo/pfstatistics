@@ -359,6 +359,85 @@ export function reviewScore({ manual = {}, rate = null } = {}) {
   };
 }
 
+/** 값이 구간에 드는지 — gte 이상, lt 미만 */
+const inBand = (b, v) => (b.gte == null || v >= b.gte) && (b.lt == null || v < b.lt);
+
+/**
+ * 가중평균 구간표 (규모 및 배치).
+ *   (총세대수 점수 × 0.5) + (용적률 × 0.25) + (건폐율 × 0.25)
+ * 가중평균을 **등급:5점척도** 로 등급 지은 뒤 그 등급의 대표점수를 쓴다 —
+ * 교통환경·주거편의와 같은 규칙이다(평균값 자체가 점수가 아니다).
+ *
+ * @param {object} values { 총세대수, 용적률, 건폐율 }
+ */
+export function scoreWeighted(key, values = {}) {
+  const t = TABLE[key];
+  if (!t || t.scope !== 'weighted') return null;
+
+  const parts = t.parts.map(p => {
+    const raw = values?.[p.id];
+    const v = raw === '' || raw == null ? NaN : Number(raw);
+    if (!Number.isFinite(v)) return { ...p, value: null, score: null, band: null };
+    const b = p.bands.find(x => inBand(x, v));
+    return { ...p, value: v, score: b?.score ?? null, band: b?.label ?? null };
+  });
+
+  const missing = parts.filter(p => p.score == null).map(p => p.id);
+  if (missing.length) {
+    return { pending: true, parts, missing, text: `${missing.join(' · ')} 를 입력하세요` };
+  }
+  const avg = parts.reduce((s, p) => s + p.score * p.weight, 0);
+  const g = gradeOf(avg);
+  return {
+    parts, avg: Number(avg.toFixed(3)), score: g?.score ?? null, label: g?.label ?? '',
+    max: t.max, formula: t.formula,
+    text: parts.map(p => `${p.id} ${p.score}×${p.weight}`).join(' + '),
+  };
+}
+
+/**
+ * 평형구성 — 평형별 세대수에 가중치를 걸어 가중평균을 낸다.
+ * **작을수록 좋다** (작은 평형이 많을수록 팔린다).
+ * 원문 산식 끝의 ×100 은 급간과 맞지 않아 빼고 쓴다 — config `_note` 참조.
+ */
+export function scoreUnitMix(counts = {}) {
+  const t = TABLE['평형구성'];
+  if (!t) return null;
+  const rows = t.weights.map(w => {
+    const raw = counts?.[w.id];
+    const n = raw === '' || raw == null ? 0 : Number(raw);
+    return { ...w, n: Number.isFinite(n) && n > 0 ? n : 0 };
+  });
+  const total = rows.reduce((s, r) => s + r.n, 0);
+  if (!total) return { pending: true, rows, total: 0, text: '평형별 세대수를 입력하세요' };
+
+  const value = rows.reduce((s, r) => s + r.n * r.weight, 0) / total;
+  const b = t.bands.find(x => inBand(x, value));
+  return {
+    rows, total, value: Number(value.toFixed(3)),
+    score: b?.score ?? null, label: b?.label ?? '', max: t.max, formula: t.formula,
+    text: rows.filter(r => r.n).map(r => `${r.id} ${r.n}×${r.weight}`).join(' + ') + ` ÷ ${total}`,
+  };
+}
+
+/**
+ * 인근아파트 초기 분양률(10) — **입력 항목**이다.
+ * 옆 단지의 실제 분양률을 조사해 매긴다. 본건의 산정 결과인 초기예상분양률과 다른 값이다.
+ * @param {string} special 'firstInDistrict'(수용·환지 지구내 최초분양) | 'none'(적용아파트 미존재)
+ */
+export function scoreNearbyPresale(rate, special = null) {
+  const t = TABLE['인근초기분양률'];
+  if (!t) return null;
+  if (special) {
+    const sp = t.special.find(x => x.id === special);
+    if (sp) return { score: sp.score, label: sp.label, max: t.max, special: sp, text: sp.text };
+  }
+  const v = rate === '' || rate == null ? NaN : Number(rate);
+  if (!Number.isFinite(v)) return { pending: true, max: t.max, text: '인근 단지의 초기분양률(%)을 입력하세요' };
+  const rule = t.rules.find(r => r.gte == null || v >= r.gte);
+  return { score: rule.score, label: rule.label, max: t.max, rule, text: `조사값 ${v}%` };
+}
+
 /** 구간표 원본을 그대로 꺼낸다 (화면에 근거를 적을 때) */
 export const tableOf = (key) => TABLE[key] ?? null;
 

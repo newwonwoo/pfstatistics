@@ -18,6 +18,7 @@ const box = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
 
 import { scoreSheet, scoreGroup, scoreFacility, scorePoi, scoreMatrix, scoreAverage, scoreRank, scoreBand, expectedSaleRate, reviewScore, tableOf } from '../src/lib/scoring';
 import { compareSummary, expectedRateOf } from '../src/lib/compare';
+import { manualSummary } from '../src/lib/manual';
 
 const fmt = (v) =>
   typeof v === 'number' ? v : (v == null || v === '' ? '' : String(v));
@@ -111,7 +112,7 @@ function writeTable(ws, startRow, { title, subtitle, columns, rows, markCell }) 
  * @param {Array} p.sheets      SHEETS
  * @param {Function} p.getCardEl  (indicatorId) => HTMLElement  증빙 카드 DOM
  */
-export async function exportWorkbook({ data, facilities, manual, compare, rate, review, sheets, buildSheet, getCardEl, onProgress }) {
+export async function exportWorkbook({ data, facilities, manual, compare, rate, review, sheetInput, excl = null, manualSum = null, sheets, buildSheet, getCardEl, onProgress }) {
   const ExcelJS = (await import('exceljs')).default ?? (await import('exceljs'));
   const wb = new ExcelJS.Workbook();
   wb.creator = 'PF 보증심사 통계 자동수집';
@@ -186,7 +187,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
 
     const sitePrice = Number(site.unitPrice) || null;
     const index = sitePrice && avg ? (sitePrice / avg) * 100 : null;
-    const sc = scoreMatrix('분양가경쟁력', index ?? NaN, Number(site.exclScore));
+    const sc = scoreMatrix('분양가경쟁력', index ?? NaN, excl == null ? NaN : Number(excl));
 
     cw.getCell(cur.nextRow, 2).value =
       `비교사업장 ${chosen.length}곳 평균 : ${avg == null ? '-' : Math.round(avg).toLocaleString('ko-KR')} 원/㎡`
@@ -274,11 +275,9 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
   */
   {
     onProgress?.('초기예상분양률');
-    const cmp = compareSummary(compare);
+    const cmp = compareSummary(compare, excl);
     const compScore = cmp.sc && !cmp.sc.pending ? cmp.sc.score : null;
-    const exclRaw = compare?.site?.exclScore;
-    const excl = Number(exclRaw);
-    const hasExcl = Number.isFinite(excl) && String(exclRaw ?? '').trim() !== '';
+    const hasExcl = excl != null;
     const total = hasExcl && compScore != null ? excl + compScore : null;
     const series = rate?.series ?? '주택';
     const hh = rate?.households ?? '';
@@ -291,7 +290,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
       columns: ['구분', '값', '단위', '근거'],
       rows: [
         ['① 분양가격지수 제외 항목 점수 (A)', hasExcl ? excl : '', '점',
-         hasExcl ? '비교사업장 탭 [본건 제원] 입력값' : '미입력'],
+         hasExcl ? (manualSum?.source === 'override' ? '수기입력 탭 · 직접 입력' : '수기입력 탭 자동 합산') : '미입력'],
         ['② 분양가경쟁력', compScore ?? '', '점',
          compScore != null ? `분양가격지수 ${cmp.index.toFixed(2)} · ${cmp.sc.label}` : (cmp.sc?.text ?? '미산출')],
         ['⇒ 종합평가 점수', total ?? '', '점', total != null ? res.band : ''],
@@ -330,13 +329,45 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
   }
 
   /*
+    ── 수기입력 (A 산출근거) ──────────────────────────────
+    분양가격지수 제외 항목 점수(A)가 어떻게 만들어졌는지 남긴다.
+    A 한 숫자만 적으면 나중에 근거를 못 찾는다.
+  */
+  {
+    onProgress?.('수기입력');
+    const ms = manualSum ?? manualSummary({ sheetInput: sheetInput ?? {}, data, facilities, manual });
+    const mw = wb.addWorksheet('수기입력', { views: [{ showGridLines: false }] });
+    const KIND = { auto: '자동', form: '값→점수', typed: '점수 직접' };
+    let r = writeTable(mw, 2, {
+      title: '수기입력 — 분양가격지수 제외 항목 점수(A) 산출근거',
+      subtitle: `▶ 사업지 : ${facilities?.address ?? data.region}`,
+      columns: ['평가항목', '구분', '배점', '점수', '근거'],
+      rows: [
+        ...ms.rows.map(x => [x.id, KIND[x.kind], x.max ?? '', x.score ?? '', x.why ?? '']),
+        ['합계 = A', '', '', ms.excl ?? '',
+          ms.override != null
+            ? `직접 입력한 ${ms.override} 적용 (자동 합계 ${ms.missing.length ? '산출 불가' : ms.sum})`
+            : ms.missing.length
+              ? `미입력 ${ms.missing.length}개 — ${ms.missing.join(' · ')} (부분 합계 ${ms.sum})`
+              : '전 항목 입력됨'],
+      ],
+    });
+    mw.getCell(r + 2, 2).value = '※ 한 항목이라도 비면 A 를 확정하지 않는다 — 부분 합계를 A 로 쓰면 분양률이 통째로 낮아진다';
+    mw.getCell(r + 2, 2).font = { size: 9, color: { argb: 'FF666666' } };
+    mw.getCell(r + 3, 2).value = '※ 평형구성 산식은 원문 끝의 ×100 을 빼고 적용했다 — 급간(1.81~3.78)이 가중치 범위(1.73~6.66) 안에 들어오기 때문';
+    mw.getCell(r + 3, 2).font = { size: 9, color: { argb: 'FF666666' } };
+    mw.getColumn(2).width = 28; mw.getColumn(3).width = 11; mw.getColumn(4).width = 8;
+    mw.getColumn(5).width = 8; mw.getColumn(6).width = 74;
+  }
+
+  /*
     ── 심사평점표 ─────────────────────────────────────────
     최종 산출물. 이 앱이 만든 초기예상분양률이 여기서 점수가 되어 종합평점에 들어간다.
     사업성·시공자 항목은 수동입력이라 화면에 넣은 값을 그대로 옮긴다.
   */
   {
     onProgress?.('심사평점표');
-    const { total: rateTotal, res } = expectedRateOf(compare, rate);
+    const { total: rateTotal, res } = expectedRateOf(compare, rate, excl);
     const pct = res && !res.pending ? res.rate : null;
     const rv = reviewScore({ manual: review ?? {}, rate: pct ?? NaN });
     const t = tableOf('심사평점표');

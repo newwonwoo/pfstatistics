@@ -6,10 +6,12 @@ import { T } from './theme';
 import Steps from './Steps';
 import SheetTabs from './SheetTabs';
 import { expectedRateOf } from '../src/lib/compare';
+import { manualSummary } from '../src/lib/manual';
 import { reviewScore } from '../src/lib/scoring';
 import CompareView from './CompareView';
 import RateView from './RateView';
 import ReviewView from './ReviewView';
+import ManualView from './ManualView';
 import SheetView from './SheetView';
 import Overview from './Overview';
 import SavedList from './SavedList';
@@ -142,6 +144,7 @@ export default function Home() {
   const [compare, setCompare] = useState(null);
   const [rate, setRate] = useState(null);       // 초기예상분양률 탭 (주택종류·세대수)
   const [review, setReview] = useState(null);   // 심사평점표 탭 (수동입력 평점)
+  const [sheetInput, setSheetInput] = useState(null); // 수기입력 탭 (A 를 만드는 값들)
   useEffect(() => { if (basisMode) setRadiusBasis(basisMode); }, [basisMode]);
 
   // 경계를 다 그리면 다음에 누를 곳을 알려준다 (수집 버튼은 위 단계 줄에 하나만 둔다)
@@ -298,7 +301,7 @@ export default function Home() {
   // ── 보관 / 내보내기 ───────────────────────────────────────
   function saveRecord() {
     if (!data) return;
-    const ok = store.save({ data, facilities, addr, manual, compare, rate, review });
+    const ok = store.save({ data, facilities, addr, manual, compare, rate, review, sheetInput });
     setSavedKey(k => k + 1);
     setMsg(ok
       ? { kind: 'ok', text: `이 브라우저에 보관했습니다 — ${data.region} · ${data.period}` }
@@ -312,6 +315,7 @@ export default function Home() {
     setCompare(rec.compare ?? null);
     setRate(rec.rate ?? null);
     setReview(rec.review ?? null);
+    setSheetInput(rec.sheetInput ?? null);
     setPolygon(rec.facilities?.polygon ?? null);
     setCoord(rec.facilities?.coord ?? null);
     setGeo(rec.facilities?.geo ?? null); setPick(0);
@@ -336,7 +340,7 @@ export default function Home() {
     try {
       const { exportWorkbook } = await import('./exportExcel');
       await exportWorkbook({
-        data, facilities, manual, compare: compare && { ...compare, addr }, rate, review, sheets: SHEETS, buildSheet,
+        data, facilities, manual, compare: compare && { ...compare, addr }, rate, review, sheetInput, excl: mSum.excl, manualSum: mSum, sheets: SHEETS, buildSheet,
         getCardEl: (id) => document.querySelector(`[data-evidence="${id}"]`),
         onProgress: (label) => setMsg({ kind: 'warn', text: `엑셀 생성 중 — ${label}` }),
       });
@@ -358,7 +362,10 @@ export default function Home() {
    * 절차는 자료수집에서 끝나지 않는다 — **수집 → 분양률 산정 → 심사평점**.
    * 뒤 두 단계가 단계 줄에 없으면 "수집하면 끝" 으로 읽힌다(사용자 지적 2026-09-16).
    */
-  const rateRes = useMemo(() => expectedRateOf(compare, rate), [compare, rate]);
+  /* A(제외 항목 점수)는 수기입력 탭이 단일 지점으로 만든다 */
+  const mSum = useMemo(() => manualSummary({ sheetInput: sheetInput ?? {}, data, facilities, manual }),
+    [sheetInput, data, facilities, manual]);
+  const rateRes = useMemo(() => expectedRateOf(compare, rate, mSum.excl), [compare, rate, mSum.excl]);
   const ratePct = rateRes.res && !rateRes.res.pending ? rateRes.res.rate : null;
   const reviewRes = useMemo(
     () => reviewScore({ manual: review ?? {}, rate: ratePct ?? NaN }), [review, ratePct]);
@@ -367,12 +374,14 @@ export default function Home() {
     ...(fixed ? ['input'] : []),
     ...(basisReady ? ['boundary'] : []),
     ...(data && allPoi ? ['collect'] : []),
+    ...(mSum.excl != null ? ['manual'] : []),
     ...(ratePct != null ? ['rate'] : []),
     ...(reviewRes?.net != null ? ['review'] : []),
   ];
   const current = !fixed ? 'input'
     : !basisReady ? 'boundary'
     : !data || !allPoi ? 'collect'
+    : mSum.excl == null ? 'manual'
     : ratePct == null ? 'rate'
     : 'review';
 
@@ -639,11 +648,18 @@ export default function Home() {
               position: 'absolute', left: -99999, top: 0, width: 1100, pointerEvents: 'none',
             }}
           >
-            {s.kind === 'review'
+            {s.kind === 'manual'
+              ? (
+                <ManualView
+                  region={region} addr={addr} data={data} facilities={facilities} manual={manual}
+                  value={sheetInput} onChange={setSheetInput}
+                />
+              )
+              : s.kind === 'review'
               ? (
                 <ReviewView
                   region={region} addr={addr} facilities={facilities}
-                  compare={compare} rate={rate}
+                  compare={compare} rate={rate} excl={mSum.excl}
                   value={review} onChange={setReview}
                 />
               )
@@ -651,7 +667,7 @@ export default function Home() {
               ? (
                 <RateView
                   region={region} addr={addr} data={data} facilities={facilities} manual={manual}
-                  company={data?.company} compare={compare}
+                  company={data?.company} compare={compare} excl={mSum.excl} manualSum={mSum}
                   value={rate} onChange={setRate}
                 />
               )
@@ -663,6 +679,7 @@ export default function Home() {
                   company={data?.company}
                   /* 시공능력평가순위는 이미 수집돼 있다 — 본건 유사도 판정에 참고로 보여준다 */
                   companyRank={(data?.results ?? []).find(r => r.indicatorId === 'construction_capability_rank' && r.ok)?.value ?? null}
+                  excl={mSum.excl} manualSum={mSum}
                   value={compare} onChange={setCompare}
                 />
               )

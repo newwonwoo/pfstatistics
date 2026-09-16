@@ -98,6 +98,8 @@ const S = {
   propAskHead: { fontSize: 11, fontWeight: 700, color: T.muted, letterSpacing: '.04em', marginBottom: 7 },
   propCheck: { display: 'flex', gap: 7, alignItems: 'flex-start', fontSize: 11.5, color: T.ink2, lineHeight: 1.7, marginTop: 4 },
   propHint: { color: T.muted },
+  exclRead: { display: 'flex', alignItems: 'baseline', gap: 7, padding: '5px 0', fontSize: 15, fontWeight: 700, ...mono },
+  exclNote: { fontSize: 10.5, fontWeight: 400, color: T.muted, fontFamily: 'inherit', lineHeight: 1.4 },
   regScope: { marginTop: 7, paddingTop: 7, borderTop: `1px dashed ${T.line}`, fontSize: 11.5, color: T.ink2, lineHeight: 1.7 },
   badge: (tone) => ({
     fontSize: 10.5, fontWeight: 700, padding: '2px 7px', borderRadius: 4, whiteSpace: 'nowrap',
@@ -118,7 +120,7 @@ const rLabel = (r) => `${r / 1000}km`;
 const baseRadius = (region) =>
   REG.METRO.some(m => String(region ?? '').startsWith(m)) ? 1000 : 2000;
 
-export default function CompareView({ addr, coord, region, polygon, radiusBasis, company, companyRank, value, onChange }) {
+export default function CompareView({ addr, coord, region, polygon, radiusBasis, company, companyRank, excl = null, manualSum = null, value, onChange }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -223,7 +225,8 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
   /* 본건 ㎡당 분양가 — ㎡ 또는 평 어느 쪽으로 넣어도 된다 */
   const sitePrice = Number(site.unitPrice) || null;
   const index = sitePrice && avg ? (sitePrice / avg) * 100 : null;
-  const sc = scoreMatrix('분양가경쟁력', index ?? NaN, Number(site.exclScore));
+  /* A 는 **수기입력 탭**이 단일 지점으로 만든다 — 두 곳에서 받으면 조용히 갈린다 */
+  const sc = scoreMatrix('분양가경쟁력', index ?? NaN, excl == null ? NaN : Number(excl));
 
   /* 제16조①2 — 적정분양가 산정 */
   /**
@@ -349,11 +352,17 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
                 setSite({ unitPrice: py ? String(Math.round(py / PY)) : '' });
               }} />
           </label>
+          {/* A 는 수기입력 탭이 만든다 — 여기서 또 받으면 두 값이 갈린다 */}
           <label style={S.field}>
             <span style={S.label}>제외 항목 점수 (A)</span>
-            <input style={{ ...S.input, width: 90 }} inputMode="numeric" value={site.exclScore ?? ''}
-              placeholder="56"
-              onChange={e => setSite({ exclScore: e.target.value.replace(/[^\d]/g, '') })} />
+            <span style={S.exclRead}>
+              {excl != null ? excl : '—'}
+              <span style={S.exclNote}>
+                {excl != null
+                  ? (manualSum?.source === 'override' ? '수기입력 탭 · 직접 입력' : '수기입력 탭에서 자동 합산')
+                  : `[수기입력] 탭에서 완성하세요${manualSum?.missing?.length ? ` (${manualSum.missing.length}개 남음)` : ''}`}
+              </span>
+            </span>
           </label>
           <label style={S.field}>
             <span style={S.label}>가. 주택유형</span>
