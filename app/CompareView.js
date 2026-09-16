@@ -339,14 +339,14 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
           <label style={S.field}>
             <span style={S.label}>본건 ㎡당 분양가 (원)</span>
             <input style={S.input} inputMode="numeric" value={site.unitPrice ?? ''}
-              placeholder="6050000"
+              placeholder="입력"
               onChange={e => setSite({ unitPrice: e.target.value.replace(/[^\d]/g, '') })} />
           </label>
           <label style={S.field}>
             <span style={S.label}>평당 환산</span>
             <input style={S.input} inputMode="numeric"
               value={sitePrice ? Math.round(sitePrice * PY) : ''}
-              placeholder="20000000"
+              placeholder="자동 환산"
               onChange={e => {
                 const py = Number(e.target.value.replace(/[^\d]/g, ''));
                 setSite({ unitPrice: py ? String(Math.round(py / PY)) : '' });

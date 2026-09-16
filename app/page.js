@@ -464,7 +464,7 @@ export default function Home() {
             <div style={{ display: 'flex', gap: 6 }}>
               <input
                 style={{ ...S.input, ...(ymManual ? null : { background: T.accentSoft, borderColor: T.accent }) }}
-                value={form.ym} onChange={set('ym')} placeholder="202607"
+                value={form.ym} onChange={set('ym')} placeholder="YYYYMM"
                 readOnly={!ymManual} disabled={fixed}
               />
               <button

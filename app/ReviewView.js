@@ -131,7 +131,7 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
               <td style={S.gh} colSpan={2}>감 점</td>
               <td style={S.td}>—</td>
               <td style={S.td}>
-                <input style={S.input(false)} type="number" step="any" placeholder="0"
+                <input style={S.input(false)} type="number" step="any" placeholder="없음"
                   value={v.__deduct ?? ''} onChange={e => put('__deduct', e.target.value)} />
               </td>
               <td style={S.td}>{r.deduct != null ? `−${r.deduct}` : <span style={S.pend}>—</span>}</td>
