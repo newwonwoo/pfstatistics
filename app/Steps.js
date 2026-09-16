@@ -38,7 +38,7 @@ export default function Steps({ current, done }) {
       「수집 기준」을 독립 단계로 뒀더니 실제와 어긋났다 — 기준은 **시설 수집 버튼을 누를 때**
       묻는 것이라, 통계 수집이 끝나도 단계 줄은 계속 2단계를 가리켰다. 수집 안으로 넣는다.
     */
-    { id: 'collect', label: '통계 · 시설 수집', stage: '자료수집', hint: '시설은 누를 때 경계/중심 기준을 묻습니다' },
+    { id: 'collect', label: '통계 · 시설 수집', stage: '자료수집', hint: '시설 수집 시 기준을 묻습니다' },
     { id: 'manual', label: '수기입력', stage: '수기입력', hint: '규모및배치 · 평형구성 · 인근초기분양률' },
     { id: 'rate', label: '분양률 산정', stage: '산정', hint: '종합평가 점수 → 초기예상분양률' },
     { id: 'review', label: '심사평점 · 내보내기', stage: '평점', hint: '초기분양률 배점 + 사업성 → 종합평점' },
@@ -52,7 +52,9 @@ export default function Steps({ current, done }) {
             <div style={S.no(state)}>
               {state === 'done' ? '완료' : `STEP ${i + 1}`}
               {/* 단계가 바뀌는 자리에만 묶음 이름을 적는다 — 매 칸에 적으면 읽히지 않는다 */}
-              {steps[i - 1]?.stage !== s.stage && <span style={S.stage}>{s.stage}</span>}
+              {/* 라벨과 같은 이름이면 두 번 적지 않는다 ("STEP 3 수기입력 / 수기입력") */}
+              {steps[i - 1]?.stage !== s.stage && s.stage !== s.label
+                && <span style={S.stage}>{s.stage}</span>}
             </div>
             <div style={S.label}>{s.label}</div>
             <div style={S.hint}>{s.hint}</div>

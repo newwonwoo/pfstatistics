@@ -69,6 +69,11 @@ const S = {
     background: T.okSoft, color: T.ok, border: `1px solid #c7e9d5`,
   },
   /** 주소 매칭 확인 — 어디를 사업지로 잡았는지 말없이 넘어가면 안 된다 */
+  /**
+   * 주소 매칭 박스.
+   * 확정 뒤에도 노란 경고톤이면 **끝난 일이 미해결처럼 보인다** — 확정되면 톤을 바꾼다.
+   * 다만 시군구 밖 결과는 확정 뒤에도 계속 경고로 남긴다(실제로 틀린 값일 수 있다).
+   */
   match: (sure) => ({
     marginTop: 11, padding: '9px 12px', borderRadius: 6, fontSize: 12.5, lineHeight: 1.6,
     display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
@@ -469,7 +474,9 @@ export default function Home() {
         </div>
 
         {geo && (
-          <div style={S.match(geo.via === 'address' && !geo.outOfRegion && geo.candidates.length === 1)}>
+          <div style={S.match(
+            (fixed && !geo.outOfRegion)
+            || (geo.via === 'address' && !geo.outOfRegion && geo.candidates.length === 1))}>
             <span>
               사업지 매칭 : <b>{addrLabel(geo.candidates[pick])}</b>
               {geo.normalized && <span style={{ color: T.muted }}> · 조회어 「{geo.query}」로 정리</span>}

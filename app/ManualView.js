@@ -91,7 +91,7 @@ export default function ManualView({ region, addr, data, facilities, manual, val
         여기서 <b>분양가격지수 제외 항목 점수(A)</b> 가 완성됩니다. A 는 종합평가 점수에서
         분양가경쟁력을 뺀 나머지 전부입니다.<br />
         <span style={{ color: T.muted }}>
-          항목 대부분은 이 앱이 이미 냈고, 구간표가 있는 것은 <b>값만 넣으면 점수가 납니다.</b>
+          항목 대부분은 이 앱이 이미 냈고, 구간표가 있는 것은 <b>값만 넣으면 점수가 납니다</b>.{' '}
           남는 수기입력은 구간표를 아직 못 받은 항목의 점수뿐입니다.
         </span>
       </div>
@@ -113,7 +113,11 @@ export default function ManualView({ region, addr, data, facilities, manual, val
           </div>
           <div style={S.out}>
             {scaleSc?.pending
-              ? <span style={S.pend}>{scaleSc.text}</span>
+              ? <span style={S.pend}>
+                  {scaleSc.missing?.length === scaleSc.parts?.length
+                    ? '세 값을 넣으면 점수가 납니다'
+                    : scaleSc.text}
+                </span>
               : (<>
                   <span style={{ color: T.muted }}>가중평균</span>
                   <span style={{ ...S.outNum, fontSize: 17 }}>{scaleSc.avg}</span>
