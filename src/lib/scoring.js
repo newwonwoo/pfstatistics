@@ -309,13 +309,42 @@ export function scorePresaleRate(rate) {
  * @param {object} manual  수동입력 점수 { 사업수익률: 20, ... } 및 dscr 실측값
  * @param {number} rate    초기예상분양률(%) — 자동 산출값
  */
+/** 항목 하나의 원시값 → 점수. 구간표는 좋은 것부터 적혀 있다 */
+function bandScore(item, raw) {
+  if (item.select) {
+    const opt = item.select.options.find(o => o.id === raw);
+    return opt ? { score: opt.score, label: opt.id } : null;
+  }
+  const b = item.band;
+  if (!b) return null;
+  const v = raw === '' || raw == null ? NaN : Number(raw);
+  if (!Number.isFinite(v)) return null;
+  const hit = b.bands.find(x =>
+    (x.gte != null && v >= x.gte)
+    || (x.lte != null && v <= x.lte)
+    || (x.lt != null && v < x.lt)
+    || (x.gte == null && x.lte == null && x.lt == null));
+  if (!hit) return { below: true, text: b.belowText ?? '구간표 범위를 벗어났습니다' };
+  return { score: hit.score, label: hit.label };
+}
+
+/** 종합평점 → 심사등급 · 보증료율 */
+export function reviewGrade(net) {
+  const t = TABLE['심사평점표']?.grade;
+  if (!t?.bands) return null;
+  if (!Number.isFinite(net)) return { pending: true, text: '종합평점이 나와야 등급이 정해집니다' };
+  const b = t.bands.find(x => x.gte == null || net >= x.gte);
+  return { grade: b.grade, fee: b.fee, label: b.label, reject: b.fee == null };
+}
+
 export function reviewScore({ manual = {}, rate = null } = {}) {
   const t = TABLE['심사평점표'];
   if (!t) return null;
 
   const presale = scorePresaleRate(Number.isFinite(rate) ? rate : NaN);
   const z = t.zeroRule;
-  const dscr = Number(manual.__dscr);
+  /* 이제 누적DSCR 은 실측값 자체를 받으므로 0점 처리 판정도 같은 값으로 한다 */
+  const dscr = Number(manual['누적DSCR분석값'] ?? manual.__dscr);
   const lowRate = Number.isFinite(rate) && rate < z.rateUnder;
   const lowDscr = Number.isFinite(dscr) && dscr < z.dscrUnder;
   const zeroed = lowRate || lowDscr;
@@ -325,8 +354,14 @@ export function reviewScore({ manual = {}, rate = null } = {}) {
       const forced = zeroed && z.zeroItems.includes(it.id);
       let score = null;
       let from = null;
+      let band = null;
       if (it.auto && it.id === '초기분양률') {
         score = presale?.pending ? null : presale.score;
+      } else if (it.band || it.select) {
+        /* 2026-09-16 전체 구간표 수령 — 원시값만 받아 점수를 낸다 */
+        const r = bandScore(it, manual[it.id]);
+        if (r?.below) { score = null; band = r.text; }
+        else if (r) { score = r.score; band = r.label; }
       } else {
         const v = manual[it.id];
         score = v === '' || v == null ? null : Number(v);
@@ -335,7 +370,8 @@ export function reviewScore({ manual = {}, rate = null } = {}) {
       if (forced && score != null) { from = score; score = 0; }
       else if (forced) { score = 0; }
       const over = score != null && score > it.max;
-      return { ...it, score, forced, from, over, band: it.auto ? presale?.label : null };
+      return { ...it, score, forced, from, over, value: manual[it.id] ?? '',
+               band: it.auto ? presale?.label : band };
     });
     const max = items.reduce((s, i) => s + i.max, 0);
     const got = items.filter(i => i.score != null).reduce((s, i) => s + i.score, 0);
@@ -353,6 +389,7 @@ export function reviewScore({ manual = {}, rate = null } = {}) {
     groups, max, total, missing,
     deduct: Number.isFinite(deduct) ? deduct : null,
     net,
+    gradeOf: reviewGrade(net ?? NaN),
     presale,
     zero: zeroed ? { lowRate, lowDscr, text: z.text, items: z.zeroItems } : null,
     grade: t.grade,

@@ -378,12 +378,14 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
       g.items.forEach((it, i) => {
         rows.push([
           i === 0 ? `${g.label} (${g.max})` : '',
-          it.id + (it.auto ? ' [자동]' : '') + (it.forced ? ' [0점 처리]' : ''),
+          it.id + (it.auto ? ' [자동]' : '') + (it.forced ? ' [0점 처리]' : '')
+            + (!it.auto && it.value !== '' && it.value != null ? ` (${it.value})` : ''),
           it.max,
           it.score ?? '',
           [
             it.auto && pct != null ? `초기예상분양률 ${pct}% · ${rv.presale?.label}` : '',
             it.forced && it.from != null ? `${it.from}점 → 0점` : '',
+            !it.auto && typeof it.band === 'string' && it.band ? `${it.band}${it.score != null ? ` → ${it.score}점` : ''}` : '',
             it.formula ?? '', it.known ? `확인된 구간 : ${it.known}` : '', it.note ?? '',
           ].filter(Boolean).join(' / '),
         ]);
@@ -392,7 +394,10 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
     rows.push(['합 계', '', rv.max, rv.total, rv.missing.length ? `미입력 : ${rv.missing.join(' · ')}` : '전 항목 입력됨']);
     rows.push(['감 점', '', '', rv.deduct ?? '', '']);
     rows.push(['종합평점', '', 100, rv.net ?? '', '합계 − 감점']);
-    rows.push(['심사등급 · 보증료율', '', '', '', `${t?.grade?.text ?? ''}${t?.grade?.known ? ` · 확인된 것 : ${t.grade.known}` : ''}`]);
+    rows.push(['심사등급', '', '', rv.gradeOf?.pending ? '' : rv.gradeOf.grade,
+               rv.gradeOf?.pending ? rv.gradeOf.text : `종합평점 ${rv.net}점 · ${rv.gradeOf.label}`]);
+    rows.push(['보증료율', '', '', rv.gradeOf?.pending || rv.gradeOf?.reject ? '' : `${rv.gradeOf.fee}%`,
+               rv.gradeOf?.reject ? '60점 미만 — 보증거절' : '심사등급에 따른 요율']);
 
     let r = writeTable(vw, 2, {
       title: '심사평점표',
