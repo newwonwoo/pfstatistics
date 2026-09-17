@@ -122,6 +122,10 @@ GET apis.data.go.kr/B551182/hospInfoServicev2/getHospBasisList
 `LTTOT_TOP_AMOUNT`(89800)는 **만원** 단위. 세대수 = `SPSPLY_HSHLDCO`(특별) + `SUPLY_HSHLDCO`(일반).
 `RENT_SECD_NM='분양주택'` 만 남긴다(임대는 분양가가 없다).
 전국 2,875건 · 경기 913건 (2026-09 기준). perPage 1000 까지 받는다.
+**적재 기간은 2020-02-05 ~ 2026-09-11 — 약 6.5년치다**(실측 2026-09-17).
+전에 "2023-10-25 ~ · 약 3년치" 라고 적었던 것은 **틀렸다.**
+규정 제16조는 "분양개시 후 10년 경과 제외" 라 0~10년이 대상인데 원천은 0~6.5년이다 —
+**6.5~10년 구간(2016~2020 분양)이 통째로 빈다.** 그 구간의 기축단지는 어떤 조회로도 안 나온다.
 **오피스텔·도시형생활주택·민간임대는 다른 API 에 있다** — APT 쪽만 보면 통째로 안 보인다.
 ```
 GET api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getUrbtyOfctlLttotPblancDetail   (전국 619건)
