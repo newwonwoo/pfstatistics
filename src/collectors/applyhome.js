@@ -55,19 +55,76 @@ export function noticeSido(region) {
 /**
  * 공고 주소를 카카오 주소검색이 읽을 수 있게 다듬는다.
  *
- * 청약홈 주소는 실무 표기 그대로라 꼬리가 길다 — 실측 예:
- *   "경기도 광주시 탄벌동 532-2번지 일원(탄벌4지구 A2블럭)"
- *   "경기도 광주시 곤지암읍 곤지암리636번지(곤지암역세권  A1-1블록)"   ← 리와 번지 사이 공백 없음
- * 사용자 입력용 normalizeAddress 와 규칙이 달라 따로 둔다(그쪽은 골든으로 검증된 코드다).
+ * **실측 2026-09-17 — 경기 고유주소 962건 중 449건(46.7%)이 지오코딩에 실패했다.**
+ * 실패를 세어보고 나서야 원인이 갈린다는 걸 알았다. 두 종류다.
+ *
+ *   (A) 정제가 못 따라간 것 — 고칠 수 있다
+ *       "김포 풍무역세권 B4블록 (경기도 김포시 사우동 458번지 일원)"
+ *         → 괄호를 통째로 지워 **진짜 지번을 버렸다**
+ *       "경기도 양주시 덕정동 일원 양주신도시 택지개발지구 내 A-26블록"
+ *         → "일원" 만 지우고 뒤의 지구명·블록을 안 지워 그대로 검색에 넣었다
+ *       "경기도 고양시 덕양구 도내동 외 8개동 일원 …"  → "외 N필지" 만 알고 "외 N개동" 을 몰랐다
+ *       "경기도 양주시 옥정동 962-9, 962-8번지"        → 지번 나열
+ *
+ *   (B) 대장에 주소가 없는 것 — 어떤 주소 API 로도 못 찾는다
+ *       "경기도 부천시 부천역곡 공공주택지구 내 A-2블록"
+ *       "경기도 평택시 고덕국제화계획지구 A-67블록"
+ *       신규 택지지구는 분양 시점에 지번이 아직 안 붙어 있다.
+ *       → 읍면동까지만 남겨 **근사 좌표**라도 얻고, 근사라는 사실을 끝까지 들고 다닌다.
+ *
+ * 그래서 한 번 정제해 한 번 묻는 게 아니라 **점점 짧게 잘라 여러 번 묻는다**(`geocodeSupply`).
  */
+
+/**
+ * 괄호 안이 진짜 주소면 그걸 쓴다 — "…B4블록 (경기도 김포시 사우동 458번지)"
+ * **읍면동 다음에 숫자**가 와야 주소로 본다. `\d+-\d+` 만 보면
+ * "(곤지암역세권  A1-1블록)" 의 `A1-1` 이 걸려 멀쩡한 주소를 버린다(실측).
+ */
+const BRACKET_ADDR = /\(([^)]*[가-힣]+(?:동|리|가|읍|면)\s*(?:산\s*)?\d+[^)]*)\)/;
+
+/** 지구·블록 꼬리 — 대장에 없는 표기라 검색에 넣으면 0건이 된다 */
+const ZONE_TAIL = /\s*(?:[가-힣A-Za-z0-9·\s]*?(?:지구|단지|산업단지|신도시|역세권|계획지구)\s*)?(?:내\s*)?[A-Za-z]{0,3}[-\s]?\d{0,3}\s*(?:블록|블럭|BL|bl)\b.*$/;
+
+/** "경기도 김포시" — 괄호 안 주소에 상위 행정구역이 없을 때 앞에 붙여준다 */
+const headOf = (raw) => raw.match(/^\s*([가-힣]+(?:특별시|광역시|특별자치시|특별자치도|도)\s+[가-힣]+(?:시|군|구)(?:\s+[가-힣]+구)?)/)?.[1] ?? null;
+
 export function normalizeSupplyAddress(address) {
-  return String(address ?? '')
-    .replace(/\([^)]*\)/g, ' ')                 // (블록·지구 표기) 제거
-    .replace(/(동|리|가)(\d)/g, '$1 $2')        // "곤지암리636" → "곤지암리 636"  ※ "산54-3" 은 건드리지 않는다
-    .replace(/(\d)\s*번지/g, '$1')              // "532-2번지" → "532-2"
-    .replace(/\s*(?:일원|일대|외\s*\d+\s*필지)/g, ' ')
+  const raw = String(address ?? '');
+  const inner = raw.match(BRACKET_ADDR)?.[1];
+  let base = raw;
+  if (inner) {
+    const head = headOf(raw);
+    /* 괄호 안이 "신동720" 처럼 시도·시군구 없이 오면 밖에서 가져와 붙인다 */
+    base = headOf(inner) ? inner : [head, inner].filter(Boolean).join(' ');
+  }
+
+  return base
+    .replace(/\([^)]*\)/g, ' ')                       // 남은 괄호 제거
+    .replace(/(동|리|가)(\d)/g, '$1 $2')               // "곤지암리636" → "곤지암리 636"
+    .replace(/(\d)\s*번지/g, '$1')                     // "532-2번지" → "532-2"
+    .replace(/\s*외\s*\d+\s*(?:필지|개\s*동|개동|동)/g, ' ')  // "외 8개동" · "외 57필지"
+    .replace(/\s*(?:일원|일대)/g, ' ')
+    .replace(/,\s*[^,]*$/, (m) => (/\d/.test(m) ? '' : m))   // "962-9, 962-8" → 첫 지번만
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/*
+  아래 둘은 **가장 말단의** 읍면동을 잡아야 한다.
+  non-greedy 로 두면 "남양주시 진접읍 내각리" 에서 `진접읍` 에 멈춰 리를 버린다(실측).
+*/
+/** 지구·블록 꼬리를 떼어 "시도 시군구 읍면동 [지번]" 까지만 남긴다 */
+export function trimToDong(q) {
+  const cut = q.replace(ZONE_TAIL, '').trim();
+  const m = cut.match(/^(.*(?:동|리|가|읍|면))\s*(산?\s*\d+(?:-\d+)?)?/);
+  if (!m) return null;
+  return [m[1], m[2]?.replace(/\s+/g, '')].filter(Boolean).join(' ').trim();
+}
+
+/** 읍면동까지만 (지번 버림) — 대장에 지번이 없는 신규 택지의 마지막 수단 */
+export function trimToDongOnly(q) {
+  const m = q.replace(ZONE_TAIL, '').match(/^(.*(?:동|리|가|읍|면))(?:\s|$)/);
+  return m ? m[1].trim() : null;
 }
 
 /** "084.7459A" → 84.7459 (전용면적). 숫자를 못 읽으면 null */
@@ -276,18 +333,46 @@ export function timingOf({ saleStart, moveIn }, now = new Date()) {
 /* 같은 주소를 여러 번 물어볼 이유가 없다 (같은 단지가 재공고로 여러 건 들어온다) */
 const geoCache = new Map();
 
-async function geocodeOne(query) {
-  if (geoCache.has(query)) return geoCache.get(query);
+async function geocodeOne(query, kind = 'address') {
+  const key = `${kind}|${query}`;
+  if (geoCache.has(key)) return geoCache.get(key);
   let hit = null;
   try {
     const d = await getJson(
-      `${KAKAO}/search/address.json?query=${encodeURIComponent(query)}&size=1`,
+      `${KAKAO}/search/${kind}.json?query=${encodeURIComponent(query)}&size=1`,
       { headers: H(), retries: 2, timeout: 12000 });
     const doc = d.documents?.[0];
     if (doc) hit = { x: Number(doc.x), y: Number(doc.y) };
   } catch { /* 한 건 실패가 전체를 막으면 안 된다 */ }
-  geoCache.set(query, hit);
+  geoCache.set(key, hit);
   return hit;
+}
+
+/**
+ * 공고 주소 → 좌표. **한 번 묻고 마는 게 아니라 점점 짧게 잘라 여러 번 묻는다.**
+ *
+ * 한 번만 물었을 때 경기 고유주소 962건 중 449건(46.7%)이 실패했다(실측 2026-09-17).
+ * 실패 대부분은 "지구·블록 표기" 라 대장에 지번이 없는 경우인데,
+ * 읍면동까지만 남기면 **근사 좌표**라도 나온다. 근사인지 아닌지를 끝까지 들고 다녀야
+ * "이 거리가 정확한 값인가" 를 화면에서 답할 수 있다.
+ *
+ * @returns {{x,y,precision,query}|null}
+ *   precision  exact  지번까지 맞은 좌표
+ *              dong   읍면동 중심 — 거리가 수백 m 틀어질 수 있다
+ *              place  장소검색(지구명)으로 잡은 좌표 — 가장 약하다
+ */
+async function geocodeSupply(normalized) {
+  const dong = trimToDong(normalized);
+  const dongOnly = trimToDongOnly(normalized);
+  const tries = [...new Set([normalized, dong, dongOnly].filter(Boolean))];
+
+  for (const q of tries) {
+    const p = await geocodeOne(q, 'address');
+    if (p) return { ...p, query: q, precision: /\d/.test(q.replace(/^.*?(?:시|군|구)\s/, '')) ? 'exact' : 'dong' };
+  }
+  /* 지번도 읍면동도 없는 신규 택지 — "부천역곡 공공주택지구" 는 장소로는 찾힌다 */
+  const p = await geocodeOne(normalized, 'keyword');
+  return p ? { ...p, query: normalized, precision: 'place' } : null;
 }
 
 /** 동시 호출 수를 묶어 돌린다 (카카오 호출이 수백 건이 될 수 있다) */
@@ -383,9 +468,9 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
 
   const located = await mapLimit(shortlist, 10, async (n) => {
     const q = normalizeSupplyAddress(n.r.HSSPLY_ADRES);
-    const p = await geocodeOne(q);
+    const p = await geocodeSupply(q);
     if (!p) return null;
-    return { ...n, q, p, d: Math.round(dist(p)) };
+    return { ...n, q: p.query, p, d: Math.round(dist(p)), precision: p.precision };
   });
 
   const within = located.filter(v => v && v.d <= radius).sort((a, b) => a.d - b.d);
@@ -408,13 +493,16 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
     const uniqAddr = [...new Map(uniq.map(n => [normalizeSupplyAddress(n.r.HSSPLY_ADRES), n])).values()];
     const rows = await mapLimit(uniqAddr, 10, async (n) => {
       const q = normalizeSupplyAddress(n.r.HSSPLY_ADRES);
-      const p = await geocodeOne(q);
-      return p ? null : { name: n.r.HOUSE_NM, raw: n.r.HSSPLY_ADRES, query: q, kind: n.kind, src: n.src };
+      const p = await geocodeSupply(q);
+      return { ok: !!p, precision: p?.precision ?? null,
+               name: n.r.HOUSE_NM, raw: n.r.HSSPLY_ADRES, query: p?.query ?? q, kind: n.kind, src: n.src };
     });
-    const failed = rows.filter(Boolean);
+    const failed = rows.filter(r => !r.ok);
+    const by = (p) => rows.filter(r => r.precision === p).length;
     return {
       sido, census: true,
       notices: uniq.length, uniqueAddresses: uniqAddr.length,
+      exact: by('exact'), dong: by('dong'), place: by('place'),
       failed: failed.length,
       rate: `${((failed.length / Math.max(1, uniqAddr.length)) * 100).toFixed(1)}%`,
       items: failed,
@@ -442,7 +530,7 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
   }
 
   // 3차 — 반경 안의 단지만 주택형별 상세를 받는다 (호출 수를 최소로)
-  const items = await mapLimit(inside, 5, async ({ r, q, p, d, src, kind }) => {
+  const items = await mapLimit(inside, 5, async ({ r, q, p, d, src, kind, precision }) => {
     let types = [];
     try {
       types = src === 'urbty' ? await fetchUrbtyModels(r.HOUSE_MANAGE_NO) : await fetchModels(r.HOUSE_MANAGE_NO);
@@ -460,6 +548,8 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
       query: q,
       x: p.x, y: p.y,
       distance: d,
+      /* 좌표를 어디까지 맞춰서 잰 거리인지 — dong·place 는 근사다 */
+      geocode: precision ?? 'exact',
       noticeDate: r.RCRIT_PBLANC_DE,
       // 규정상 "분양 개시일" = 공급계약시작일 (모집공고일이 아니다)
       saleStart: r.CNTRCT_CNCLS_BGNDE ?? null,
