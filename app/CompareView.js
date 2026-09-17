@@ -788,6 +788,52 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
           </table>
         </div>
 
+        {/*
+          **기축 단지** — 청약홈 적재가 2020-02 부터라 그 앞 단지는 원천에 아예 없다.
+          실측(용답동 1km): 청약홈 4건 vs 카카오 아파트 16곳.
+          **분양가는 어느 원천에도 없다.** 그래서 평균에 넣지 못하고, 그 사실을 적어 둔다 —
+          조용히 섞으면 분양가격지수가 통째로 틀어진다.
+        */}
+        {data.knownApts?.items?.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <div style={S.secTitle}>
+              반경 {rLabel(data.radius)} 기축·미공고 단지 {data.knownApts.items.length}곳
+              <span style={{ fontWeight: 400, color: T.muted, fontSize: 11.5 }}>
+                {' · '}청약홈에 분양공고가 없어 <b>분양가를 알 수 없습니다</b> — 비교사업장 평균에 넣지 못합니다
+              </span>
+            </div>
+            <div style={S.scroll}>
+              <table style={S.table}>
+                <thead><tr>{['#', '단지명', '주소', '거리', '세대수', '시공사', '사용승인일'].map(c =>
+                  <th key={c} style={S.th}>{c}</th>)}</tr></thead>
+                <tbody>
+                  {data.knownApts.items.map((a, i) => (
+                    <tr key={`${a.name}-${i}`} style={S.rowOut}>
+                      <td style={S.td}>{i + 1}</td>
+                      <td style={S.tdL}>
+                        {a.name}
+                        {a.planned && <span style={{ ...S.badge('none'), marginLeft: 6 }}>미준공</span>}
+                      </td>
+                      <td style={S.tdL}>{a.address}</td>
+                      <td style={S.tdNo}>{a.distance}m</td>
+                      <td style={S.tdNo}>{a.kapt?.households?.toLocaleString('ko-KR') ?? '-'}</td>
+                      <td style={S.tdL}>{a.kapt?.builder ?? '-'}</td>
+                      <td style={S.tdNo}>{a.kapt?.usedate ?? '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p style={S.note}>
+              * 출처 : <b>{data.knownApts.source?.name}</b>
+              {data.knownApts.source?.detail ? ` · ${data.knownApts.source.detail}` : ''}<br />
+              카카오 장소검색은 한 번에 45곳까지만 줍니다 — <b>가까운 곳부터</b> 받습니다
+              {data.knownApts.scanned != null && ` (반경 안 아파트 분류 ${data.knownApts.scanned}곳 중)`}.
+              세대수·시공사·사용승인일이 빈 줄은 K-apt 에서 이름이 맞지 않은 것입니다(관리비 의무단지만 있습니다).
+            </p>
+          </div>
+        )}
+
         {data.excludedRental?.length > 0 && (
           <div style={{ ...S.warn, marginTop: 10 }}>
             반경 안에 <b>분양전환 임대 아파트 {data.excludedRental.length}건</b>이 더 있었지만 분양가가 없어 표에서 뺐습니다 —{' '}

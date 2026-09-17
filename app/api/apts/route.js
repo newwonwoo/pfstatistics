@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { collectComparables } from '../../../src/collectors/applyhome.js';
+import { collectComparables, collectKnownApts } from '../../../src/collectors/applyhome.js';
 import { toSggCode } from '../../../src/lib/region.js';
 import { requireKey } from '../../../src/lib/env.js';
 
@@ -49,6 +49,21 @@ export async function GET(req) {
       /* 본건(심사대상) 단지를 비교사업장에서 가리려면 확정한 사업지 주소가 필요하다 */
       siteAddress: q.get('site') || null,
     });
+    /*
+     * **기축 단지 보강** — 청약홈 적재는 2020-02 부터라 그 앞 단지는 원천에 아예 없다.
+     * 실측(용답동 1km): 청약홈 4건 vs 카카오 아파트 16곳. 분양가는 없지만
+     * 규정 제16조가 준공 단지도 쓰므로 실무자가 보기라도 해야 한다.
+     * 전수조사·진단 창구에서는 부른다고 득 될 게 없어 건너뛴다.
+     */
+    if (!r.census && !r.probe) {
+      try {
+        r.knownApts = await collectKnownApts({
+          site: { x, y }, radius, polygon,
+          sggCode: q.get('sgg') || await sggCodeOf(region),
+          exclude: (r.items ?? []).map(a => a.name),
+        });
+      } catch (e) { r.knownApts = { error: e.message, items: [] }; }
+    }
     return NextResponse.json({ region, ...r });
   } catch (e) {
     const code = e.code === 'NEED_SGG' ? 400 : e.code === 'NO_KEY' ? 428 : 502;

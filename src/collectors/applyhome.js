@@ -902,3 +902,85 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
     },
   };
 }
+
+/**
+ * **기축 단지 보강** — 청약홈에 공고가 없는 단지를 카카오·K-apt 로 목록에 올린다.
+ *
+ * 실측 2026-09-17 (서울 성동구 용답동 108-1, 반경 1km):
+ *   청약홈 336건 중 반경 안 **4건** · 카카오 아파트 **16곳**.
+ *   차이는 버그가 아니라 **원천 범위**다 — 청약홈 적재는 2020-02 부터라
+ *   그 앞에 분양한 기축 단지(삼희·청계벽산메가트리움·답십리한화…)는 애초에 없다.
+ *   규정 제16조는 준공 단지도 쓰므로 실무자가 **보기라도 해야** 한다.
+ *
+ * **분양가는 주지 않는다.** 카카오에도 K-apt 에도 분양가가 없다.
+ * 그래서 이 목록은 평균에 들어가지 못하고, 그 사실을 화면이 말해야 한다 —
+ * 조용히 0원으로 섞이면 분양가격지수가 통째로 틀어진다.
+ *
+ * 카카오 장소검색은 **한 번에 45건까지**만 준다(15×3페이지). 가까운 것부터 받는다.
+ */
+const APT_CAT = /주거시설\s*>\s*아파트/;
+/** "래미안위브아파트 311동" · "마장세림아파트 1동" → 같은 단지로 묶는다 */
+const aptKey = (name) => String(name ?? '')
+  .replace(/\s*\d+\s*동\s*$/, '')
+  .replace(/\s*\([^)]*\)\s*$/, '')
+  .replace(/아파트$/, '')
+  .replace(/\s/g, '');
+
+export async function collectKnownApts({ site, radius = 2000, polygon = null, sggCode = null, exclude = [] }) {
+  const dist = (p) => (polygon?.length >= 3
+    ? distanceToPolygon({ lat: p.y, lng: p.x }, polygon)
+    : haversine({ lat: Number(site.y), lng: Number(site.x) }, { lat: p.y, lng: p.x }));
+
+  const docs = [];
+  let total = null;
+  for (let page = 1; page <= 3; page++) {
+    const p = new URLSearchParams({ query: '아파트', size: '15', page: String(page),
+      x: String(site.x), y: String(site.y), radius: String(Math.min(20000, radius)), sort: 'distance' });
+    let d;
+    try { d = await getJson(`${KAKAO}/search/keyword.json?${p}`, { headers: H(), retries: 2, timeout: 12000 }); }
+    catch { break; }
+    total ??= d.meta?.total_count ?? null;
+    docs.push(...(d.documents ?? []));
+    if (d.meta?.is_end) break;
+  }
+
+  const seen = new Set(exclude.map(aptKey));
+  const uniq = [];
+  for (const d of docs) {
+    if (!APT_CAT.test(d.category_name ?? '')) continue;
+    const key = aptKey(d.place_name);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    uniq.push({
+      name: d.place_name, address: d.address_name, x: Number(d.x), y: Number(d.y),
+      distance: Math.round(dist({ x: Number(d.x), y: Number(d.y) })),
+      /* 카카오가 "(2029년02월예정)" 처럼 준공 예정을 이름에 달아 준다 — 미준공 신호다 */
+      planned: /\d{4}년\s*\d{1,2}월\s*예정/.test(d.place_name),
+    });
+  }
+  uniq.sort((a, b) => a.distance - b.distance);
+
+  /* K-apt 로 세대수·시공사·사용승인일을 보강한다 (준공 단지만 있다 — 미준공은 그대로 둔다) */
+  if (sggCode) {
+    try {
+      const index = await loadSggIndex(sggCode);
+      await mapLimit(uniq, 5, async (v) => {
+        const b = await matchByName(v.name.replace(/\s*\([^)]*\)\s*$/, ''), index);
+        if (b) v.kapt = b;
+      });
+    } catch { /* 보강 실패는 목록을 막지 않는다 */ }
+  }
+
+  return {
+    radius,
+    scanned: total,
+    count: uniq.length,
+    truncated: total != null && total > docs.length,
+    items: uniq.filter(v => v.distance <= radius),
+    source: {
+      name: '카카오맵 장소검색 (분류: 부동산 > 주거시설 > 아파트)',
+      detail: 'K-apt 공동주택 기본정보로 세대수·시공사·사용승인일 보강',
+      note: '분양가는 어느 원천에도 없습니다 — 비교사업장 평균에 넣을 수 없습니다',
+    },
+  };
+}
