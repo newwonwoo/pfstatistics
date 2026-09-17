@@ -40,6 +40,7 @@ export async function GET(req) {
       endPrdDe: q.get('end') ?? period,
       itmId: q.get('itmId') ?? '',
       objL1: q.get('objL1') ?? '',
+      objL2: q.get('objL2') ?? '',
     });
     // 코드(C1_ID)가 없으면 탐색이 소용없다 — objL1 에 넣을 값이 바로 이것이다
     const named = rows.map(r => ({

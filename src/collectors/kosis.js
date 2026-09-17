@@ -35,10 +35,16 @@ export async function searchTable(keyword) {
   })).filter(x => x.orgId && x.tblId);
 }
 
-export async function fetchData({ orgId, tblId, prdSe, startPrdDe, endPrdDe, objL1 = '', itmId = '' }) {
+/*
+ * `objL2` 를 받는다 — 분류가 2단인 통계표가 있다(실측 2026-09-17).
+ * HUG 「지역별 규모별 ㎡당 평균 분양가격」 은 objL1=지역 · objL2=규모(전용면적 구간) 라
+ * objL2 를 안 넘기면 itmId·objL1 이 맞아도 "해당 자료가 없습니다" 가 난다.
+ */
+export async function fetchData({ orgId, tblId, prdSe, startPrdDe, endPrdDe, objL1 = '', objL2 = '', itmId = '' }) {
   const qs = new URLSearchParams({
     method: 'getList', apiKey: key(), orgId, tblId, prdSe,
     startPrdDe, endPrdDe, itmId, objL1, format: 'json', jsonVD: 'Y',
+    ...(objL2 ? { objL2 } : {}),
   });
   const url = `${BASE}/Param/statisticsParameterData.do?${qs}`;
   const r = check(await getJson(url));
