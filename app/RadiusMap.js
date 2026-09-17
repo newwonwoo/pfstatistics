@@ -220,6 +220,16 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
       const tighten = () => {
         const node = el.current;
         if (!node) return;
+        /*
+         * **반경 밖 마커가 있으면 당기지 않는다.** 6차선 도로 후보는 반경의 1.2배까지 찍는다 —
+         * 원에 맞춰 당기면 그 핀이 화면 밖으로 잘린다. 그때는 `fit()` 이 정한 것을 그대로 쓴다.
+         */
+        const far = markers.some(m => {
+          const dy = (m.lat - center.lat) * 111320;
+          const dx = (m.lng - center.lng) * 111320 * Math.cos(center.lat * Math.PI / 180);
+          return Math.hypot(dx, dy) > radius * 1.02;
+        });
+        if (far) return;
         const lim = Math.min(node.offsetWidth, node.offsetHeight);
         if (!lim) return;
         const dLat = radius / 111320;                    // 정북 radius m 의 위도차
