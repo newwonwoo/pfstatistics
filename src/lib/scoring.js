@@ -411,7 +411,13 @@ export function reviewScore({ manual = {}, rate = null } = {}) {
       if (forced && score != null) { from = score; score = 0; }
       else if (forced) { score = 0; }
       const over = score != null && score > it.max;
+      /*
+        `band` 를 판정 라벨 문자열로 덮어쓰는 바람에 구간표의 **단위가 사라졌다.**
+        화면은 그걸 못 찾아 전부 `점수` 를 placeholder 로 썼고, 원시값(1.05 · 4.51% · 17위)을
+        받는 칸에 "점수" 라고 적혀 점수를 넣게 유도했다 — 단위는 따로 들고 나간다.
+      */
       return { ...it, score, forced, from, over, value: manual[it.id] ?? '',
+               unit: it.band?.unit ?? null,
                band: it.auto ? presale?.label : band };
     });
     const max = items.reduce((s, i) => s + i.max, 0);

@@ -38,8 +38,12 @@ const S = {
     입력칸은 화면 왼쪽 1/3 만 쓰고 오른쪽 2/3 는 비어 있었다 — 그 자리에 결과를 붙인다.
     자리가 모자라면 flex 가 알아서 아랫줄로 내린다.
   */
-  out: { marginLeft: 'auto', display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', fontSize: 12.5,
-         paddingLeft: 16, borderLeft: `1px dashed ${T.line}` },
+  /*
+    `marginLeft:'auto'` 로 밀었더니 입력칸(x≈180)과 결과(x≈1180)가 1000px 떨어졌다 —
+    아래로 움직이던 눈이 옆으로 멀리 움직이게 됐을 뿐이다. **바로 옆**에 붙인다.
+  */
+  out: { display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', fontSize: 12.5,
+         paddingLeft: 16, marginLeft: 4, borderLeft: `1px dashed ${T.line}`, alignSelf: 'center' },
   outNum: { fontSize: 21, fontWeight: 800, ...mono },
   pend: { color: T.muted, fontStyle: 'italic', fontSize: 12 },
 

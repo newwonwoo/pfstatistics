@@ -243,7 +243,8 @@ function FragmentRows({ g, v, put, pct, presale, known = {}, onJump }) {
             )
             : (
               <input style={S.input(it.over)} type="number" step="any"
-                placeholder={it.band ? (it.band.unit || '값') : '점수'}
+                /* 이 칸이 받는 것은 **원시값**이다 — 단위를 적어 점수와 헷갈리지 않게 한다 */
+                placeholder={it.unit || '값'}
                 value={v[it.id] ?? ''} onChange={e => put(it.id, e.target.value)} />
             )}
       </td>
