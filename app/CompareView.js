@@ -35,9 +35,10 @@ const SIZE_BANDS = ['500세대 미만', '500~999세대', '1,000세대 이상'];
   좌표를 어디까지 맞춰서 잰 거리인가 — `exact` 는 배지를 달지 않는다(기본이라 조용해야 한다).
   나머지는 근사라서 **반경 판정이 뒤집힐 수 있다**는 걸 표에서 바로 보여야 한다.
 */
-const GEOCODE_LABEL = { name: '단지명 위치', dong: '읍면동 근사', place: '지구 위치', sample: '견본주택 위치' };
+const GEOCODE_LABEL = { name: '단지명 위치', zone: '택지지구 위치', dong: '읍면동 근사', place: '지구 위치', sample: '견본주택 위치' };
 const GEOCODE_NOTE = {
   name: '공고 주소에 지번이 없어 단지명으로 찾은 위치입니다',
+  zone: '공고 주소에 지번이 없어 택지지구(카카오맵 개발지구) 중심으로 잰 거리입니다',
   dong: '공고 주소에 지번이 없어 읍면동 중심으로 잰 거리입니다 — 수백 m 틀어질 수 있습니다',
   place: '지구명으로만 찾은 위치입니다 — 거리 오차가 가장 큽니다',
   sample: '견본주택 위치입니다 — 단지와 다른 자리일 수 있습니다',
@@ -109,6 +110,10 @@ const S = {
   ok: { padding: '12px 14px', background: T.okSoft, border: '1px solid #c7e9d5', borderRadius: 6, fontSize: 12.5, color: T.ok, lineHeight: 1.6 },
   secTitle: { fontSize: 12, fontWeight: 700, color: T.muted, letterSpacing: '.04em', margin: '26px 0 12px', paddingTop: 18, borderTop: `1px solid ${T.line}` },
   note: { marginTop: 10, fontSize: 11.5, color: T.muted, lineHeight: 1.7 },
+  /* 깔때기 — 어느 단계에서 몇 건이 빠졌는지 한 줄로 */
+  funnel: { marginBottom: 10, padding: '7px 12px', background: T.soft ?? '#f6f7f9', border: '1px solid #e5e7eb',
+            borderRadius: 6, fontSize: 12, color: T.ink2, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2 },
+  arrow: { color: '#b8bec7', margin: '0 6px' },
   link: { color: T.accent, textDecoration: 'none' },
   kind: { fontSize: 11, color: T.muted, background: '#f1f3f5', padding: '2px 7px', borderRadius: 4 },
   chips: { display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', margin: '0 0 14px' },
@@ -318,8 +323,10 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
     };
   })();
 
+  /* 근사 좌표로 찍은 핀은 이름에 그 사실을 적는다 — 지도에서 정확한 핀과 구분이 안 되면 안 된다 */
   const markers = useMemo(() => items.map((a, i) => ({
-    no: i + 1, lat: a.y, lng: a.x, name: a.name, distance: a.distance,
+    no: i + 1, lat: a.y, lng: a.x, distance: a.distance,
+    name: a.geocode && a.geocode !== 'exact' ? `${a.name} (${GEOCODE_LABEL[a.geocode] ?? '근사'})` : a.name,
   })), [items]);
 
   const basisNote = areaBasis === 'supply' ? '공급면적 기준' : '전용면적 기준';
@@ -673,6 +680,24 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
       )}
 
       {items.length > 0 && (<>
+        {/*
+          **반경 안을 먼저 다 담고, 단계별로 거른다**(사용자 확정 2026-09-17).
+          어느 단계에서 몇 건이 빠졌는지 한 줄로 보여준다 —
+          "옆에 단지가 있는데 왜 표에 없나" 가 이 줄에서 답이 된다.
+        */}
+        {data.funnel && (
+          <div style={S.funnel}>
+            {data.sido} 공고 <b>{data.funnel.scanned}</b>
+            <span style={S.arrow}>→</span> 인근 시군구 <b>{data.funnel.shortlisted}</b>
+            <span style={S.arrow}>→</span> 좌표 확보 <b>{data.funnel.located}</b>
+            <span style={S.arrow}>→</span> 반경 {rLabel(data.radius)} 안 <b>{data.funnel.within}</b>
+            {data.funnel.rental > 0 && <><span style={S.arrow}>→</span> 임대 제외 <b>-{data.funnel.rental}</b></>}
+            <span style={S.arrow}>→</span> 표 <b>{all.length}</b>
+            {items.length !== all.length && <><span style={S.arrow}>→</span> 고른 종류 <b>{items.length}</b></>}
+            {data.funnel.approx > 0 &&
+              <span style={{ color: T.muted, marginLeft: 8 }}>· 이 중 {data.funnel.approx}건은 근사 좌표</span>}
+          </div>
+        )}
         {noSupply && (
           <div style={{ ...S.warn, marginBottom: 10 }}>
             일부 단지는 원천이 <b>공급면적을 주지 않습니다</b>(오피스텔·도시형생활주택 계열).
@@ -756,23 +781,16 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
         )}
 
         {/*
-          **좌표를 못 찾아 빠진 공고를 조용히 넘기지 않는다.**
-          다만 정직하게 — 좌표가 없으면 반경 안인지 밖인지도 모른다.
-          "반경 안이었다" 고는 못 쓰고 같은 시군구라는 것까지만 말한다.
-          신규 택지의 블록 표기는 대장에 지번이 아직 없어 어떤 주소 API 로도 못 찾는다.
+          **목록이 아니라 건수 한 줄이다**(사용자 지적 2026-09-17).
+          같은 시군구를 전부 적으면 반경과 무관한 단지까지 길게 늘어놓게 된다.
+          좌표는 택지지구 단계까지 찾아보고, 그래도 못 찾은 것만 숫자로 남긴다.
         */}
         {data.unlocated?.length > 0 && (
           <div style={{ ...S.warn, marginTop: 10 }}>
             같은 시군구에 <b>위치를 못 찾은 공고 {data.unlocated.length}건</b>이 있습니다 —
-            공고 주소가 지번 없이 지구·블록으로만 적혀 있어 좌표를 얻지 못했습니다.
-            <b> 반경 안인지 밖인지도 알 수 없어</b> 표에 넣지 않았습니다.<br />
-            {data.unlocated.slice(0, 4).map(r => (
-              <span key={r.name} style={{ color: T.ink2 }}>
-                · {r.url ? <a href={r.url} target="_blank" rel="noreferrer" style={S.link}>{r.name}</a> : r.name}
-                <span style={{ color: T.muted }}> ({r.address})</span><br />
-              </span>
-            ))}
-            {data.unlocated.length > 4 && <span style={{ color: T.muted }}>  외 {data.unlocated.length - 4}건</span>}
+            지번도 택지지구명도 대장에 없어 좌표를 얻지 못했습니다.
+            <b> 반경 안인지 밖인지도 알 수 없어</b> 표에 넣지 않았습니다.
+            <span style={{ color: T.muted }}> (예: {data.unlocated[0].address})</span>
           </div>
         )}
 

@@ -368,6 +368,7 @@ async function geocodeOne(query, kind = 'address') {
  *
  * @returns {{x,y,precision,query}|null}
  *   precision  exact  지번까지 맞은 좌표
+ *              zone   택지지구 중심 — 구역 자체라 읍면동보다 낫다
  *              dong   읍면동 중심 — 거리가 수백 m 틀어질 수 있다
  *              place  장소검색(지구명)으로 잡은 좌표 — 가장 약하다
  */
@@ -379,6 +380,60 @@ export function placeNameOf(houseNm) {
     .replace(/\s*\d+\s*블(?:록|럭)\s*$/, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * **택지지구 이름으로 좌표를 얻는다** — 신규 택지의 마지막 수단.
+ *
+ * "경기도 성남시 성남낙생지구 내 A-1블록" 처럼 **읍면동조차 없는 주소**가 실패의 대부분이다
+ * (실측 2026-09-17: 경기 실패 45건이 전부 지구·블록 표기).
+ * 그런데 카카오 장소검색에 **`부동산 > 부지 > 개발지구`** 카테고리가 있어
+ * "성남낙생 공공주택지구 @경기 성남시 분당구 동원동 산 47-13" 로 **지번까지** 나온다.
+ *
+ * **일반명사로는 절대 묻지 않는다.** "공공주택지구" 만 남겨 물었더니
+ * 시흥장현을 찾는데 **시흥은계**를 줬다(실측). 당수1지구는 당수2지구가 왔다.
+ * 틀린 좌표가 조용히 반경 판정에 들어가는 자리라, 고유명이 든 질의만 쓰고
+ * 결과 이름에 그 고유명이 들어있는지 **대조한 뒤에** 채택한다.
+ */
+const ZONE_GENERIC = /^(?:택지개발사업지구|택지개발지구|공공주택지구|도시개발사업|일반산업단지|산업단지|택지지구|계획지구|신도시|지구)$/;
+const ZONE_KIND = '(?:택지개발사업지구|택지개발지구|공공주택지구|도시개발사업|일반산업단지|산업단지|택지지구|계획지구|그린시티|신도시|지구)';
+const ZONE_NAME = new RegExp(`([가-힣A-Za-z0-9·]+(?:\\s+[가-힣A-Za-z0-9·]+)?\\s*${ZONE_KIND})`);
+const SIDO_HEAD = /^[가-힣]+(?:특별시|광역시|특별자치시|특별자치도|도)\s+/;
+
+/** 공고 주소에서 택지지구 이름 후보를 뽑는다 (긴 것 → 고유명 토막 순) */
+export function zoneQueries(address) {
+  const t = String(address ?? '')
+    .replace(SIDO_HEAD, '')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[가-힣]+(?:동|리|가)\s*,/g, ' ')        // "장곡동, 장현동, …" 나열
+    .replace(/\s*(?:일원|일대|내)\s*/g, ' ')
+    .replace(/([가-힣])(공공주택지구|택지개발지구|도시개발사업)/g, '$1 $2')  // 붙여쓴 것을 띄운다
+    .replace(/\s+/g, ' ').trim();
+  const m = t.match(ZONE_NAME);
+  if (!m) return [];
+  /* 앞에 붙은 시군구·읍면동을 뗀다 — "군자동 시흥장현 공공주택지구" 로 물으면 0건이다 */
+  const full = m[1].replace(/^[가-힣]+(?:시|군|구|동|리|읍|면|가)\s+/, '').replace(/\s+/g, ' ').trim();
+  const words = full.split(' ');
+  const out = [full, ...(words.length > 1 ? [words[0]] : [])];
+  return [...new Set(out.filter(z => z.length >= 3 && !ZONE_GENERIC.test(z)))];
+}
+
+/** 지구 이름 대조용 — 종류말(공공주택지구 등)과 공백을 지운 고유명 */
+const zoneCore = (s) => String(s).replace(new RegExp(ZONE_KIND, 'g'), '').replace(/[\s·]/g, '');
+
+async function geocodeZone(raw, normalized) {
+  const head = headOf(String(raw)) ?? headOf(normalized) ?? '';
+  for (const z of zoneQueries(raw)) {
+    const docs = await geocodeDocs(`${head} ${z}`.trim());
+    const c = zoneCore(z);
+    const hit = docs
+      .filter(d => /개발지구|부지|아파트/.test(d.category ?? ''))
+      .find(d => zoneCore(d.name).includes(c) || c.includes(zoneCore(d.name)));
+    if (hit && sameSgg(hit.address, raw)) {
+      return { x: hit.x, y: hit.y, query: `${head} ${z}`.trim(), precision: 'zone' };
+    }
+  }
+  return null;
 }
 
 /**
@@ -431,6 +486,13 @@ async function geocodeSupply(normalized, raw = '', houseNm = '') {
     }
   }
 
+  /*
+   * **택지지구 이름으로** — 읍면동조차 없는 신규 택지가 여기서 살아난다.
+   * 지구 중심은 읍면동 중심보다 사업지에 가깝다(공고가 가리키는 구역 자체다).
+   */
+  const zone = await geocodeZone(raw, normalized);
+  if (zone) return zone;
+
   /* 여기까지 왔으면 읍면동 중심이라도 — 근사임을 표시한다 */
   for (const q of [dongOnly, bracketDong].filter(Boolean)) {
     const p = await geocodeOne(q, 'address');
@@ -439,6 +501,24 @@ async function geocodeSupply(normalized, raw = '', houseNm = '') {
   /* 마지막 — "부천역곡 공공주택지구" 같은 지구명 자체를 장소로 */
   const p = await geocodeOne(normalized, 'keyword');
   return p ? { ...p, query: normalized, precision: 'place' } : null;
+}
+
+/** 장소검색 여러 건 — 카테고리까지 봐야 개발지구를 가릴 수 있다 */
+async function geocodeDocs(query, size = 10) {
+  const key = `docs|${size}|${query}`;
+  if (geoCache.has(key)) return geoCache.get(key);
+  let hits = [];
+  try {
+    const d = await getJson(
+      `${KAKAO}/search/keyword.json?query=${encodeURIComponent(query)}&size=${size}`,
+      { headers: H(), retries: 2, timeout: 12000 });
+    hits = (d.documents ?? []).map(x => ({
+      x: Number(x.x), y: Number(x.y), name: x.place_name,
+      address: x.address_name, category: x.category_name,
+    }));
+  } catch { /* 한 건 실패가 전체를 막으면 안 된다 */ }
+  geoCache.set(key, hits);
+  return hits;
 }
 
 /** 장소검색 1건 — 이름·주소까지 봐야 시군구 검증과 견본주택 판정을 할 수 있다 */
@@ -579,11 +659,11 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
   }
 
   /*
-   * **좌표를 못 찾은 공고를 조용히 버리지 않는다**(사용자 지적).
-   * 다만 정직하게 — 좌표가 없으면 **반경 안인지 밖인지도 모른다.**
-   * "반경 안에 있었다" 고는 못 쓰고, 사업지와 **같은 시군구**인 것만 골라
-   * "위치를 못 찾아 비교에서 빠졌다" 고 알린다.
-   * 남은 실패는 신규 택지의 블록 표기라 대장에 지번이 아직 없다 — 어떤 주소 API 로도 못 찾는다.
+   * **좌표를 못 찾은 공고**(사용자 지적 2026-09-17).
+   * 처음엔 같은 시군구인 것을 전부 표 아래에 적었는데 **목록이 너무 길어진다** —
+   * 좌표가 없으면 반경 안인지 밖인지도 모르니, 반경과 무관한 단지까지 늘어놓는 셈이다.
+   * 그래서 순서를 뒤집었다: **먼저 좌표를 끝까지 찾아 반경 안이면 표에 넣고**(택지지구 단계),
+   * 그래도 못 찾은 것만 **건수 한 줄**로 남긴다. 목록이 아니라 숫자다.
    */
   const siteSgg = sggOf(region);
   const unlocated = located
@@ -702,6 +782,20 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
     items,
     excludedRental,   // 반경 안에 있었으나 분양가가 없어 뺀 임대 아파트
     unlocated,        // 같은 시군구인데 좌표를 못 찾아 거리조차 못 잰 공고
+    /*
+     * **반경 안을 먼저 다 담고, 단계별로 거른다**(사용자 확정 2026-09-17).
+     * 어느 단계에서 몇 건이 빠졌는지 화면이 말할 수 있어야
+     * "옆에 단지가 있는데 왜 안 나오나" 에 답이 된다.
+     */
+    funnel: {
+      scanned: uniq.length,
+      shortlisted: shortlist.length,
+      located: located.filter(v => v?.p).length,
+      within: within.length,
+      rental: excludedRental.length,
+      listed: items.length,
+      approx: within.filter(v => v.precision && v.precision !== 'exact').length,
+    },
     source: {
       org: '한국부동산원 청약홈',
       citation: `* 출처 : 한국부동산원 청약홈 분양정보 (APT / 오피스텔·도시형·민간임대, 공공데이터포털) · ${sido} 공고 ${uniq.length}건 중 반경 ${radius >= 1000 ? `${radius / 1000}km` : `${radius}m`} 이내`,
