@@ -32,7 +32,7 @@ const S = {
   panel: { background: T.panel, border: `1px solid ${T.line}`, borderRadius: T.radius, padding: 16, boxShadow: T.shadow, marginBottom: 16 },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(155px,1fr))', gap: 11, alignItems: 'end' },
   /* 접힌 입력 패널 — "무엇을 심사 중인가" 한 줄 */
-  summary: { display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' },
+  summary: { display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 12 },
   summaryMain: { fontSize: 14, fontWeight: 700, color: T.ink, letterSpacing: '-.01em' },
   summaryMeta: { fontSize: 12, color: T.muted, ...mono },
   summaryBtn: {
@@ -266,6 +266,7 @@ export default function Home() {
       setGeo(j.geo); setPick(0);
       setCoord(j.coord);
       setFixed(true);
+      setPanelOpenManual(null);   // [사업지 바꾸기] 로 펴 둔 상태를 자동 판단으로 되돌린다
 
       /*
        * 확정된 주소에서 시군구를 되짚어 채운다.
@@ -468,7 +469,11 @@ export default function Home() {
     → **자료수집 단계 탭에서만** 그 도구들을 펴 둔다. 뒤 단계로 가면 한 줄 요약만 남긴다.
   */
   const gatherTab = (SHEETS.find(s => s.id === tab)?.stage ?? '자료수집') === '자료수집';
-  const panelOpen = panelOpenManual ?? (!fixed || gatherTab);
+  /*
+    확정된 뒤의 입력 그리드는 **잠겨서 못 고치는 칸**인데도 320px 을 먹었다.
+    한 줄 요약으로 접고 [사업지 바꾸기] 로 편다 — 시공사를 바꾸는 것도 그 길로 간다.
+  */
+  const panelOpen = panelOpenManual ?? !fixed;
 
   const status = useMemo(() => {
     const m = {};
@@ -644,7 +649,7 @@ export default function Home() {
             자리만 먹고, 정작 그 자리에서 쓰는 [이 조회 보관]·[엑셀 다운로드] 가
             줄바꿈돼 떨어져 있었다 — 접혔을 때는 그 둘만 남긴다.
           */}
-          {panelOpen && (!fixed ? null : (
+          {gatherTab && fixed && (
             <>
               <button style={S.btn({ done: true })} onClick={resetSite} disabled={!!busy}>
                 <span style={S.check}>✓</span> 주소 확정됨 — 초기화
@@ -707,7 +712,7 @@ export default function Home() {
                 {compDone ? '비교사업장 · 분양가' : '비교사업장 · 분양가 →'}
               </button>
             </>
-          ))}
+          )}
 
           {data && fixed && (
             <>

@@ -33,7 +33,13 @@ const S = {
   input: { width: 110, padding: '5px 8px', fontSize: 12.5, textAlign: 'right', border: `1px solid ${T.line}`, borderRadius: 4, background: '#fffdf0', color: T.ink, fontFamily: 'inherit', ...mono },
   sub: { fontSize: 11, color: T.muted, minHeight: 15, ...mono },
 
-  out: { marginTop: 13, paddingTop: 12, borderTop: `1px dashed ${T.line}`, display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', fontSize: 12.5 },
+  /*
+    결과를 입력칸 **아래** 점선 밑에 두었더니, 값을 넣을 때마다 눈이 위↔아래로 움직였다.
+    입력칸은 화면 왼쪽 1/3 만 쓰고 오른쪽 2/3 는 비어 있었다 — 그 자리에 결과를 붙인다.
+    자리가 모자라면 flex 가 알아서 아랫줄로 내린다.
+  */
+  out: { marginLeft: 'auto', display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', fontSize: 12.5,
+         paddingLeft: 16, borderLeft: `1px dashed ${T.line}` },
   outNum: { fontSize: 21, fontWeight: 800, ...mono },
   pend: { color: T.muted, fontStyle: 'italic', fontSize: 12 },
 
@@ -110,20 +116,20 @@ export default function ManualView({ region, addr, data, facilities, manual, val
                 <span style={S.sub}>{p.score != null ? `${p.band} → ${p.score}점 ×${p.weight}` : ''}</span>
               </div>
             ))}
-          </div>
           <div style={S.out}>
-            {scaleSc?.pending
-              ? <span style={S.pend}>
-                  {scaleSc.missing?.length === scaleSc.parts?.length
-                    ? '세 값을 넣으면 점수가 납니다'
-                    : scaleSc.text}
-                </span>
-              : (<>
-                  <span style={{ color: T.muted }}>가중평균</span>
-                  <span style={{ ...S.outNum, fontSize: 17 }}>{scaleSc.avg}</span>
-                  <span style={{ color: T.muted }}>→</span>
-                  <b>{scaleSc.label} · 평가점수 {scaleSc.score}점</b>
-                </>)}
+              {scaleSc?.pending
+                ? <span style={S.pend}>
+                    {scaleSc.missing?.length === scaleSc.parts?.length
+                      ? '세 값을 넣으면 점수가 납니다'
+                      : scaleSc.text}
+                  </span>
+                : (<>
+                    <span style={{ color: T.muted }}>가중평균</span>
+                    <span style={{ ...S.outNum, fontSize: 17 }}>{scaleSc.avg}</span>
+                    <span style={{ color: T.muted }}>→</span>
+                    <b>{scaleSc.label} · 평가점수 {scaleSc.score}점</b>
+                  </>)}
+            </div>
           </div>
           <div style={S.note}>
             ※ 주상복합(오피스텔분양보증)은 아파트 + 오피스텔 세대수를 합산 ·
@@ -147,16 +153,16 @@ export default function ManualView({ region, addr, data, facilities, manual, val
                 <span style={S.sub}>{w.note ?? ''}</span>
               </div>
             ))}
-          </div>
           <div style={S.out}>
-            {mixSc?.pending
-              ? <span style={S.pend}>{mixSc.text}</span>
-              : (<>
-                  <span style={{ color: T.muted }}>총 {mixSc.total}세대 · 가중평균</span>
-                  <span style={{ ...S.outNum, fontSize: 17 }}>{mixSc.value}</span>
-                  <span style={{ color: T.muted }}>→</span>
-                  <b>{mixSc.label} · 평가점수 {mixSc.score}점</b>
-                </>)}
+              {mixSc?.pending
+                ? <span style={S.pend}>{mixSc.text}</span>
+                : (<>
+                    <span style={{ color: T.muted }}>총 {mixSc.total}세대 · 가중평균</span>
+                    <span style={{ ...S.outNum, fontSize: 17 }}>{mixSc.value}</span>
+                    <span style={{ color: T.muted }}>→</span>
+                    <b>{mixSc.label} · 평가점수 {mixSc.score}점</b>
+                  </>)}
+            </div>
           </div>
           <div style={S.warn}>
             원문 산식 끝에 <b>×100</b> 이 붙어 있으나 급간(1.81 / 3.37 / 3.41 / 3.78)이
@@ -194,11 +200,11 @@ export default function ManualView({ region, addr, data, facilities, manual, val
               </div>
               <span style={S.sub}>해당하면 조사값 대신 이 점수를 씁니다</span>
             </div>
-          </div>
           <div style={S.out}>
-            {nearbySc?.pending
-              ? <span style={S.pend}>{nearbySc.text}</span>
-              : <b>{nearbySc.label} · 평가점수 {nearbySc.score}점 <span style={{ fontWeight: 400, color: T.muted }}>({nearbySc.text})</span></b>}
+              {nearbySc?.pending
+                ? <span style={S.pend}>{nearbySc.text}</span>
+                : <b>{nearbySc.label} · 평가점수 {nearbySc.score}점 <span style={{ fontWeight: 400, color: T.muted }}>({nearbySc.text})</span></b>}
+            </div>
           </div>
           <div style={S.note}>
             ※ 본건의 <b>초기예상분양률(산정 결과)</b> 과 다른 값입니다 — 이건 옆 단지를 조사해 매기는 입력 항목입니다.<br />
