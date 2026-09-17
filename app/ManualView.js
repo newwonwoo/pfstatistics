@@ -12,7 +12,7 @@ import { manualSummary, PENDING_ITEMS, scaleTable, unitMixTable, nearbyTable } f
  *
  *   자동        교통환경 · 주거편의 · 교육환경 · 브랜드경쟁력 · 주택담보대출금리
  *   값 → 점수   규모 및 배치 · 평형구성 · 인근아파트 초기 분양률
- *   점수 직접   지역미분양 · 지역수요 · 지역경쟁력 · 소비심리지수   (구간표 미수령)
+ *   점수 직접   없음 — 2026-09-17 지역미분양·지역수요 구간표를 받아 전부 자동/값입력으로 넘어갔다
  */
 
 const S = {
@@ -79,6 +79,8 @@ export default function ManualView({ region, addr, data, facilities, manual, val
   const setMix = (k, x) => set({ 평형구성: { ...(v.평형구성 ?? {}), [k]: x } });
   const setNearby = (patch) => set({ 인근초기분양률: { ...(v.인근초기분양률 ?? {}), ...patch } });
   const setTyped = (k, x) => set({ 점수: { ...(v.점수 ?? {}), [k]: x } });
+  /* 지역수요의 인구유입요인 — 원천이 없어 사람이 개수를 센다 */
+  const setDemand = (patch) => set({ 지역수요: { ...(v.지역수요 ?? {}), ...patch } });
 
   const sum = useMemo(
     () => manualSummary({ sheetInput: v, data, facilities, manual }),
@@ -217,26 +219,60 @@ export default function ManualView({ region, addr, data, facilities, manual, val
         </div>
       </div>
 
-      {/* ── 구간표 미수령 항목 ─────────────────────────── */}
+      {/*
+        구간표 미수령 항목 — **지금은 비어 있다**(2026-09-17 마지막 두 개를 받았다).
+        `PENDING_ITEMS` 가 비면 이 칸 자체가 사라진다. 새 항목이 생기면 그때 다시 나온다.
+      */}
+      {PENDING_ITEMS.length > 0 && (
+        <div style={S.box}>
+          <div style={S.head}>
+            <span>구간표 미수령 항목</span>
+            <span style={S.headNote}>점수를 직접 넣습니다</span>
+          </div>
+          <div style={S.body}>
+            <div style={S.grid}>
+              {PENDING_ITEMS.map(it => (
+                <div key={it.id} style={S.field}>
+                  <span style={S.lab}>{it.id} {it.max && <span style={{ fontWeight: 400, color: T.muted }}>(배점 {it.max})</span>}</span>
+                  <input style={S.input} type="number" min="0" step="any" placeholder="점수"
+                    value={v.점수?.[it.id] ?? ''} onChange={e => setTyped(it.id, e.target.value)} />
+                  <span style={S.sub} />
+                </div>
+              ))}
+            </div>
+            <div style={S.note}>
+              ※ 구간표를 받으면 이 칸들도 값 입력만으로 점수가 나게 바뀝니다. 지금은 내부망 평가표의 점수를 옮겨 넣으세요.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/*
+        ── 지역수요 · 인구유입요인 ──────────────────────
+        **구간표 미수령 칸은 2026-09-17 로 없어졌다.** 지역미분양·지역수요 구간표를 받아
+        둘 다 수집값에서 점수가 난다. 다만 지역수요의 반쪽인 인구유입요인은
+        **어느 원천에도 없다** — 신도시·혁신도시·기업도시·산업단지 등 요인의 개수를 사람이 센다.
+      */}
       <div style={S.box}>
         <div style={S.head}>
-          <span>구간표 미수령 항목</span>
-          <span style={S.headNote}>점수를 직접 넣습니다</span>
+          <span>인구유입요인</span>
+          <span style={S.headNote}>지역수요(5) 의 반쪽 — 원천이 없어 직접 셉니다</span>
         </div>
         <div style={S.body}>
           <div style={S.grid}>
-            {PENDING_ITEMS.map(it => (
-              <div key={it.id} style={S.field}>
-                <span style={S.lab}>{it.id} {it.max && <span style={{ fontWeight: 400, color: T.muted }}>(배점 {it.max})</span>}</span>
-                <input style={S.input} type="number" min="0" step="any" placeholder="점수"
-                  value={v.점수?.[it.id] ?? ''} onChange={e => setTyped(it.id, e.target.value)} />
-                <span style={S.sub} />
-              </div>
-            ))}
+            <div style={S.field}>
+              <span style={S.lab}>요인 개수 <span style={{ fontWeight: 400, color: T.muted }}>(없으면 0)</span></span>
+              <input style={S.input} type="number" min="0" step="1" placeholder="개수"
+                value={v.지역수요?.inflow ?? ''}
+                onChange={e => setDemand({ inflow: e.target.value })} />
+              <span style={S.sub}>2개 이상 5점 · 1개 3점 · 없음 1점</span>
+            </div>
           </div>
           <div style={S.note}>
-            ※ 구간표를 받으면 이 칸들도 값 입력만으로 점수가 나게 바뀝니다. 지금은 내부망 평가표의 점수를 옮겨 넣으세요.<br />
-            ※ 수치 자체는 각 시트에서 이미 수집돼 있습니다 — 지역미분양 · 지역수요 · 지역경쟁력 · 부동산시장 탭에서 보세요.
+            ※ 대상은 <b>신도시 · 혁신도시 · 기업도시 · 산업단지 등</b> 입니다(원문).
+            <b>4점·2점 행은 원문에 없습니다</b> — 세 단계뿐입니다.<br />
+            ※ 주택보급률은 이미 수집돼 있어 자동으로 점수가 납니다.
+            지역수요 점수 = (주택보급률 점수 + 인구유입요인 점수) / 2 → 등급 → 대표점수.
           </div>
         </div>
       </div>

@@ -237,7 +237,9 @@ export function scoreBand(key, raw) {
   if (raw === '' || raw == null || !Number.isFinite(n)) {
     return { pending: true, text: '원천값이 없어 점수를 낼 수 없습니다' };
   }
-  const applied = n + (t.spread ?? 0);
+  /* 화면에 그대로 찍히는 값이라 자릿수를 정해둔다 — 0.05219235971198797% 는 읽을 수 없다 */
+  const raw2 = n + (t.spread ?? 0);
+  const applied = t.digits == null ? raw2 : Number(raw2.toFixed(t.digits));
 
   /* `lt` 로 적힌 표(주택담보대출금리)와 `gte` 로 적힌 표(지역경쟁력·소비심리지수)를 둘 다 받는다 */
   for (const rule of t.rules) {
@@ -254,6 +256,64 @@ export function scoreBand(key, raw) {
   }
   if (!t.base) return { pending: true, text: '구간표 범위를 벗어났습니다' };
   return { score: t.base.score, label: t.base.label, text: t.base.text, applied, formula: t.formula, rule: null };
+}
+
+/**
+ * 개수 구간표 (지역수요의 인구유입요인).
+ * 신도시·혁신도시·기업도시·산업단지 등 **요인의 개수**로 매긴다.
+ * 원문에 4점·2점 행은 없다 — 2개 이상 5점 · 1개 3점 · 없음 1점 세 단계뿐이다.
+ */
+export function scoreCount(key, count) {
+  const t = TABLE[key];
+  if (!t || t.scope !== 'count') return null;
+  const n = Number(count);
+  if (count === '' || count == null || !Number.isFinite(n) || n < 0) {
+    return { pending: true, text: '인구유입 요인 개수를 넣으세요 (없으면 0)' };
+  }
+  for (const rule of t.rules) {
+    if (rule.gte == null || n >= rule.gte) {
+      return { score: rule.score, label: rule.label, applied: n, max: t.max, rule };
+    }
+  }
+  return { pending: true, text: '구간표 범위를 벗어났습니다' };
+}
+
+/**
+ * **지역수요(5)** — 주택보급률과 인구유입요인을 각각 5점 척도로 매겨 **평균**을 내고,
+ * 그 평균으로 등급을 정한다(교통환경·주거편의와 같은 구조).
+ * 평가표에 적히는 점수는 평균이 아니라 **그 등급의 대표점수**다.
+ *
+ * **보급률은 낮을수록 높은 점수다** — 집이 모자란 곳이 수요가 있다는 뜻이라 방향이 뒤집혀 있다.
+ *
+ * @param {number} supplyRatio  주택보급률(%) — 원천에서 수집한 값
+ * @param {number} inflow       인구유입 요인 개수 — 실무자 입력(원천 없음)
+ */
+export function scoreRegionDemand(supplyRatio, inflow) {
+  const t = TABLE['지역수요'];
+  if (!t) return null;
+  const a = scoreBand('지역수요:주택보급률', supplyRatio);
+  const b = scoreCount('지역수요:인구유입요인', inflow);
+  const parts = [
+    { name: '주택보급률', basis: supplyRatio == null ? null : `${supplyRatio}%`, sc: a },
+    { name: '인구유입요인', basis: b?.pending ? null : `${inflow}개`, sc: b },
+  ];
+  const bad = parts.filter(p => !p.sc || p.sc.pending || !Number.isFinite(p.sc.score));
+  if (bad.length) {
+    const reasons = [...new Set(bad.map(p => p.sc?.text).filter(Boolean))];
+    return { pending: true, text: reasons.length === 1 ? reasons[0]
+      : `${bad.map(p => p.name).join(' · ')} 미입력 — 평균은 두 항목이 다 있어야 냅니다` };
+  }
+  const avg = (a.score + b.score) / 2;
+  const band = gradeOf(avg);
+  return {
+    avg: Number(avg.toFixed(2)),
+    score: band?.score ?? null,
+    label: band?.label ?? '',
+    max: t.max,
+    text: `주택보급률 ${supplyRatio}% → ${a.score}점 · 인구유입요인 ${inflow}개 → ${b.score}점`
+        + `　⇒　(${a.score} + ${b.score}) / 2 = ${Number(avg.toFixed(2))} → ${band?.label ?? ''} → ${band?.score ?? '?'}점`,
+    parts,
+  };
 }
 
 /**

@@ -1,5 +1,5 @@
 import {
-  scoreAverage, scoreSheet, scoreRank, scoreBand,
+  scoreAverage, scoreSheet, scoreRank, scoreBand, scoreRegionDemand,
   scoreWeighted, scoreUnitMix, scoreNearbyPresale, tableOf,
 } from './scoring.js';
 
@@ -15,11 +15,12 @@ import {
  * **한 항목이라도 비면 A 를 확정하지 않는다** — 부분 합계를 A 로 쓰면 분양률이 통째로 낮아진다.
  */
 
-/** 구간표를 못 받아 점수를 직접 받는 항목. 배점을 아는 것만 적는다(모르면 null). */
-export const PENDING_ITEMS = [
-  { id: '지역미분양', max: null, note: '미분양비율 — 구간표 미수령' },
-  { id: '지역수요', max: null, note: '주택보급률 · 인구유입요인 — 구간표 미수령' },
-];
+/**
+ * 구간표를 못 받아 점수를 직접 받는 항목.
+ * **2026-09-17 로 비었다** — 지역미분양·지역수요 구간표를 받아 자동으로 넘겼다.
+ * 새 항목이 생기면 여기에 넣고, 배점을 아는 것만 적는다(모르면 null).
+ */
+export const PENDING_ITEMS = [];
 
 /** 아직 안 된 항목이 어디서 채워지는지 — 화면에 갈 곳을 적어준다 */
 const GOTO = {
@@ -30,6 +31,8 @@ const GOTO = {
   '주택담보대출금리': '[통계 수집] 을 누르세요 — CD(91일) 금리가 필요합니다',
   '지역경쟁력': '[통계 수집] 을 누르세요 — KB 매매지수 증감률이 필요합니다',
   '부동산시장 소비심리지수': '[통계 수집] 을 누르세요 — 소비심리지수가 필요합니다',
+  '지역미분양': '[통계 수집] 을 누르세요 — 미분양주택수·주민등록세대수가 필요합니다',
+  '지역수요': '[통계 수집] 을 누르세요 — 주택보급률이 필요합니다',
 };
 
 export function manualSummary({ sheetInput = {}, data = null, facilities = null, manual = null } = {}) {
@@ -42,6 +45,19 @@ export function manualSummary({ sheetInput = {}, data = null, facilities = null,
   /* 2026-09-16 구간표 수령 — 수집한 값에서 바로 점수가 난다(전에는 점수를 직접 받았다) */
   const kb = val('kb_apt_price_index');
   const cs = val('consumer_sentiment');
+  /*
+   * **지역미분양은 두 값의 비율이다**(2026-09-17 구간표 수령).
+   * 원문 산식 : 해당지역 (미분양주택수 ÷ 주민등록세대수) × 100.
+   * 둘 다 이 앱이 이미 수집하므로 점수를 손으로 넣지 않는다.
+   * 골든 검산: 93 ÷ 178,187 × 100 = 0.052% → 0.1% 미만 → 15점.
+   */
+  const unsold = val('unsold_housing');
+  const households = val('resident_households');
+  const unsoldRatio = (Number.isFinite(Number(unsold)) && Number(households) > 0)
+    ? (Number(unsold) / Number(households)) * 100 : null;
+  /* 인구유입요인(신도시·혁신도시·기업도시·산업단지 등)은 원천이 없다 — 실무자가 개수를 넣는다 */
+  const supplyRatio = val('housing_supply_ratio');
+  const inflow = sheetInput.지역수요?.inflow;
 
   /* ① 원천에서 자동으로 나는 것 */
   const auto = [
@@ -52,6 +68,9 @@ export function manualSummary({ sheetInput = {}, data = null, facilities = null,
     { id: '주택담보대출금리', max: 5, sc: loan },
     { id: '지역경쟁력', max: 5, sc: kb == null ? null : scoreBand('지역경쟁력', kb) },
     { id: '부동산시장 소비심리지수', max: 15, sc: cs == null ? null : scoreBand('소비심리지수', cs) },
+    { id: '지역미분양', max: 15, sc: unsoldRatio == null ? null : scoreBand('지역미분양', unsoldRatio) },
+    /* 지역수요만 반쪽이 수기다 — 주택보급률은 자동, 인구유입요인은 개수를 받는다 */
+    { id: '지역수요', max: 5, sc: supplyRatio == null ? null : scoreRegionDemand(supplyRatio, inflow) },
   ].map(r => ({
     ...r, kind: 'auto', score: num(r.sc),
     /*
