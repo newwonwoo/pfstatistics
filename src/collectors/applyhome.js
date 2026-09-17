@@ -85,6 +85,15 @@ const BRACKET_ADDR = /\(([^)]*[가-힣]+(?:동|리|가|읍|면)\s*(?:산\s*)?\d+
 /** 지구·블록 꼬리 — 대장에 없는 표기라 검색에 넣으면 0건이 된다 */
 const ZONE_TAIL = /\s*(?:[가-힣A-Za-z0-9·\s]*?(?:지구|단지|산업단지|신도시|역세권|계획지구)\s*)?(?:내\s*)?[A-Za-z]{0,3}[-\s]?\d{0,3}\s*(?:블록|블럭|BL|bl)\b.*$/;
 
+/**
+ * 괄호 안의 **법정동만** 뽑는다 — "서울특별시 강북구 도봉로 222 (미아동)"
+ *
+ * 도로명주소는 **건물에 붙는다.** 분양공고 주소는 준공 전 예정 주소라
+ * 그 번지에 건물이 아직 없으면 카카오에도 juso 에도 없다(실측: 서울 실패 16건이 전부 이 경우).
+ * 그런데 공고가 괄호 안에 법정동을 같이 적어준다 — 그걸 지우고 있었다.
+ */
+const BRACKET_DONG = /\(\s*([가-힣]+(?:동|리|가))\s*\)/;
+
 /** "경기도 김포시" — 괄호 안 주소에 상위 행정구역이 없을 때 앞에 붙여준다 */
 const headOf = (raw) => raw.match(/^\s*([가-힣]+(?:특별시|광역시|특별자치시|특별자치도|도)\s+[가-힣]+(?:시|군|구)(?:\s+[가-힣]+구)?)/)?.[1] ?? null;
 
@@ -361,10 +370,16 @@ async function geocodeOne(query, kind = 'address') {
  *              dong   읍면동 중심 — 거리가 수백 m 틀어질 수 있다
  *              place  장소검색(지구명)으로 잡은 좌표 — 가장 약하다
  */
-async function geocodeSupply(normalized) {
+async function geocodeSupply(normalized, raw = '') {
   const dong = trimToDong(normalized);
   const dongOnly = trimToDongOnly(normalized);
-  const tries = [...new Set([normalized, dong, dongOnly].filter(Boolean))];
+  /* 도로명이 아직 없는 신축 부지 — 공고가 괄호에 적어준 법정동으로 떨어진다 */
+  const bracketDong = (() => {
+    const d = String(raw).match(BRACKET_DONG)?.[1];
+    const head = headOf(String(raw)) ?? headOf(normalized);
+    return d && head ? `${head} ${d}` : null;
+  })();
+  const tries = [...new Set([normalized, dong, dongOnly, bracketDong].filter(Boolean))];
 
   for (const q of tries) {
     const p = await geocodeOne(q, 'address');
@@ -468,7 +483,7 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
 
   const located = await mapLimit(shortlist, 10, async (n) => {
     const q = normalizeSupplyAddress(n.r.HSSPLY_ADRES);
-    const p = await geocodeSupply(q);
+    const p = await geocodeSupply(q, n.r.HSSPLY_ADRES);
     if (!p) return null;
     return { ...n, q: p.query, p, d: Math.round(dist(p)), precision: p.precision };
   });
@@ -493,7 +508,7 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
     const uniqAddr = [...new Map(uniq.map(n => [normalizeSupplyAddress(n.r.HSSPLY_ADRES), n])).values()];
     const rows = await mapLimit(uniqAddr, 10, async (n) => {
       const q = normalizeSupplyAddress(n.r.HSSPLY_ADRES);
-      const p = await geocodeSupply(q);
+      const p = await geocodeSupply(q, n.r.HSSPLY_ADRES);
       return { ok: !!p, precision: p?.precision ?? null,
                name: n.r.HOUSE_NM, raw: n.r.HSSPLY_ADRES, query: p?.query ?? q, kind: n.kind, src: n.src };
     });
