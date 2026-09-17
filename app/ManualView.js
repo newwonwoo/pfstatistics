@@ -93,9 +93,10 @@ export default function ManualView({ region, addr, data, facilities, manual, val
 
   /*
    * **지역 평균 초기분양률은 참고치다**(HUG · KOSIS 414/DT_41401N_008, 2026-09-17 연결).
-   * 규정이 말하는 것은 「인근 단지」 초기분양률이지 지역 평균이 아니다 —
-   * 그래서 **말없이 채우지 않는다.** 숫자를 보여주고 [넣기] 를 눌러야 들어간다
-   * (시공순위 자동채택을 막았던 것과 같은 이유다).
+   * 규정이 말하는 것은 「인근 단지」 초기분양률이지 지역 평균이 아니다.
+   * 처음엔 [이 값 넣기] 버튼을 뒀는데 **넣을 이유가 없다**(사용자 지적) —
+   * 규정과 맞지 않는 값을 한 번의 클릭으로 칸에 앉힐 수 있게 두면 그게 실수의 통로가 된다.
+   * **숫자만 회색으로 보여주고 끝낸다.** 이 칸은 본래 옆 단지를 조사해 넣는 수기입력이다.
    */
   const [hug, setHug] = useState(null);
   useEffect(() => {
@@ -215,13 +216,10 @@ export default function ManualView({ region, addr, data, facilities, manual, val
               <div style={{ ...S.field, gap: 6 }}>
                 <span style={S.lab}>참고 — {hug?.rate?.areaName} 지역 평균</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <b style={{ fontSize: 15, ...mono }}>{hugRate.rate}%</b>
+                  <b style={{ fontSize: 15, color: T.muted, ...mono }}>{hugRate.rate}%</b>
                   <span style={{ fontSize: 11, color: T.muted }}>{qLabel(hugRate.period)}</span>
-                  <button style={S.chip(false)} onClick={() => setNearby({ rate: String(hugRate.rate) })}>
-                    이 값 넣기
-                  </button>
                 </div>
-                <span style={S.sub}>HUG 민간아파트 평균 — <b>인근 단지가 아닙니다</b></span>
+                <span style={S.sub}>HUG 민간아파트 평균 — <b>넣는 값이 아닙니다</b></span>
               </div>
             )}
             <div style={{ ...S.field, gap: 6 }}>
