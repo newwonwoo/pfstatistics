@@ -30,14 +30,24 @@ import { manualSummary } from '../src/lib/manual';
 const fmt = (v) =>
   typeof v === 'number' ? v : (v == null || v === '' ? '' : String(v));
 
-/** 지도 DOM → PNG dataURL (타일 CORS 때문에 전용 캡쳐를 쓴다) */
+/**
+ * 지도 DOM → dataURL (타일 CORS 때문에 전용 캡쳐를 쓴다).
+ * **지도는 JPEG 로 넣는다** — 3배 해상도 PNG 로 넣었더니 한 파일이 47MB 가 됐다(실측).
+ * 타일은 연속톤 사진이라 PNG 가 최악이고, 핀·라벨 글자는 크고 진해서 품질 0.92 로도 그대로 읽힌다.
+ */
 async function shotMap(el) {
   if (!el) return null;
   try {
     const { captureMap } = await import('./captureMap');
-    return await captureMap(el);
+    return await captureMap(el, { mime: 'image/jpeg', quality: 0.92 });
   } catch { return null; }
 }
+
+/** dataURL 의 실제 형식대로 엑셀에 넣는다 — png 로 박아두면 jpeg 가 깨진다 */
+const addPic = (wb, url) => wb.addImage({
+  base64: url.split(',')[1],
+  extension: /^data:image\/jpe?g/.test(url) ? 'jpeg' : 'png',
+});
 
 /** 화면의 증빙 카드 DOM → PNG dataURL */
 async function shot(el) {
@@ -270,7 +280,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
         cw.getCell(crow, 2).value = `[증빙] 반경 ${rkm} 분양단지 위치`;
         cw.getCell(crow, 2).font = { bold: true, size: 10 };
         const h = Math.round(IMG_W * (mapEl.offsetHeight / mapEl.offsetWidth));
-        const imgId = wb.addImage({ base64: png.split(',')[1], extension: 'png' });
+        const imgId = addPic(wb, png);
         cw.addImage(imgId, { tl: { col: 1, row: crow }, ext: { width: IMG_W, height: h } });
       }
     }
@@ -549,7 +559,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
     const putImage = (png, el, atRow) => {
       if (!png || !el) return atRow;
       const h = Math.round(IMG_W * (el.offsetHeight / el.offsetWidth));
-      const imgId = wb.addImage({ base64: png.split(',')[1], extension: 'png' });
+      const imgId = addPic(wb, png);
       ws.addImage(imgId, { tl: { col: 1, row: atRow - 1 }, ext: { width: IMG_W, height: h } });
       return atRow + Math.ceil(h / 19) + 2;
     };

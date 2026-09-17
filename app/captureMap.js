@@ -170,7 +170,8 @@ const LABEL_MAX = 999;   /* 이름은 전부 단다 — 자리를 못 찾은 것
  * @returns {Promise<string>} PNG dataURL
  */
 export async function composeMap(el, spec = {}) {
-  const { map, kakao, center, radius, markers = [], polygon = null, radiusRing = null, title = '', labels = true } = spec;
+  const { map, kakao, center, radius, markers = [], polygon = null, radiusRing = null, title = '', labels = true,
+          mime = 'image/png', quality = 0.92 } = spec;
   /*
    * **확대해도 깨지지 않게 3배로 찍는다**(사용자 요청 2026-09-17).
    * 타일 자체는 1배라 타일 그림은 확대의 한계가 있지만,
@@ -309,7 +310,13 @@ export async function composeMap(el, spec = {}) {
 
   let url;
   try {
-    url = canvas.toDataURL('image/png');
+    /*
+     * **지도는 사진이라 JPEG 가 맞다**(실측 2026-09-17).
+     * 3배로 찍으니 엑셀이 47MB 가 됐다 — 메일로 못 보낸다.
+     * 타일은 연속톤 사진이라 PNG 가 최악이고, 핀·라벨 글자는 크고 진해서
+     * JPEG 품질 0.92 에서도 그대로 읽힌다. 표·글자 증빙(카드)은 PNG 를 유지한다.
+     */
+    url = canvas.toDataURL(mime, quality);
   } catch (e) {
     throw new Error(`캔버스가 오염되어 저장할 수 없습니다 (${e.name})`);
   }
@@ -408,12 +415,12 @@ async function captureByDom(el, pixelRatio) {
  * 엑셀 원본이 2096x1280 으로 나와 배치 1240px 대비 1.69배 여유뿐이었다.
  * 두 곳의 기본값을 같은 수로 맞춘다.
  */
-export async function captureMap(el, { pixelRatio = 3 } = {}) {
+export async function captureMap(el, { pixelRatio = 3, mime, quality } = {}) {
   if (!el) throw new Error('지도 요소를 찾지 못했습니다');
   let first = null;
   if (typeof el.__capture === 'function') {
     try {
-      return await el.__capture({ pixelRatio });
+      return await el.__capture({ pixelRatio, ...(mime ? { mime, quality } : {}) });
     } catch (e) {
       first = e;   // 합성이 안 되면 예전 방식이라도 시도해 본다
     }
