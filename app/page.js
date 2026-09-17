@@ -2,7 +2,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import './globals.css';
 import { SHEETS, buildSheet } from './sheets';
-import { T } from './theme';
+import { T, mono } from './theme';
 import Steps from './Steps';
 import SheetTabs from './SheetTabs';
 import { expectedRateOf } from '../src/lib/compare';
@@ -31,6 +31,14 @@ const S = {
 
   panel: { background: T.panel, border: `1px solid ${T.line}`, borderRadius: T.radius, padding: 16, boxShadow: T.shadow, marginBottom: 16 },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(155px,1fr))', gap: 11, alignItems: 'end' },
+  /* 접힌 입력 패널 — "무엇을 심사 중인가" 한 줄 */
+  summary: { display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' },
+  summaryMain: { fontSize: 14, fontWeight: 700, color: T.ink, letterSpacing: '-.01em' },
+  summaryMeta: { fontSize: 12, color: T.muted, ...mono },
+  summaryBtn: {
+    marginLeft: 'auto', padding: '5px 12px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+    border: `1px solid ${T.line}`, borderRadius: 5, background: '#fff', color: T.ink2,
+  },
   field: { display: 'flex', flexDirection: 'column', gap: 5 },
   label: { fontSize: 11, color: T.muted, fontWeight: 700, letterSpacing: '.02em' },
   input: { padding: '8px 10px', border: `1px solid ${T.line}`, borderRadius: 6, fontSize: 13, background: '#fff', color: T.ink, width: '100%' },
@@ -185,6 +193,8 @@ export default function Home() {
   const [tab, setTab] = useState('교통환경');   // 자료수집 첫 시트에서 시작한다
   /* 지도는 탭을 화면 밖으로 밀어낸다 — 경계를 쓰는 시트에서만 펴 둔다 */
   const [mapOpenManual, setMapOpenManual] = useState(null);
+  /* 입력 패널 접힘 — null 이면 단계에 따라 자동, 누르면 그 뜻을 따른다 */
+  const [panelOpenManual, setPanelOpenManual] = useState(null);
   const [busy, setBusy] = useState(null);
   const [msg, setMsg] = useState(null);
   const [savedKey, setSavedKey] = useState(0);
@@ -272,7 +282,8 @@ export default function Home() {
         kind: j.geo?.via === 'keyword' ? 'warn' : 'ok',
         text: j.geo?.via === 'keyword'
           ? `주소검색으로는 못 찾아 장소검색으로 잡았습니다 — 매칭이 맞는지 먼저 확인하세요.${filled ? ` (시군구를 ${hit.sgg} 로 맞췄습니다)` : ''}`
-          : `주소 매칭 완료${n > 1 ? ` (후보 ${n}건 — 다르면 아래에서 고르세요)` : ''}.`
+          /* 후보 드롭다운은 이 메시지보다 **위**에 있다 — "아래에서" 라고 적어 눈이 헛돌았다 */
+          : `주소 매칭 완료${n > 1 ? ` (후보 ${n}건 — 다르면 위 [사업지 매칭] 에서 고르세요)` : ''}.`
             + (filled ? ` 시군구를 ${hit.sgg} 로 맞췄습니다.` : ''),
       });
     } catch (e) { setMsg({ kind: 'warn', text: e.message }); }
@@ -319,10 +330,16 @@ export default function Home() {
         : j));
       setCoord(j.coord);
       setTab(sheet ?? '교통환경');
-      const n = Object.values(j.facilities ?? {}).filter(v => v.nearest).length;
+      /*
+        "완료 — 0종 확인" 은 무엇이 완료인지 헷갈린다. 반경 안에 없는 것도 정상 결과이므로
+        **조회한 종수와 그 중 몇 종이 반경 안에 있었는지**를 나눠 적는다.
+      */
+      const got = Object.values(j.facilities ?? {});
+      const hit = got.filter(v => v.nearest).length;
       setMsg({
         kind: 'ok',
-        text: `${sheet ?? '반경시설'} 수집 완료 — ${n}종 확인 · ${j.basis === 'polygon' ? '사업지 경계 기준' : '대표지번 중심점 기준'}`,
+        text: `${sheet ?? '반경시설'} 수집 완료 — ${got.length}종 조회 · 반경 내 ${hit}종`
+          + ` · ${j.basis === 'polygon' ? '사업지 경계 기준' : '대표지번 중심점 기준'}`,
       });
     } catch (e) { setMsg({ kind: 'err', text: e.message }); }
     finally { setBusy(null); }
@@ -393,6 +410,7 @@ export default function Home() {
   const poiDone = (sheet) =>
     Object.values(facilities?.facilities ?? {}).some(v => v.sheet === sheet);
   const allPoi = POI_SHEETS.every(poiDone);
+  const poiDone3 = POI_SHEETS.filter(poiDone).length;
   /*
     비교사업장도 **자료수집 단계**다. 이걸 빼고 STEP 2 를 완료로 표시했더니
     분양가경쟁력이 빈 채로 다음 단계가 열렸고, 단계 줄에 그 탭으로 가는 길도 없었다.
@@ -430,13 +448,27 @@ export default function Home() {
    * 다 그린 지도, 안 쓸 지도가 500px 을 차지할 이유가 없다.
    * 손잡이에 현재 기준이 남아 언제든 다시 편다.
    */
+  /*
+    **기준을 고르기 전에는 펴지 않는다.** 주소 확정 직후부터 지도가 350px 을 먹는데,
+    그 시점에 할 일은 [통계 수집] 이라 눈이 버튼 → 지도 → 다시 버튼으로 왕복했다.
+    경계를 그리겠다고(=`basisMode==='polygon'`) 정했을 때만 편다.
+  */
   const mapWanted = Boolean(SHEETS.find(x => x.id === tab)?.map)
     && !(polygon?.length >= 3)
-    /* [대표지번 중심 기준] 을 골랐으면 경계를 그릴 뜻이 없다 — 지도를 펴 둘 이유도 없다 */
-    && basisMode !== 'point';
+    && basisMode === 'polygon';
   /* [사업지 경계 기준] 을 고르면 접혀 있어도 펴야 한다 — 안 그리면 그릴 곳이 안 보인다 */
   const mapOpen = drawNow ? true : (mapOpenManual ?? mapWanted);
   const setMapOpen = (fn) => setMapOpenManual(typeof fn === 'function' ? fn(mapOpen) : fn);
+
+  /*
+    **끝난 단계가 화면을 계속 먹고 있었다.**
+    심사평점표 탭인데도 화면 900px 중 830px 이 입력폼·지도·보관목록·통계카드였고,
+    정작 값을 넣을 표는 스크롤 밖에 있었다(실측). 입력칸과 결과가 한 화면에 없으면
+    눈도 마우스도 왕복한다.
+    → **자료수집 단계 탭에서만** 그 도구들을 펴 둔다. 뒤 단계로 가면 한 줄 요약만 남긴다.
+  */
+  const gatherTab = (SHEETS.find(s => s.id === tab)?.stage ?? '자료수집') === '자료수집';
+  const panelOpen = panelOpenManual ?? (!fixed || gatherTab);
 
   const status = useMemo(() => {
     const m = {};
@@ -459,6 +491,28 @@ export default function Home() {
       <Steps current={current} done={done} />
 
       <div style={S.panel}>
+        {/*
+          **자료수집이 끝나면 접는다.** 입력폼·매칭 드롭다운은 그 단계의 도구인데
+          뒤 단계 탭에서도 계속 화면 위쪽 400px 을 먹어, 값을 넣을 표가 스크롤 밖으로 밀렸다.
+          접힌 자리에는 "무엇을 심사 중인가" 한 줄만 남긴다 — 그건 어느 단계에서나 필요하다.
+        */}
+        {!panelOpen && (
+          <div style={S.summary}>
+            <span style={S.summaryMain}>{addr || region}</span>
+            <span style={S.summaryMeta}>
+              {form.ym}
+              {form.company ? ` · ${form.company}` : ''}
+              {rankMeta?.rank ? ` ${rankMeta.rank}위` : ''}
+              {data ? ` · 통계 ${data.okCount}/${data.total}` : ''}
+              {facilities ? ` · 시설 ${POI_SHEETS.filter(poiDone).length}/${POI_SHEETS.length}` : ''}
+              {compare?.data ? ' · 비교사업장' : ''}
+            </span>
+            <button style={S.summaryBtn} onClick={() => setPanelOpenManual(true)}>사업지 바꾸기</button>
+          </div>
+        )}
+
+        {panelOpen && (<>
+
         <div style={S.grid}>
           <div style={{ gridColumn: 'span 2' }}>
             <RegionPicker
@@ -508,6 +562,18 @@ export default function Home() {
             onMeta={setRankMeta}
           />
 
+          {/*
+            **[주소 확정] 이 폼 왼쪽 아래에 있었다.** 마지막으로 만지는 칸은 오른쪽 끝의 시공사라
+            확정하려면 마우스가 990px 을 되돌아갔다(실측). 입력이 끝나는 자리에 버튼을 둔다.
+          */}
+          {!fixed && (
+            <div style={S.field}>
+              <span style={S.label} aria-hidden>&nbsp;</span>
+              <button style={S.btn({ busy: busy === 'geo', primary: true })} onClick={locate} disabled={!!busy}>
+                {busy === 'geo' ? '주소 확인 중…' : '주소 확정'}
+              </button>
+            </div>
+          )}
         </div>
 
         {/*
@@ -560,6 +626,8 @@ export default function Home() {
           </div>
         )}
 
+        </>)}
+
         {/*
           순서: 사업지 경계 → 통계 수집 → 반경시설 수집.
           주소를 넣고 사업지를 확정한 뒤 수집하는 흐름이 실무 순서와 맞다.
@@ -571,11 +639,12 @@ export default function Home() {
           수집이 돌아가면 결과를 믿을 수 없다.
         */}
         <div style={S.actions}>
-          {!fixed ? (
-            <button style={S.btn({ busy: busy === 'geo', primary: true })} onClick={locate} disabled={!!busy}>
-              {busy === 'geo' ? '주소 확인 중…' : '주소 확정'}
-            </button>
-          ) : (
+          {/*
+            단계 버튼은 **자료수집 단계의 것**이다. 뒤 단계 탭에서는 전부 초록(완료)인 채로
+            자리만 먹고, 정작 그 자리에서 쓰는 [이 조회 보관]·[엑셀 다운로드] 가
+            줄바꿈돼 떨어져 있었다 — 접혔을 때는 그 둘만 남긴다.
+          */}
+          {panelOpen && (!fixed ? null : (
             <>
               <button style={S.btn({ done: true })} onClick={resetSite} disabled={!!busy}>
                 <span style={S.check}>✓</span> 주소 확정됨 — 초기화
@@ -603,16 +672,31 @@ export default function Home() {
                 </span>
               )}
 
-              {POI_SHEETS.map(sh => (
+              {/*
+                **파란 버튼이 셋이면 다음에 뭘 누를지 셋이 동시에 주장한다.**
+                어차피 셋 다 눌러야 하고(기준까지 물으면 4클릭), 한 번에 받는 길은
+                이미 있었다(`runPoi(null)`). 주 버튼은 하나로 묶고, 개별 재수집은
+                다 끝난 뒤에만 보조로 남긴다 — 하나만 다시 받고 싶을 때가 있다.
+              */}
+              {!allPoi ? (
                 <button
-                  key={sh}
-                  style={S.btn({ busy: busy === sh, primary: !!data && !poiDone(sh), done: poiDone(sh) })}
-                  onClick={() => collectPoi(sh)} disabled={!!busy}
+                  style={S.btn({ busy: busy === 'poi', primary: !!data, done: false })}
+                  onClick={() => collectPoi(null)} disabled={!!busy}
                 >
-                  {poiDone(sh) && <span style={S.check}>✓</span>}
-                  {busy === sh ? '수집 중…' : `${sh} 수집`}
+                  {busy === 'poi' ? '수집 중…' : `반경시설 수집${poiDone3 ? ` (${poiDone3}/3)` : ' (3종)'}`}
                 </button>
-              ))}
+              ) : (
+                POI_SHEETS.map(sh => (
+                  <button
+                    key={sh}
+                    style={S.btn({ busy: busy === sh, done: true })}
+                    onClick={() => collectPoi(sh)} disabled={!!busy}
+                    title={`${sh} 만 다시 수집합니다`}
+                  >
+                    {busy === sh ? '수집 중…' : <><span style={S.check}>✓</span>{sh}</>}
+                  </button>
+                ))
+              )}
 
               {/* 반경·종류를 고른 뒤 수집해야 해서 버튼은 탭 안에 있다 — 여기서는 그 탭으로 보낸다 */}
               <button
@@ -623,11 +707,11 @@ export default function Home() {
                 {compDone ? '비교사업장 · 분양가' : '비교사업장 · 분양가 →'}
               </button>
             </>
-          )}
+          ))}
 
           {data && fixed && (
             <>
-              <button style={{ ...S.btn({}), ...S.spacer }} onClick={saveRecord} disabled={!!busy}>
+              <button style={panelOpen ? { ...S.btn({}), ...S.spacer } : S.btn({})} onClick={saveRecord} disabled={!!busy}>
                 이 조회 보관
               </button>
               <button style={S.btn({ busy: busy === 'xlsx' })} onClick={exportXlsx} disabled={!!busy}>
@@ -684,7 +768,7 @@ export default function Home() {
         지도는 **자료수집 단계의 도구**다. 수기입력·산정·평점 탭에서는 쓸 일이 없는데
         760px 을 차지해 탭이 화면 밖으로 밀린다 — 그 단계에서는 접는다.
       */}
-      {coord && (
+      {coord && gatherTab && (
         <button style={S.mapToggle} onClick={() => setMapOpen(o => !o)}>
           <span style={{ fontWeight: 700 }}>사업지 경계 지도</span>
           <span style={S.mapToggleNote}>
@@ -694,7 +778,7 @@ export default function Home() {
           <span style={S.mapToggleArrow}>{mapOpen ? '접기 ▲' : '펴기 ▼'}</span>
         </button>
       )}
-      {coord && (
+      {coord && gatherTab && (
         <div style={S.drawerWrap(mapOpen)}>
         <PolygonDrawer
           center={{ lat: Number(coord.y), lng: Number(coord.x) }}
@@ -708,9 +792,13 @@ export default function Home() {
         </div>
       )}
 
-      <SavedList onOpen={openRecord} refreshKey={savedKey} />
+      {/*
+        보관목록·통계카드도 자료수집 단계의 것이다.
+        심사평점표 탭에서 이 둘이 400px 을 먹어 정작 값 넣을 표가 스크롤 밖에 있었다.
+      */}
+      {gatherTab && <SavedList onOpen={openRecord} refreshKey={savedKey} />}
 
-      {data && <Overview data={data} onJump={setTab} />}
+      {data && gatherTab && <Overview data={data} onJump={setTab} />}
 
       <div style={{ marginTop: 20 }}>
         <SheetTabs sheets={SHEETS} active={tab} onSelect={(id) => { setTab(id); setMapOpenManual(null); }} status={status} />
@@ -742,7 +830,7 @@ export default function Home() {
                 <ReviewView
                   region={region} addr={addr} data={data} facilities={facilities}
                   compare={compare} rate={rate} excl={mSum.excl} sheetInput={sheetInput}
-                  value={review} onChange={setReview}
+                  value={review} onChange={setReview} onJump={setTab}
                 />
               )
               : s.kind === 'rate'
@@ -750,7 +838,7 @@ export default function Home() {
                 <RateView
                   region={region} addr={addr} facilities={facilities}
                   compare={compare} excl={mSum.excl} manualSum={mSum} sheetInput={sheetInput}
-                  value={rate} onChange={setRate}
+                  value={rate} onChange={setRate} onJump={setTab}
                 />
               )
               : s.kind === 'comp'

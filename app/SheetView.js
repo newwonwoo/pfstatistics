@@ -232,8 +232,13 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                       : <><NameCell label={f.label} /><DistCell label={f.label} /></>}
                     {/* 구간표가 들어온 항목만 점수를 낸다 — 없으면 빗금 그대로 */}
                     {(() => {
+                      /*
+                        수집 전에는 **어느 항목도 점수를 내지 않는다.**
+                        6차선만 `scoreFacility` 가 facilities 와 무관하게 기본 1점을 내서,
+                        주소도 안 넣은 첫 화면에 지하철역은 "수집 대기" 인데 6차선만 1점이 떠 있었다.
+                      */
                       const sc = f.manual
-                        ? scoreFacility(f.label, manual?.[f.label])
+                        ? (facilities ? scoreFacility(f.label, manual?.[f.label]) : null)
                         : scorePoi(f.label, facilities);
                       if (!sc) return (<><td style={S.blank} /><td style={S.blank} /></>);
                       // 구간을 못 받은 경우 — 점수를 매기지 않고 사유를 적는다

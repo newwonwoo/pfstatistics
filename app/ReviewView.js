@@ -47,6 +47,13 @@ const S = {
     color: tone === 'ok' ? T.ok : tone === 'warn' ? T.warn : T.muted,
   }),
   pend: { color: T.muted, fontStyle: 'italic', fontWeight: 400, whiteSpace: 'nowrap' },
+  /* 합계 자리의 진행도 — 점수로 안 읽히게 약하게 */
+  progress: { color: T.muted, fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap' },
+  partial: { color: T.muted, fontStyle: 'italic' },
+  go: {
+    marginLeft: 8, padding: '2px 9px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+    border: `1px solid ${T.accent}`, borderRadius: 4, background: T.accentSoft, color: T.accent,
+  },
   take: {
     marginLeft: 7, padding: '2px 8px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
     border: `1px solid ${T.accent}`, borderRadius: 4, background: T.accentSoft, color: T.accent,
@@ -56,7 +63,7 @@ const S = {
   dscrBar: { display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap', margin: '14px 0 4px', fontSize: 12, color: T.ink2 },
 };
 
-export default function ReviewView({ region, addr, data, facilities, compare, rate, excl = null, sheetInput = null, value, onChange }) {
+export default function ReviewView({ region, addr, data, facilities, compare, rate, excl = null, sheetInput = null, value, onChange, onJump }) {
   const v = value ?? {};
   const set = (patch) => onChange?.({ ...v, ...patch });
   const put = (id, x) => set({ [id]: x });
@@ -66,6 +73,7 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
   const pct = res && !res.pending ? res.rate : null;
 
   const r = useMemo(() => reviewScore({ manual: v, rate: pct ?? NaN }), [v, pct]);
+  const items = r.groups.flatMap(g => g.items).length;
 
   /*
     이 앱이 이미 수집한 값은 근거 칸에 띄우고 **한 번에 넣을 수 있게** 한다.
@@ -120,22 +128,29 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
           </thead>
           <tbody>
             {r.groups.map(g => (
-              <FragmentRows key={g.label} g={g} v={v} put={put} pct={pct} presale={r.presale} known={known} />
+              <FragmentRows key={g.label} g={g} v={v} put={put} pct={pct} presale={r.presale} known={known} onJump={onJump} />
             ))}
             <tr>
               <td style={S.gh} colSpan={2}>합 계</td>
               <td style={S.sum}>{r.max}</td>
               <td style={S.td} />
-              <td style={S.sum}>
-                {/* 하나도 안 넣었는데 0 이 뜨면 "0점 평가" 로 읽힌다 */}
-                {r.missing.length === r.groups.flatMap(g => g.items).length
-                  ? <span style={S.pend}>—</span>
-                  : r.missing.length ? <span style={S.pend}>{r.total}</span> : r.total}
+              {/*
+                **배점 100 옆에 부분합 숫자가 있으면 "16/100" 으로 읽힌다.**
+                실제로는 7개 중 1개만 평가한 값인데 낮은 평점처럼 보인다 — 실측으로 확인했다.
+                미완성일 때는 합계 자리에 **진행도**를 놓고, 부분합은 근거 칸에서 괄호로 말한다.
+                (숫자를 없애는 게 아니라 총점으로 **오독되지 않게** 자리를 바꾸는 것이다)
+              */}
+              <td style={r.missing.length ? { ...S.sum, background: '#fff' } : S.sum}>
+                {r.missing.length
+                  ? <span style={S.progress}>{items - r.missing.length} / {items}</span>
+                  : r.total}
               </td>
               <td style={S.tdWhy}>
                 {r.missing.length
-                  ? <>수동입력 <b style={{ color: T.warn }}>{r.missing.length}개</b> 남음
-                      {r.missing.length <= 3 && <> — {r.missing.join(' · ')}</>}</>
+                  ? <>값을 넣은 항목 <b>{items - r.missing.length}개</b> ·
+                      남은 항목 <b style={{ color: T.warn }}>{r.missing.length}개</b>
+                      {r.missing.length <= 3 && <> — {r.missing.join(' · ')}</>}<br />
+                      <span>전 항목을 넣어야 합계가 납니다 <span style={S.partial}>(지금까지 넣은 것만 더하면 {r.total}점)</span></span></>
                   : '전 항목 입력됨'}
               </td>
             </tr>
@@ -201,7 +216,7 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
 }
 
 /** 그룹 한 덩어리 — 첫 줄에 구분을 병합해 캡쳐의 모양을 그대로 낸다 */
-function FragmentRows({ g, v, put, pct, presale, known = {} }) {
+function FragmentRows({ g, v, put, pct, presale, known = {}, onJump }) {
   return g.items.map((it, i) => (
     <tr key={it.id}>
       {i === 0 && (
@@ -237,7 +252,13 @@ function FragmentRows({ g, v, put, pct, presale, known = {} }) {
       </td>
       <td style={S.tdWhy}>
         {it.auto && pct != null && <><b style={{ color: T.ink2 }}>초기예상분양률 {pct}% · {presale?.label}</b><br /></>}
-        {it.auto && pct == null && <><span style={{ color: T.warn }}>초기예상분양률 탭에서 산정되면 자동으로 찹니다</span><br /></>}
+        {it.auto && pct == null && (
+          <>
+            <span style={{ color: T.warn }}>초기예상분양률이 산정되면 자동으로 찹니다</span>
+            <button style={S.go} onClick={() => onJump?.('초기예상분양률')}>초기예상분양률 탭으로 →</button>
+            <br />
+          </>
+        )}
         {it.forced && it.from != null && <><b style={{ color: T.warn }}>{it.from}점 → 0점</b><br /></>}
         {it.formula && <>{it.formula}<br /></>}
         {!it.auto && it.score != null && typeof it.band === 'string' && it.band

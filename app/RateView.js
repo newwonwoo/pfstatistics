@@ -47,6 +47,10 @@ const S = {
   rateNum: { fontSize: 42, fontWeight: 800, letterSpacing: '-.03em', ...mono },
   rateSub: { fontSize: 12.5, color: T.ink2, lineHeight: 1.7 },
   pend: { color: T.muted, fontStyle: 'italic', fontSize: 12.5 },
+  go: {
+    marginLeft: 8, padding: '2px 9px', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+    border: `1px solid ${T.accent}`, borderRadius: 4, background: T.accentSoft, color: T.accent,
+  },
   cap: { marginTop: 8, padding: '9px 13px', background: T.warnSoft, border: '1px solid #f0dcb4', borderRadius: 6, fontSize: 12, color: T.warn, lineHeight: 1.6 },
 
   ref: { borderCollapse: 'collapse', width: '100%', fontSize: 12.5 },
@@ -65,7 +69,7 @@ const SERIES = [
   { id: '오피스텔', label: '오피스텔 · 도시형생활주택' },
 ];
 
-export default function RateView({ region, addr, facilities, compare, excl: exclProp = null, manualSum = null, sheetInput = null, value, onChange }) {
+export default function RateView({ region, addr, facilities, compare, excl: exclProp = null, manualSum = null, sheetInput = null, value, onChange, onJump }) {
   const v = value ?? {};
   const series = v.series ?? '주택';
   /*
@@ -125,10 +129,17 @@ export default function RateView({ region, addr, facilities, compare, excl: excl
               <td style={S.key}>① 분양가격지수 제외 항목 점수 (A)</td>
               <td style={{ ...S.num, color: hasExcl ? T.ink : T.muted }}>{hasExcl ? excl : '—'}</td>
               <td style={S.unit}>점</td>
+              {/*
+                "[수기입력] 탭에서 하세요" 를 글로만 적어두면 위로 스크롤해 탭을 찾아 눌러야 한다.
+                막힌 자리에서 **그 자리로 바로 보내는** 버튼을 둔다.
+              */}
               <td style={S.memo}>
                 {hasExcl
                   ? (manualSum?.source === 'override' ? '[수기입력] 탭에서 직접 입력한 값' : '[수기입력] 탭에서 자동 합산')
-                  : `[수기입력] 탭에서 A 를 완성하세요${manualSum?.missing?.length ? ` — ${manualSum.missing.length}개 남음` : ''}`}
+                  : (<>
+                      A 를 완성해야 합니다{manualSum?.missing?.length ? ` — ${manualSum.missing.length}개 남음` : ''}
+                      <button style={S.go} onClick={() => onJump?.('수기입력')}>수기입력 탭으로 →</button>
+                    </>)}
               </td>
             </tr>
             <tr>
@@ -138,7 +149,10 @@ export default function RateView({ region, addr, facilities, compare, excl: excl
               <td style={S.memo}>
                 {compScore != null
                   ? `분양가격지수 ${cmp.index.toFixed(2)} · ${cmp.sc.label}`
-                  : (cmp.sc?.text ?? '비교사업장을 고르고 본건 예정분양가를 입력하세요')}
+                  : (<>
+                      {cmp.sc?.text ?? '비교사업장을 고르고 본건 예정분양가를 입력하세요'}
+                      <button style={S.go} onClick={() => onJump?.('비교사업장')}>비교사업장 탭으로 →</button>
+                    </>)}
               </td>
             </tr>
             <tr>
