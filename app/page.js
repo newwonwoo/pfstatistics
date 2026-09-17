@@ -144,7 +144,9 @@ export default function Home() {
    * 아무데나 잡힐 수 있는데 사용자는 그걸 알 방법이 없다.
    */
   /*
-    **빈 칸으로 시작한다.** 전에는 골든 표본(경기도 광주시 탄벌동 203-4 · 제일건설(주))이
+    **빈 칸으로 시작한다.** placeholder 도 마찬가지다 — 지번 칸에 "탄벌동 203-4"(골든 표본 주소)를
+    적어 두었던 것을 "지번 또는 도로명" 으로 바꿨다. 초기값을 비운 것과 같은 함정이다.
+    전에는 골든 표본(경기도 광주시 탄벌동 203-4 · 제일건설(주))이
     초기값으로 박혀 있었다. 개발 중엔 편했지만 실무자가 앱을 열면 **남의 사업장이
     이미 입력된 것처럼 보인다** — 그대로 [주소 확정] 을 눌러도 아무 경고가 없다.
     placeholder 에 그럴듯한 값을 넣지 말라던 것과 같은 함정이다(CLAUDE.md).
@@ -550,7 +552,7 @@ export default function Home() {
             <label style={S.label}>
               지번 · 상세 <span style={{ color: T.muted, fontWeight: 400 }}>(비워도 시군구 중심으로 잡힙니다)</span>
             </label>
-            <input style={S.input} value={form.detail} onChange={set('detail')} placeholder="탄벌동 203-4"
+            <input style={S.input} value={form.detail} onChange={set('detail')} placeholder="지번 또는 도로명"
               disabled={fixed} />
           </div>
           <div style={S.field}>
