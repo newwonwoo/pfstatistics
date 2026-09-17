@@ -19,7 +19,12 @@ const S = {
   name: { fontSize: 12.5, fontWeight: 700, color: T.ink2 },
   btn: { padding: '5px 11px', fontSize: 11.5, fontWeight: 700, border: `1px solid ${T.line}`, background: '#fff', borderRadius: 5, cursor: 'pointer', color: T.ink2 },
   btnOn: { borderColor: T.accent, background: T.accentSoft, color: T.accent },
-  map: { width: '100%', height: 420 },
+  /*
+   * **지도를 크게 쓴다**(사용자 요청 2026-09-17).
+   * 420px 에서는 축소돼 시설명을 못 읽었다 — 증빙으로 붙였을 때 확인이 안 된다.
+   * 크기를 키우면 같은 축척에서 타일이 더 들어와 실제 정보량 자체가 는다.
+   */
+  map: { width: '100%', height: 640 },
   fallback: { padding: '36px 20px', textAlign: 'center', color: T.warn, fontSize: 12.5, background: T.warnSoft, lineHeight: 1.7 },
   cap: { padding: '9px 14px', fontSize: 11.5, color: T.muted, borderTop: `1px solid ${T.line}` },
 };
@@ -43,7 +48,12 @@ const MAP_TYPES = [
  */
 const MAX_LEVEL = { 300: 3, 500: 4, 1000: 5, 1500: 6 };
 /** 이름표를 다는 최대 개수 — 넘으면 서로 겹쳐 못 읽는다 */
-const LABEL_MAX = 8;
+/*
+ * **이름은 전부 단다**(사용자 요청). 겹침은 개수로 막던 것을
+ * 자리잡기(placeLabel)가 자리를 못 찾으면 그 하나만 포기하는 방식으로 바꿨다 —
+ * 지도가 커져 자리가 늘었으므로 대부분 다 들어온다.
+ */
+const LABEL_MAX = 999;
 
 const levelCapFor = (r) => MAX_LEVEL[r] ?? (r <= 300 ? 3 : r <= 500 ? 4 : r <= 1000 ? 5 : 6);
 

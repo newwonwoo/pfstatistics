@@ -32,12 +32,25 @@ const S = {
   panel: { background: T.panel, border: `1px solid ${T.line}`, borderRadius: T.radius, padding: 16, boxShadow: T.shadow, marginBottom: 16 },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(155px,1fr))', gap: 11, alignItems: 'end' },
   /* 접힌 입력 패널 — "무엇을 심사 중인가" 한 줄 */
-  summary: { display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 12 },
-  summaryMain: { fontSize: 14, fontWeight: 700, color: T.ink, letterSpacing: '-.01em' },
+  /*
+   * **한 줄이 너무 소심했다**(사용자 지적 2026-09-17).
+   * 회색 글씨 + 흰 버튼이라 [엑셀 다운로드]·[사업지 바꾸기] 가 배경에 묻혔다.
+   * 이 줄은 어느 단계에서나 늘 떠 있는 유일한 조작 자리다 — 눈에 들어와야 한다.
+   */
+  summary: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12,
+             padding: '10px 14px', background: '#fff', border: `1px solid ${T.line}`,
+             borderLeft: `4px solid ${T.accent}`, borderRadius: 7,
+             boxShadow: '0 1px 3px rgba(16,24,40,.06)' },
+  summaryMain: { fontSize: 16, fontWeight: 800, color: T.ink, letterSpacing: '-.01em' },
   summaryMeta: { fontSize: 12, color: T.muted, ...mono },
   summaryBtn: {
-    marginLeft: 'auto', padding: '5px 12px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
-    border: `1px solid ${T.line}`, borderRadius: 5, background: '#fff', color: T.ink2,
+    marginLeft: 'auto', padding: '8px 16px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+    border: `1px solid ${T.line}`, borderRadius: 6, background: '#fff', color: T.ink,
+  },
+  /* 내보내기는 이 줄의 주인공이다 — 다른 버튼과 같은 회색이면 찾지 못한다 */
+  summaryBtnMain: {
+    marginLeft: 0, padding: '8px 16px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+    border: `1px solid ${T.accent}`, borderRadius: 6, background: T.accent, color: '#fff',
   },
   field: { display: 'flex', flexDirection: 'column', gap: 5 },
   label: { fontSize: 11, color: T.muted, fontWeight: 700, letterSpacing: '.02em' },
@@ -394,6 +407,23 @@ export default function Home() {
 
   async function exportXlsx() {
     if (!data) return;
+    /*
+     * **비어 있는 탭이 있으면 묻는다**(사용자 요청 2026-09-17).
+     * 엑셀은 화면 상태를 그대로 읽으므로, 안 채운 시트는 빗금인 채로 심사 파일에 들어간다.
+     * 조용히 내보내면 받는 사람이 "왜 비었나" 를 묻게 된다 — 내보내는 사람이 먼저 알아야 한다.
+     */
+    const missing = [
+      ...POI_SHEETS.filter(sh => !poiDone(sh)).map(sh => `${sh} (반경시설 미수집)`),
+      ...(compare?.data ? [] : ['비교사업장 (미수집)']),
+      ...(mSum?.excl == null ? [`수기입력 (A 미완성${mSum?.missing?.length ? ` — ${mSum.missing.length}개 남음` : ''})`] : []),
+      ...(() => {
+        const r = reviewScore({ manual: review ?? {}, rate });
+        return r.missing?.length ? [`심사평점표 (${r.missing.length}개 미입력)`] : [];
+      })(),
+    ];
+    if (missing.length && !window.confirm(
+      `아래 탭이 아직 비어 있습니다 — 그대로 내보낼까요?\n\n· ${missing.join('\n· ')}\n\n`
+      + '엑셀은 화면 상태를 그대로 담습니다. 비어 있는 칸은 빗금으로 들어갑니다.')) return;
     setBusy('xlsx'); setMsg(null);
     try {
       const { exportWorkbook } = await import('./exportExcel');
@@ -530,8 +560,8 @@ export default function Home() {
                 <button style={{ ...S.summaryBtn, marginLeft: 'auto' }} onClick={saveRecord} disabled={!!busy}>
                   이 조회 보관
                 </button>
-                <button style={{ ...S.summaryBtn, marginLeft: 0 }} onClick={exportXlsx} disabled={!!busy}>
-                  {busy === 'xlsx' ? '생성 중…' : '엑셀 다운로드'}
+                <button style={S.summaryBtnMain} onClick={exportXlsx} disabled={!!busy}>
+                  {busy === 'xlsx' ? '생성 중…' : '⬇ 엑셀 다운로드'}
                 </button>
               </>
             )}

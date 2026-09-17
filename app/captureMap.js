@@ -163,7 +163,7 @@ function placeLabel(ctx, placed, x, y, text, bounds) {
 const rLabel = (r) => (r >= 1000 ? `${r / 1000}km` : `${r}m`);
 
 /** 이름표를 다는 최대 개수 — RadiusMap 과 같게 유지할 것 */
-const LABEL_MAX = 8;
+const LABEL_MAX = 999;   /* 이름은 전부 단다 — 자리를 못 찾은 것만 포기한다 */
 
 /**
  * 타일 + 오버레이를 캔버스에 합성한다.
@@ -171,7 +171,13 @@ const LABEL_MAX = 8;
  */
 export async function composeMap(el, spec = {}) {
   const { map, kakao, center, radius, markers = [], polygon = null, radiusRing = null, title = '' } = spec;
-  const ratio = spec.pixelRatio ?? 2;
+  /*
+   * **확대해도 깨지지 않게 3배로 찍는다**(사용자 요청 2026-09-17).
+   * 타일 자체는 1배라 타일 그림은 확대의 한계가 있지만,
+   * 핀·라벨·반경원·경계선은 캔버스에 직접 그리므로 배율만큼 선명해진다 —
+   * 증빙에서 실제로 읽어야 하는 것이 그 글자들이다.
+   */
+  const ratio = spec.pixelRatio ?? 3;
   const w = el.offsetWidth;
   const h = el.offsetHeight;
   if (!w || !h) throw new Error('지도 크기가 0입니다 (화면에 보이지 않는 상태)');

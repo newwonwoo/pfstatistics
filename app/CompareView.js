@@ -804,7 +804,8 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
             </div>
             <div style={S.scroll}>
               <table style={S.table}>
-                <thead><tr>{['#', '단지명', '주소', '거리', '세대수', '시공사', '사용승인일'].map(c =>
+                <thead><tr>{['#', '단지명', '주소', '거리', '세대수', '시공사', '사용승인일',
+                             '실거래 단가(원/㎡·전용)', '거래'].map(c =>
                   <th key={c} style={S.th}>{c}</th>)}</tr></thead>
                 <tbody>
                   {data.knownApts.items.map((a, i) => (
@@ -819,6 +820,12 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
                       <td style={S.tdNo}>{a.kapt?.households?.toLocaleString('ko-KR') ?? '-'}</td>
                       <td style={S.tdL}>{a.kapt?.builder ?? '-'}</td>
                       <td style={S.tdNo}>{a.kapt?.usedate ?? '-'}</td>
+                      <td style={S.tdNo}>{a.trade ? won(a.trade.unit) : '-'}</td>
+                      <td style={S.tdNo}>
+                        {a.trade
+                          ? <span style={{ fontSize: 11, color: T.muted }}>{a.trade.deals}건 · {a.trade.from}~{a.trade.to}</span>
+                          : '-'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -827,6 +834,9 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
             <p style={S.note}>
               * 출처 : <b>{data.knownApts.source?.name}</b>
               {data.knownApts.source?.detail ? ` · ${data.knownApts.source.detail}` : ''}<br />
+              <b>실거래 단가는 분양가가 아닙니다</b> — 이미 팔린 값이고 <b>전용면적</b> 기준이라
+              심사기준(공급면적) 단가보다 높게 나옵니다. 위 비교사업장 평균에 넣지 않습니다.
+              Σ거래금액 ÷ Σ전용면적(면적 가중)으로 냈습니다.<br />
               카카오 장소검색은 한 번에 45곳까지만 줍니다 — <b>가까운 곳부터</b> 받습니다
               {data.knownApts.scanned != null && ` (반경 안 아파트 분류 ${data.knownApts.scanned}곳 중)`}.
               세대수·시공사·사용승인일이 빈 줄은 K-apt 에서 이름이 맞지 않은 것입니다(관리비 의무단지만 있습니다).

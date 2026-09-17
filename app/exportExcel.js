@@ -11,6 +11,13 @@
  * 캡쳐는 화면에 이미 그려져 있으므로 브라우저에서 PNG 로 떠서 넣는다.
  */
 
+/*
+ * **증빙 이미지를 크게 넣는다**(사용자 요청 2026-09-17).
+ * 620px 로는 엑셀에서 시설명을 못 읽었다. 캡쳐 자체는 3배 해상도로 찍으므로
+ * 배치 크기를 키워도 흐려지지 않는다 — 엑셀에서 더 확대해 봐도 글자가 살아 있다.
+ */
+const IMG_W = 1240;
+
 const HEAD_FILL = 'FFDCE6F1';
 const MARK_FILL = 'FFFFFDF0';
 const BORDER = { style: 'thin', color: { argb: 'FF9AA5B1' } };
@@ -261,9 +268,9 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
       if (png) {
         cw.getCell(crow, 2).value = `[증빙] 반경 ${rkm} 분양단지 위치`;
         cw.getCell(crow, 2).font = { bold: true, size: 10 };
-        const h = Math.round(620 * (mapEl.offsetHeight / mapEl.offsetWidth));
+        const h = Math.round(IMG_W * (mapEl.offsetHeight / mapEl.offsetWidth));
         const imgId = wb.addImage({ base64: png.split(',')[1], extension: 'png' });
-        cw.addImage(imgId, { tl: { col: 1, row: crow }, ext: { width: 620, height: h } });
+        cw.addImage(imgId, { tl: { col: 1, row: crow }, ext: { width: IMG_W, height: h } });
       }
     }
   }
@@ -540,9 +547,9 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
     /** 캡쳐 이미지 한 장을 시트에 넣고 다음 행 번호를 돌려준다 */
     const putImage = (png, el, atRow) => {
       if (!png || !el) return atRow;
-      const h = Math.round(620 * (el.offsetHeight / el.offsetWidth));
+      const h = Math.round(IMG_W * (el.offsetHeight / el.offsetWidth));
       const imgId = wb.addImage({ base64: png.split(',')[1], extension: 'png' });
-      ws.addImage(imgId, { tl: { col: 1, row: atRow - 1 }, ext: { width: 620, height: h } });
+      ws.addImage(imgId, { tl: { col: 1, row: atRow - 1 }, ext: { width: IMG_W, height: h } });
       return atRow + Math.ceil(h / 19) + 2;
     };
 

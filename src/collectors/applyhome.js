@@ -4,6 +4,7 @@ import { distanceToPolygon, haversine } from '../lib/geo.js';
 import { sidoShort } from '../lib/sido.js';
 import { lookup as rankLookup } from './constructor.js';
 import { loadSggIndex, matchByName } from './kapt.js';
+import { tradeIndex, lookupTrade } from './rtms.js';
 
 /**
  * 청약홈(한국부동산원) 분양정보 — 비교사업장의 **분양가** 원천.
@@ -969,6 +970,20 @@ export async function collectKnownApts({ site, radius = 2000, polygon = null, sg
         if (b) v.kapt = b;
       });
     } catch { /* 보강 실패는 목록을 막지 않는다 */ }
+
+    /*
+     * **실거래가로 가격을 채운다**(사용자 요청 2026-09-17).
+     * 기축 단지는 분양가가 어느 원천에도 없다 — 유일하게 숫자가 있는 곳이 국토부 실거래가다.
+     * **분양가가 아니다.** 이미 팔린 값이고 **전용면적 기준**이라
+     * 심사기준(공급면적) 단가와 그대로 비교하면 안 된다. 평균에는 넣지 않는다.
+     */
+    try {
+      const trades = await tradeIndex(sggCode);
+      for (const v of uniq) {
+        const t = lookupTrade(trades, v.name, v.address);
+        if (t) v.trade = t;
+      }
+    } catch { /* 실거래가 실패도 목록을 막지 않는다 */ }
   }
 
   return {
@@ -979,8 +994,8 @@ export async function collectKnownApts({ site, radius = 2000, polygon = null, sg
     items: uniq.filter(v => v.distance <= radius),
     source: {
       name: '카카오맵 장소검색 (분류: 부동산 > 주거시설 > 아파트)',
-      detail: 'K-apt 공동주택 기본정보로 세대수·시공사·사용승인일 보강',
-      note: '분양가는 어느 원천에도 없습니다 — 비교사업장 평균에 넣을 수 없습니다',
+      detail: 'K-apt 공동주택 기본정보(세대수·시공사·사용승인일) · 국토교통부 아파트 매매 실거래가(최근 12개월) 보강',
+      note: '실거래가는 분양가가 아닙니다 — 이미 팔린 값이고 전용면적 기준이라 비교사업장 평균에 넣을 수 없습니다',
     },
   };
 }
