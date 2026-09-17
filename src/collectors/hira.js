@@ -98,6 +98,12 @@ export async function collectMedical({ point, polygon = null, radius = 1500 }) {
   return {
     sheet: '주거편의', radius,
     basis: ring ? 'polygon' : 'point',
+    /* 의료시설만 원천이 다르다 — 봉투가 그 사실을 들고 다녀야 화면·엑셀이 맞게 적는다 */
+    source: {
+      name: '건강보험심사평가원 병원정보서비스',
+      detail: '의료법 제3조 종별(clCdNm) 기준 · 병원급 이상만 채택',
+      filter: '병원급 = 상급종합 · 종합병원 · 병원 · 요양병원 · 정신병원 · 치과병원 · 한방병원',
+    },
     count: items.length,
     nearest: items[0] ?? null,
     items,

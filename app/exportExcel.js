@@ -563,10 +563,17 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
         label.font = { bold: true, size: 10 };
         row = putImage(png, el, row + 1);
         const hit = facilities?.facilities?.[f.label];
+        /*
+          **출처를 "카카오맵" 으로 박아두고 있었다.** 의료시설은 심평원이라 증빙이 틀린 출처를 달고
+          심사 파일에 들어갔다. 봉투가 들고 오는 `source` 를 그대로 쓴다.
+        */
         ws.getCell(row, 2).value = f.manual
           ? `* 도로명 = 카카오 좌표→주소 역산 · 차선 수 = 로드뷰 육안 판정 · 기준 반경 ${f.radius}m`
-          : `* 출처 : 카카오맵 · 반경 ${hit?.radius ?? ''}m · 반경 내 ${hit?.count ?? 0}건`
-            + (hit?.basis === 'polygon' ? ' · 사업지 경계 기준' : ' · 대표지번 기준');
+          : `* 출처 : ${hit?.source?.name ?? '카카오맵'}`
+            + (hit?.source?.detail ? ` (${hit.source.detail})` : '')
+            + ` · 반경 ${hit?.radius ?? ''}m · 반경 내 ${hit?.count ?? 0}건`
+            + (hit?.basis === 'polygon' ? ' · 사업지 경계 기준' : ' · 대표지번 기준')
+            + (hit?.excludedClinics ? ` · 병원급이 아닌 ${hit.excludedClinics}곳 제외${hit.excludedByGrade ? ` (${hit.excludedByGrade})` : ''}` : '');
         ws.getCell(row, 2).font = { size: 9 };
         row += 2;
       }

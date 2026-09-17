@@ -24,6 +24,7 @@ const S = {
   blockHead: { fontSize: 13, marginBottom: 8, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' },
   crit: { marginLeft: 'auto', fontSize: 11.5, color: T.ink2, background: '#f1f3f5', padding: '3px 9px', borderRadius: 4 },
   absent: { padding: '12px 14px', background: T.warnSoft, border: `1px solid #f0dcb4`, borderRadius: 6, fontSize: 12.5, color: T.warn, lineHeight: 1.6 },
+  srcLine: { marginTop: 7, fontSize: 11, color: T.muted, lineHeight: 1.65 },
   seg: { display: 'inline-flex', border: `1px solid ${T.lineStrong}`, borderRadius: 6, overflow: 'hidden', marginLeft: 'auto' },
   segBtn: (on, off) => ({
     padding: '5px 12px', fontSize: 11.5, fontWeight: 700, border: 0, cursor: off ? 'not-allowed' : 'pointer',
@@ -417,6 +418,18 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                           + (h.excludedByGrade ? ` (${h.excludedByGrade})` : '')
                         : ''}
                       {h.error ? ` · ${h.error}` : ''}
+                    </div>
+                  )}
+
+                  {/*
+                    **어느 원천에서 온 목록인지 적는다.** 의료시설만 심평원이고 나머지는 카카오인데
+                    화면이 그 구분을 말하지 않아 전부 카카오맵으로 보였다(사용자 지적).
+                  */}
+                  {h.source && (
+                    <div style={S.srcLine}>
+                      * 출처 : <b style={{ color: T.ink2 }}>{h.source.name}</b>
+                      {h.source.detail ? ` · ${h.source.detail}` : ''}
+                      {h.source.filter ? <><br />　{h.source.filter}</> : null}
                     </div>
                   )}
 

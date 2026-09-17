@@ -293,6 +293,19 @@ export async function collectFacilities({ x, y }, only = null, polygon = null) {
       sheet: spec.sheet,
       radius: spec.radius,
       basis: ring ? 'polygon' : 'point',   // 무엇을 기준으로 쟀는지 증빙에 남긴다
+      /*
+        **어느 원천에서 왔는지를 봉투가 들고 다닌다.**
+        의료시설만 심평원이고 나머지는 카카오인데, 화면에도 엑셀에도 그 구분이 없어
+        전부 카카오맵으로 보였다(엑셀은 실제로 "출처 : 카카오맵" 을 의료시설에도 찍고 있었다).
+        표준 봉투 규칙대로 `source` 를 값과 함께 들고 간다.
+      */
+      source: {
+        name: '카카오맵',
+        detail: spec.category
+          ? `카테고리 ${spec.category}${spec.keywordAlso ? ` + 키워드 "${spec.keywordAlso}"` : ''}`
+          : `키워드 "${spec.keyword}"`,
+        filter: spec.categoryFilter ? `카카오 분류 ${spec.categoryFilter}` : null,
+      },
       count: items.length,
       nearest: items[0] ?? null,
       items,
