@@ -435,13 +435,21 @@ const zoneCore = (s) => String(s).replace(new RegExp(ZONE_KIND, 'g'), '').replac
 async function geocodeZone(raw, normalized) {
   const head = headOf(String(raw)) ?? headOf(normalized) ?? '';
   for (const z of zoneQueries(raw)) {
-    const docs = await geocodeDocs(`${head} ${z}`.trim());
-    const c = zoneCore(z);
-    const hit = docs
-      .filter(d => /개발지구|부지|아파트/.test(d.category ?? ''))
-      .find(d => zoneCore(d.name).includes(c) || c.includes(zoneCore(d.name)));
-    if (hit && sameSgg(hit.address, raw)) {
-      return { x: hit.x, y: hit.y, query: `${head} ${z}`.trim(), precision: 'zone' };
+    /*
+     * **시군구를 붙이면 오히려 0건이 되는 지구가 있다**(실측 2026-09-17):
+     * "시흥장현"·"장항지구"·"평택 모산·영신지구" 는 지구명만 물어야 나온다.
+     * 그래서 붙인 질의를 먼저(더 좁다) 물어보고, 안 되면 지구명만 다시 묻는다.
+     * 엉뚱한 지역이 잡히는 것은 이름 대조와 시군구 대조가 막는다.
+     */
+    for (const q of [...new Set([`${head} ${z}`.trim(), z])]) {
+      const docs = await geocodeDocs(q);
+      const c = zoneCore(z);
+      const hit = docs
+        .filter(d => /개발지구|부지|아파트/.test(d.category ?? ''))
+        .find(d => zoneCore(d.name).includes(c) || c.includes(zoneCore(d.name)));
+      if (hit && sameSgg(hit.address, raw)) {
+        return { x: hit.x, y: hit.y, query: q, precision: 'zone' };
+      }
     }
   }
   return null;
@@ -504,8 +512,16 @@ async function geocodeSupply(normalized, raw = '', houseNm = '') {
   const zone = await geocodeZone(raw, normalized);
   if (zone) return zone;
 
-  /* 여기까지 왔으면 읍면동 중심이라도 — 근사임을 표시한다 */
-  for (const q of [dongOnly, bracketDong].filter(Boolean)) {
+  /*
+   * 여기까지 왔으면 읍면동 중심이라도 — 근사임을 표시한다.
+   * **동을 나열한 주소는 첫 동까지만** 잘라 묻는다 —
+   * "고양시 일산동구 장항동, 일산서구 대화동 일원" 을 통째로 물으면 0건이다(실측).
+   */
+  const firstDong = (() => {
+    const m = normalized.match(/^(.*?(?:동|리|가|읍|면))\s*,/);
+    return m ? m[1].trim() : null;
+  })();
+  for (const q of [dongOnly, firstDong, bracketDong].filter(Boolean)) {
     const p = await geocodeOne(q, 'address');
     if (p) return { ...p, query: q, precision: 'dong' };
   }
