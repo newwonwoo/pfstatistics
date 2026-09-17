@@ -242,11 +242,18 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                           <td style={S.td}><span style={S.pend}>{sc.text}</span></td>
                         </>);
                       }
+                      /*
+                        항목마다 따로 판정하고 평균으로 등급을 낸다 — 그러니 **아직 판정 안 한 항목**의
+                        기본점수(1점)를 판정된 값과 같은 색으로 두면 안 된다. 노란 칸은 확정된 값 자리다.
+                      */
+                      const unjudged = sc.reason === '차선 수 미입력' || sc.reason === '도로 미선택';
                       return (<>
-                        <td style={S.tdVal}>{sc.score}</td>
+                        <td style={unjudged ? S.td : S.tdVal}>{sc.score}</td>
                         <td style={S.td}>
-                          {sc.score}점 · {sc.label}
-                          {sc.reason ?? sc.text ? <span style={S.why}> ({sc.reason ?? sc.text})</span> : null}
+                          {unjudged
+                            ? <span style={S.pend}>판정 전 기본 {sc.score}점 — {sc.reason}</span>
+                            : <>{sc.score}점 · {sc.label}
+                                {sc.reason ?? sc.text ? <span style={S.why}> ({sc.reason ?? sc.text})</span> : null}</>}
                         </td>
                       </>);
                     })()}

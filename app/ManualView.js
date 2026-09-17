@@ -262,7 +262,9 @@ export default function ManualView({ region, addr, data, facilities, manual, val
                   : sum.missing.length
                     ? <>미입력 <b style={{ color: T.warn }}>{sum.missing.length}개</b> — {sum.missing.join(' · ')}<br />
                         <span>전 항목이 차야 A 를 확정합니다. 부분 합계({sum.sum})를 A 로 쓰면 분양률이 통째로 낮아집니다.</span></>
-                    : '전 항목 입력됨'}
+                    : sum.provisional.length
+                      ? <>전 항목 입력됨 — 다만 <b style={{ color: T.warn }}>{sum.provisional.map(x => x.id).join(' · ')}</b> 에 판정 전 기본점수가 섞여 있습니다. 그 항목을 판정하면 A 가 바뀝니다.</>
+                      : '전 항목 입력됨'}
               </td>
             </tr>
           </tbody>

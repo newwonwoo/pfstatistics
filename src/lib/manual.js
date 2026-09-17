@@ -54,6 +54,13 @@ export function manualSummary({ sheetInput = {}, data = null, facilities = null,
     { id: '부동산시장 소비심리지수', max: 15, sc: cs == null ? null : scoreBand('소비심리지수', cs) },
   ].map(r => ({
     ...r, kind: 'auto', score: num(r.sc),
+    /*
+      교통환경·주거편의는 **항목마다 따로 판정하고 그 평균으로 등급을 낸다**(사용자 확인).
+      그래서 한 항목이 아직 판정 전이면 평균도 아직 확정이 아니다 —
+      `scoreAverage` 가 그 사실을 `caution` 으로 돌려주는데 여기서 버리고 있었다.
+      A 합산표는 이 점수가 분양률·보증료율까지 흘러가는 **마지막 관문**이라 반드시 같이 적는다.
+    */
+    caution: r.sc?.caution ?? null,
     /* "수집 대기" 만 적으면 어디서 수집해야 하는지 알 수 없다 — 갈 곳을 적는다 */
     why: r.sc?.pending ? r.sc.text
       : r.sc == null ? (GOTO[r.id] ?? '수집 대기')
@@ -82,6 +89,8 @@ export function manualSummary({ sheetInput = {}, data = null, facilities = null,
 
   const rows = [...auto, ...formed, ...typed];
   const missing = rows.filter(r => r.score == null).map(r => r.id);
+  /* 점수는 났지만 **판정 전 기본점수가 섞인** 항목 — A 는 나오되 확정으로 읽으면 안 된다 */
+  const provisional = rows.filter(r => r.caution).map(r => ({ id: r.id, text: r.caution }));
   const sum = rows.reduce((s, r) => s + (r.score ?? 0), 0);
 
   /* 직접 넣은 A 가 있으면 그것을 쓴다 — 내부망 평가표 값을 그대로 넣고 싶을 때가 있다 */
@@ -91,7 +100,7 @@ export function manualSummary({ sheetInput = {}, data = null, facilities = null,
 
   return {
     rows, auto, formed, typed,
-    sum, missing,
+    sum, missing, provisional,
     override,
     excl: override ?? (missing.length ? null : sum),
     source: override != null ? 'override' : (missing.length ? null : 'computed'),
