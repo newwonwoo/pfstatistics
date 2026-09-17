@@ -96,7 +96,18 @@ const ZONE_TAIL = /\s*(?:[가-힣A-Za-z0-9·\s]*?(?:지구|단지|산업단지|�
 const BRACKET_DONG = /\(\s*([가-힣]+(?:동|리|가))\s*\)/;
 
 /** "경기도 김포시" — 괄호 안 주소에 상위 행정구역이 없을 때 앞에 붙여준다 */
-const headOf = (raw) => raw.match(/^\s*([가-힣]+(?:특별시|광역시|특별자치시|특별자치도|도)\s+[가-힣]+(?:시|군|구)(?:\s+[가-힣]+구)?)/)?.[1] ?? null;
+/*
+ * **"신도시" 도 "시" 로 끝난다** — "경기도 양주회천신도시 공동주택용지 A-22BL" 을
+ * 시도+시군구로 읽어 질의가 "경기도 양주회천신도시 양주회천신도시" 가 됐다(실측 0건).
+ * 시군구 자리에 올 수 없는 꼬리를 먼저 막는다.
+ */
+const NOT_SGG = /(?:신도시|그린시티|시티)$/;
+const headOf = (raw) => {
+  const m = raw.match(/^\s*([가-힣]+(?:특별시|광역시|특별자치시|특별자치도|도))\s+([가-힣]+(?:시|군|구))(\s+[가-힣]+구)?/);
+  if (!m) return null;
+  if (NOT_SGG.test(m[2])) return m[1];          // 시도까지만
+  return [m[1], m[2], m[3]].filter(Boolean).join(' ').replace(/\s+/g, ' ');
+};
 
 export function normalizeSupplyAddress(address) {
   const raw = String(address ?? '');
@@ -446,7 +457,7 @@ async function geocodeZone(raw, normalized) {
  */
 const SIDO_SUFFIX = /(?:특별시|광역시|특별자치시|특별자치도|자치시|자치도|도)$/;
 const sggOfWords = (text) => String(text ?? '').split(/\s+/)
-  .find(w => w.length > 1 && !SIDO_SUFFIX.test(w) && /(?:시|군|구)$/.test(w)) ?? null;
+  .find(w => w.length > 1 && !SIDO_SUFFIX.test(w) && !NOT_SGG.test(w) && /(?:시|군|구)$/.test(w)) ?? null;
 
 const sameSgg = (addr, raw) => {
   const sgg = sggOfWords(raw);
@@ -504,7 +515,7 @@ async function geocodeSupply(normalized, raw = '', houseNm = '') {
 }
 
 /** 장소검색 여러 건 — 카테고리까지 봐야 개발지구를 가릴 수 있다 */
-async function geocodeDocs(query, size = 10) {
+async function geocodeDocs(query, size = 15) {   /* 카카오 장소검색 한 번에 받을 수 있는 최대 */
   const key = `docs|${size}|${query}`;
   if (geoCache.has(key)) return geoCache.get(key);
   let hits = [];
@@ -700,7 +711,7 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
     return {
       sido, census: true,
       notices: uniq.length, uniqueAddresses: uniqAddr.length,
-      exact: by('exact'), name: by('name'), sample: by('sample'), dong: by('dong'), place: by('place'),
+      exact: by('exact'), name: by('name'), zone: by('zone'), sample: by('sample'), dong: by('dong'), place: by('place'),
       failed: failed.length,
       rate: `${((failed.length / Math.max(1, uniqAddr.length)) * 100).toFixed(1)}%`,
       items: failed,
