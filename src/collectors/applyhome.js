@@ -5,6 +5,7 @@ import { sidoShort } from '../lib/sido.js';
 import { lookup as rankLookup } from './constructor.js';
 import { loadSggIndex, matchByName } from './kapt.js';
 import { tradeIndex, lookupTrade } from './rtms.js';
+import { toSggCode } from '../lib/region.js';
 
 /**
  * 청약홈(한국부동산원) 분양정보 — 비교사업장의 **분양가** 원천.
@@ -927,7 +928,7 @@ const aptKey = (name) => String(name ?? '')
   .replace(/아파트$/, '')
   .replace(/\s/g, '');
 
-export async function collectKnownApts({ site, radius = 2000, polygon = null, sggCode = null, exclude = [] }) {
+export async function collectKnownApts({ site, radius = 2000, polygon = null, exclude = [] }) {
   const dist = (p) => (polygon?.length >= 3
     ? distanceToPolygon({ lat: p.y, lng: p.x }, polygon)
     : haversine({ lat: Number(site.y), lng: Number(site.x) }, { lat: p.y, lng: p.x }));
@@ -961,11 +962,30 @@ export async function collectKnownApts({ site, radius = 2000, polygon = null, sg
   }
   uniq.sort((a, b) => a.distance - b.distance);
 
-  /* K-apt 로 세대수·시공사·사용승인일을 보강한다 (준공 단지만 있다 — 미준공은 그대로 둔다) */
-  if (sggCode) {
+  /*
+   * **반경은 시군구를 넘는다**(실측 2026-09-17).
+   * 사업지는 성동구인데 반경 1km 안 단지 14곳 중 8곳이 **동대문구**였다.
+   * 사업지 시군구 색인 하나만 받으면 그 8곳은 실거래도 세대수도 못 채운다 —
+   * 단지 **주소에 적힌 시군구별로** 색인을 받는다.
+   */
+  const sggOfAddr = (addr) => String(addr ?? '').split(/\s+/).slice(0, 2).join(' ');
+  const bySgg = new Map();
+  for (const v of uniq) {
+    const k = sggOfAddr(v.address);
+    if (!k) continue;
+    if (!bySgg.has(k)) bySgg.set(k, []);
+    bySgg.get(k).push(v);
+  }
+
+  await mapLimit([...bySgg.entries()], 3, async ([name, members]) => {
+    let code = null;
+    try { code = await toSggCode(name, { kakaoKey: requireKey('KAKAO_REST_KEY') }); } catch { /* 못 구하면 보강만 건너뛴다 */ }
+    if (!code) return;
+
+    /* K-apt — 세대수·시공사·사용승인일 (관리비 의무단지, 즉 준공 단지만 있다) */
     try {
-      const index = await loadSggIndex(sggCode);
-      await mapLimit(uniq, 5, async (v) => {
+      const index = await loadSggIndex(code);
+      await mapLimit(members, 5, async (v) => {
         const b = await matchByName(v.name.replace(/\s*\([^)]*\)\s*$/, ''), index);
         if (b) v.kapt = b;
       });
@@ -978,13 +998,13 @@ export async function collectKnownApts({ site, radius = 2000, polygon = null, sg
      * 심사기준(공급면적) 단가와 그대로 비교하면 안 된다. 평균에는 넣지 않는다.
      */
     try {
-      const trades = await tradeIndex(sggCode);
-      for (const v of uniq) {
+      const trades = await tradeIndex(code);
+      for (const v of members) {
         const t = lookupTrade(trades, v.name, v.address);
         if (t) v.trade = t;
       }
     } catch { /* 실거래가 실패도 목록을 막지 않는다 */ }
-  }
+  });
 
   return {
     radius,
@@ -992,6 +1012,7 @@ export async function collectKnownApts({ site, radius = 2000, polygon = null, sg
     count: uniq.length,
     truncated: total != null && total > docs.length,
     items: uniq.filter(v => v.distance <= radius),
+    sggs: [...bySgg.keys()],
     source: {
       name: '카카오맵 장소검색 (분류: 부동산 > 주거시설 > 아파트)',
       detail: 'K-apt 공동주택 기본정보(세대수·시공사·사용승인일) · 국토교통부 아파트 매매 실거래가(최근 12개월) 보강',

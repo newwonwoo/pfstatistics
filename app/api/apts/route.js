@@ -59,7 +59,6 @@ export async function GET(req) {
       try {
         r.knownApts = await collectKnownApts({
           site: { x, y }, radius, polygon,
-          sggCode: q.get('sgg') || await sggCodeOf(region),
           exclude: (r.items ?? []).map(a => a.name),
         });
       } catch (e) { r.knownApts = { error: e.message, items: [] }; }
