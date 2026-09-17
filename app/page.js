@@ -180,9 +180,13 @@ export default function Home() {
   /*
    * 거리를 어디서부터 잴지는 **수집 전에** 정해야 한다.
    * 나중에 지도에서 바꾸는 옵션으로 두니 아무도 안 건드렸고, 그러면 판정이 늘 중심점 기준이 된다.
-   * 수집 버튼을 누르면 먼저 묻고, 경계 기준이면 그리기를 켠 채 지도로 보낸다.
+   *
+   * **기본값은 경계다**(사용자 확정 2026-09-17). 규정이 재는 거리가 「단지 경계로부터 시설물까지」라
+   * 경계 기준이 규정대로다 — 중심점 기준은 그보다 100m 넘게 멀게 잡힌다(실측).
+   * 그래서 [반경시설 수집] 은 묻지 않고 바로 경계 그리기로 간다.
+   * 중심 기준으로 가려면 단계 줄의 [변경] 을 눌러 고른다(그때 아래 관문이 열린다).
    */
-  const [basisMode, setBasisMode] = useState(null);   // null=미정 · 'polygon' · 'point'
+  const [basisMode, setBasisMode] = useState('polygon');   // null=미정(관문) · 'polygon' · 'point'
   const [pending, setPending] = useState(undefined);  // 기준을 정하면 수집할 시트 (null=전체)
   const [drawNow, setDrawNow] = useState(false);      // 지도를 그리기 모드로 열기
   const [geo, setGeo] = useState(null);             // 주소 매칭 결과 (후보 포함)
@@ -365,7 +369,7 @@ export default function Home() {
   function resetSite() {
     setFixed(false); setGeo(null); setPick(0);
     setCoord(null); setPolygon(null); setFacilities(null); setData(null);
-    setBasisMode(null); setPending(undefined); setDrawNow(false);
+    setBasisMode('polygon'); setPending(undefined); setDrawNow(false);   // 기본값은 경계
     setMsg({ kind: 'warn', text: '사업지를 초기화했습니다. 시도·시군구부터 다시 지정하세요.' });
   }
 
@@ -494,9 +498,14 @@ export default function Home() {
     그 시점에 할 일은 [통계 수집] 이라 눈이 버튼 → 지도 → 다시 버튼으로 왕복했다.
     경계를 그리겠다고(=`basisMode==='polygon'`) 정했을 때만 편다.
   */
+  /*
+    기본값이 경계가 된 뒤(2026-09-17) `basisMode === 'polygon'` 은 주소 확정 직후부터 참이라
+    그것만으로 펴면 위에 적은 함정으로 그대로 되돌아간다 — **수집을 시작했을 때**(pending) 편다.
+  */
   const mapWanted = Boolean(SHEETS.find(x => x.id === tab)?.map)
     && !(polygon?.length >= 3)
-    && basisMode === 'polygon';
+    && basisMode === 'polygon'
+    && pending !== undefined;
   /* [사업지 경계 기준] 을 고르면 접혀 있어도 펴야 한다 — 안 그리면 그릴 곳이 안 보인다 */
   const mapOpen = drawNow ? true : (mapOpenManual ?? mapWanted);
   const setMapOpen = (fn) => setMapOpenManual(typeof fn === 'function' ? fn(mapOpen) : fn);
