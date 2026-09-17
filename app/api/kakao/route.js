@@ -30,8 +30,9 @@ export async function GET(req) {
     const docs = [];
     let total = null;
     for (let page = 1; page <= pages; page++) {
-      const p = new URLSearchParams({ size: '15', page: String(page), sort: 'distance' });
-      if (x && y) { p.set('x', x); p.set('y', y); p.set('radius', String(radius)); }
+      /* sort=distance 는 중심좌표가 있어야 한다 — 없이 보내면 400 (Required Parameter x,y) */
+      const p = new URLSearchParams({ size: '15', page: String(page) });
+      if (x && y) { p.set('x', x); p.set('y', y); p.set('radius', String(radius)); p.set('sort', 'distance'); }
       if (kind === 'category') p.set('category_group_code', q.get('category'));
       else p.set('query', q.get('q') ?? '아파트');
       const d = await getJson(`${BASE}/${kind}.json?${p}`, { headers: H, retries: 2, timeout: 12000 });
