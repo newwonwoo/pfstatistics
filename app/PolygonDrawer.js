@@ -128,7 +128,7 @@ export default function PolygonDrawer({ center, polygon, onChange, busy, autoDra
       </div>
 
       {err ? <div style={S.fail}>지도를 불러오지 못했습니다.<br />{err}</div>
-           : <div ref={el} style={S.map} />}
+           : <div ref={el} data-map="사업지 경계" style={S.map} />}
 
       {/*
         그리고 나서 뭘 해야 하는지가 안 보이면 안 된다.
