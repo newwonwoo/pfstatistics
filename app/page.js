@@ -850,6 +850,10 @@ export default function Home() {
           onChange={setPolygon}
           autoDraw={drawNow}
           pendingSheet={pending}
+          /* 경계 기준을 고른 그 순간에만 수집 버튼을 지도 발치에 둔다 */
+          onCollect={pending !== undefined && basisMode === 'polygon'
+            ? () => runPoi(pending ?? null, polygon)
+            : null}
           confirmed={!!facilities}
           busy={busy === 'poi' || POI_SHEETS.includes(busy)}
         />

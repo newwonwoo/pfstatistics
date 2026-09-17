@@ -63,6 +63,12 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
   const [err, setErr] = useState(null);
   const [ready, setReady] = useState(false);
   const [mapType, setMapType] = useState(defaultMapType);
+  /*
+   * **이름표를 끌 수 있게 한다**(사용자 제안 2026-09-17).
+   * 라벨 상한을 없앤 뒤로 시설이 많은 지역에서는 흰 박스가 지도를 덮는다.
+   * 기본은 이름을 보여주고(증빙에 이름이 있어야 한다), 번호 동그라미만 볼 수도 있게 둔다.
+   */
+  const [labels, setLabels] = useState(true);
   const [saving, setSaving] = useState(null);   // null | 'busy' | 실패사유
   const rvEl = useRef(null);
   const rvRef = useRef(null);
@@ -147,7 +153,7 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
             border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);color:#fff;
             font:700 12px 'Malgun Gothic',sans-serif;display:flex;align-items:center;justify-content:center">${no}</div>`,
         });
-        if (i < LABEL_MAX) {
+        if (labels && i < LABEL_MAX) {
           // 같은 높이에 다 걸면 서로 덮는다. 높이를 엇갈려 겹침을 줄인다.
           new kakao.maps.CustomOverlay({
             position: p, map, yAnchor: 2.4 + (i % 3) * 0.95, zIndex: 4,
@@ -201,10 +207,12 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
       map: mapRef.current.map,
       kakao: mapRef.current.kakao,
       center, radius, markers, polygon, title, radiusRing: ring,
+      /* 화면에서 이름표를 껐으면 캡쳐도 끈다 — 증빙이 화면과 달라지면 안 된다 */
+      labels,
       ...opts,
     });
     return () => { if (node) delete node.__capture; };
-  }, [ready, center.lat, center.lng, radius, mkey, pkey, rkey, title, mapType]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, center.lat, center.lng, radius, mkey, pkey, rkey, title, mapType, labels]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * 클릭 지점에서 가장 가까운 로드뷰로 옮긴다.
@@ -320,6 +328,13 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
               }}
             >{t.label}</button>
           ))}
+          {markers.length > 0 && (
+            <button style={{ ...S.btn, ...(labels ? S.btnOn : null) }}
+              title={labels ? '이름표를 끄고 번호 동그라미만 봅니다' : '시설 이름표를 답니다'}
+              onClick={() => setLabels(v => !v)}>
+              {labels ? '이름표 끄기' : '이름표'}
+            </button>
+          )}
           {ready && roadview && (
             <button style={{ ...S.btn, ...(rvOn ? S.btnOn : null) }} onClick={toggleRoadview}>
               {rvOn ? '로드뷰 닫기' : '로드뷰'}

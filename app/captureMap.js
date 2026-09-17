@@ -170,7 +170,7 @@ const LABEL_MAX = 999;   /* 이름은 전부 단다 — 자리를 못 찾은 것
  * @returns {Promise<string>} PNG dataURL
  */
 export async function composeMap(el, spec = {}) {
-  const { map, kakao, center, radius, markers = [], polygon = null, radiusRing = null, title = '' } = spec;
+  const { map, kakao, center, radius, markers = [], polygon = null, radiusRing = null, title = '', labels = true } = spec;
   /*
    * **확대해도 깨지지 않게 3배로 찍는다**(사용자 요청 2026-09-17).
    * 타일 자체는 1배라 타일 그림은 확대의 한계가 있지만,
@@ -282,7 +282,7 @@ export async function composeMap(el, spec = {}) {
     const pinBox = (q) => ({ x1: q.x - 12, y1: q.y - 33, x2: q.x + 12, y2: q.y + 3 });
     const placed = [pinBox(c), ...markers.filter(m => !m.faint).map(m => pinBox(pt(m.lat, m.lng)))];
 
-    markers.filter(m => !m.faint).slice(0, LABEL_MAX).forEach((m, i) => {
+    (labels ? markers.filter(m => !m.faint) : []).slice(0, LABEL_MAX).forEach((m, i) => {
       const q = pt(m.lat, m.lng);
       const no = m.no ?? i + 1;
       placeLabel(ctx, placed, q.x, q.y - 36,

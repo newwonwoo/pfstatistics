@@ -28,6 +28,13 @@ const S = {
     padding: '10px 14px', borderTop: `1px solid ${T.line}`, background: '#fafbfc',
   },
   foot2: { fontSize: 11.5, color: T.muted, flex: 1, minWidth: 220 },
+  /* 경계를 다 찍으면 곧바로 누를 수 있는 버튼 — 못 누를 때는 사유를 글자로 보여준다 */
+  go: (on) => ({
+    padding: '8px 16px', borderRadius: 6, fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap',
+    cursor: on ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
+    background: on ? '#1b4fd8' : '#f1f3f5', color: on ? '#fff' : '#767e8a',
+    border: `1px solid ${on ? '#1b4fd8' : '#e2e5ea'}`,
+  }),
   ready: (ok) => ({
     padding: '7px 13px', borderRadius: 6, fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap',
     background: ok ? T.okSoft : '#f1f3f5', color: ok ? T.ok : T.muted,
@@ -35,7 +42,7 @@ const S = {
   }),
 };
 
-export default function PolygonDrawer({ center, polygon, onChange, busy, autoDraw = false, pendingSheet }) {
+export default function PolygonDrawer({ center, polygon, onChange, busy, autoDraw = false, pendingSheet, onCollect = null }) {
   const el = useRef(null);
   const state = useRef({ map: null, poly: null, dots: [] });
   const [pts, setPts] = useState(polygon ?? []);
@@ -136,16 +143,29 @@ export default function PolygonDrawer({ center, polygon, onChange, busy, autoDra
               : '[그리기 시작] 을 누르고 지도에서 사업지 모서리를 찍으세요'}
         </span>
         {/*
-          수집 버튼은 위 단계 줄에 이미 있다. 여기 또 두면 같은 동작이 두 군데가 된다.
-          여기서는 지금 상태와 다음에 누를 곳만 알려준다.
+          **안내문이 가리키는 버튼이 화면에 없었다**(사용자 지적 2026-09-17).
+          "「이 경계로 수집」 을 누르세요" 라고 적어놓고 정작 그 이름의 버튼은 어디에도 없었고,
+          실제로는 674px 위 단계 줄의 [반경시설 수집] 을 다시 눌러야 했다.
+          **수집 버튼을 두 군데 두지 않는다**는 규칙은 지킨다 —
+          이 버튼은 경계 기준을 고른 **그 순간에만** 있고, 수집이 끝나면 사라진다.
+          단계 줄 버튼은 이 흐름을 *시작한* 버튼이고, 이건 그 흐름을 *끝내는* 버튼이다.
         */}
-        <span style={S.ready(pts.length >= 3 || (!drawing && !pendingSheet))}>
-          {busy ? '수집 중…'
-            : pts.length >= 3 ? `경계 지정 완료 — 위 [${pendingSheet ?? '시트'} 수집] 을 누르세요`
-            /* 경계 기준을 고른 상태에서만 지시문을 쓴다 — 아니면 "해야 할 일" 로 보인다 */
-            : (drawing || pendingSheet) ? `경계를 ${3 - pts.length}점 더 찍으세요`
-            : '경계 그리기는 선택입니다 — 안 그리면 대표지번 중심으로 잽니다'}
-        </span>
+        {onCollect ? (
+          <button style={S.go(pts.length >= 3 && !busy)}
+            disabled={pts.length < 3 || !!busy}
+            title={pts.length < 3 ? `경계를 ${3 - pts.length}점 더 찍어야 누를 수 있습니다` : ''}
+            onClick={onCollect}>
+            {busy ? '수집 중…'
+              : pts.length >= 3 ? `이 경계로 ${pendingSheet ?? '반경시설'} 수집`
+              : `경계를 ${3 - pts.length}점 더 찍으세요`}
+          </button>
+        ) : (
+          <span style={S.ready(pts.length >= 3)}>
+            {busy ? '수집 중…'
+              : pts.length >= 3 ? `경계 ${pts.length}점 지정됨 — 경계 기준으로 잽니다`
+              : '경계 그리기는 선택입니다 — 안 그리면 대표지번 중심으로 잽니다'}
+          </span>
+        )}
       </div>
     </div>
   );
