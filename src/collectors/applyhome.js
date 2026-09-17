@@ -370,7 +370,25 @@ async function geocodeOne(query, kind = 'address') {
  *              dong   읍면동 중심 — 거리가 수백 m 틀어질 수 있다
  *              place  장소검색(지구명)으로 잡은 좌표 — 가장 약하다
  */
-async function geocodeSupply(normalized, raw = '') {
+/** 공고 단지명에서 지구·블록·공급유형 꼬리를 떼어 장소검색에 넣을 이름을 만든다 */
+export function placeNameOf(houseNm) {
+  return String(houseNm ?? '')
+    .replace(/\([^)]*\)?/g, ' ')                                   // "(성남낙생지구 A-1BL)" · 안 닫힌 괄호도
+    .replace(/\s*(?:신혼희망타운|공공분양주택|공공분양|행복주택|민간참여|국민임대|영구임대).*$/, ' ')
+    .replace(/\s*\d+\s*블(?:록|럭)\s*$/, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** 장소검색 결과가 그 공고의 시군구 안인지 — 아니면 엉뚱한 동명 단지다 */
+const sameSgg = (addr, raw) => {
+  const a = String(addr ?? '').split(/\s+/);
+  const b = String(raw ?? '').split(/\s+/);
+  const sgg = b.find(w => /(?:시|군|구)$/.test(w) && w.length > 1);
+  return !sgg || a.some(w => w === sgg);
+};
+
+async function geocodeSupply(normalized, raw = '', houseNm = '') {
   const dong = trimToDong(normalized);
   const dongOnly = trimToDongOnly(normalized);
   /* 도로명이 아직 없는 신축 부지 — 공고가 괄호에 적어준 법정동으로 떨어진다 */
@@ -379,15 +397,55 @@ async function geocodeSupply(normalized, raw = '') {
     const head = headOf(String(raw)) ?? headOf(normalized);
     return d && head ? `${head} ${d}` : null;
   })();
-  const tries = [...new Set([normalized, dong, dongOnly, bracketDong].filter(Boolean))];
-
-  for (const q of tries) {
+  /* 지번까지 맞는 주소가 먼저 */
+  for (const q of [normalized, dong].filter(Boolean)) {
     const p = await geocodeOne(q, 'address');
     if (p) return { ...p, query: q, precision: /\d/.test(q.replace(/^.*?(?:시|군|구)\s/, '')) ? 'exact' : 'dong' };
   }
-  /* 지번도 읍면동도 없는 신규 택지 — "부천역곡 공공주택지구" 는 장소로는 찾힌다 */
+
+  /*
+   * **단지명으로 장소를 찾는다** — 읍면동 중심보다 정확하다.
+   * 신규 택지는 주소가 대장에 없어도 카카오에는 단지가 등록돼 있다
+   * (실측: "역곡지구하우스토리아파트(A2) (2029년06월예정)" 처럼 미준공도 있다).
+   * 다만 **견본주택은 단지와 다른 자리에 짓는다** — 좌표를 쓰되 그 사실을 표시한다.
+   * 동명이 단지를 잡지 않도록 시군구가 같은지 확인한다(장소검색은 시군구를 넘어간다).
+   */
+  const place = placeNameOf(houseNm);
+  if (place.length >= 3) {
+    const head = headOf(String(raw)) ?? headOf(normalized) ?? '';
+    const d = await geocodeDoc(`${head} ${place}`.trim());
+    if (d && sameSgg(d.address, raw)) {
+      const sample = /견본주택|모델하우스|홍보관/.test(d.name ?? '');
+      return { x: d.x, y: d.y, query: `${head} ${place}`.trim(), precision: sample ? 'sample' : 'name' };
+    }
+  }
+
+  /* 여기까지 왔으면 읍면동 중심이라도 — 근사임을 표시한다 */
+  for (const q of [dongOnly, bracketDong].filter(Boolean)) {
+    const p = await geocodeOne(q, 'address');
+    if (p) return { ...p, query: q, precision: 'dong' };
+  }
+  /* 마지막 — "부천역곡 공공주택지구" 같은 지구명 자체를 장소로 */
   const p = await geocodeOne(normalized, 'keyword');
   return p ? { ...p, query: normalized, precision: 'place' } : null;
+}
+
+/** 장소검색 1건 — 이름·주소까지 봐야 시군구 검증과 견본주택 판정을 할 수 있다 */
+async function geocodeDoc(query) {
+  const key = `doc|${query}`;
+  if (geoCache.has(key)) return geoCache.get(key);
+  let hit = null;
+  try {
+    const d = await getJson(
+      `${KAKAO}/search/keyword.json?query=${encodeURIComponent(query)}&size=5`,
+      { headers: H(), retries: 2, timeout: 12000 });
+    /* 견본주택보다 단지 자체를 앞세운다 */
+    const docs = d.documents ?? [];
+    const best = docs.find(x => !/견본주택|모델하우스|홍보관/.test(x.place_name ?? '')) ?? docs[0];
+    if (best) hit = { x: Number(best.x), y: Number(best.y), name: best.place_name, address: best.address_name };
+  } catch { /* 한 건 실패가 전체를 막으면 안 된다 */ }
+  geoCache.set(key, hit);
+  return hit;
 }
 
 /** 동시 호출 수를 묶어 돌린다 (카카오 호출이 수백 건이 될 수 있다) */
@@ -483,7 +541,7 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
 
   const located = await mapLimit(shortlist, 10, async (n) => {
     const q = normalizeSupplyAddress(n.r.HSSPLY_ADRES);
-    const p = await geocodeSupply(q, n.r.HSSPLY_ADRES);
+    const p = await geocodeSupply(q, n.r.HSSPLY_ADRES, n.r.HOUSE_NM);
     if (!p) return null;
     return { ...n, q: p.query, p, d: Math.round(dist(p)), precision: p.precision };
   });
@@ -508,7 +566,7 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
     const uniqAddr = [...new Map(uniq.map(n => [normalizeSupplyAddress(n.r.HSSPLY_ADRES), n])).values()];
     const rows = await mapLimit(uniqAddr, 10, async (n) => {
       const q = normalizeSupplyAddress(n.r.HSSPLY_ADRES);
-      const p = await geocodeSupply(q, n.r.HSSPLY_ADRES);
+      const p = await geocodeSupply(q, n.r.HSSPLY_ADRES, n.r.HOUSE_NM);
       return { ok: !!p, precision: p?.precision ?? null,
                name: n.r.HOUSE_NM, raw: n.r.HSSPLY_ADRES, query: p?.query ?? q, kind: n.kind, src: n.src };
     });
@@ -517,7 +575,7 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
     return {
       sido, census: true,
       notices: uniq.length, uniqueAddresses: uniqAddr.length,
-      exact: by('exact'), dong: by('dong'), place: by('place'),
+      exact: by('exact'), name: by('name'), sample: by('sample'), dong: by('dong'), place: by('place'),
       failed: failed.length,
       rate: `${((failed.length / Math.max(1, uniqAddr.length)) * 100).toFixed(1)}%`,
       items: failed,
