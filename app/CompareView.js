@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { T, mono } from './theme';
 import RadiusMap from './RadiusMap';
 import { scoreMatrix } from '../src/lib/scoring';
@@ -114,6 +114,10 @@ const S = {
   funnel: { marginBottom: 10, padding: '7px 12px', background: T.soft ?? '#f6f7f9', border: '1px solid #e5e7eb',
             borderRadius: 6, fontSize: 12, color: T.ink2, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2 },
   arrow: { color: '#b8bec7', margin: '0 6px' },
+  /* 지역 평균 기준선 — 비교사업장 평균과 섞이지 않게 색을 달리한다 */
+  baseline: { marginTop: 12, padding: '9px 14px', background: '#f4f7fb', border: '1px solid #dfe6ef',
+              borderRadius: 7, fontSize: 12.5, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' },
+  baseNum: { fontSize: 17, fontWeight: 800, ...mono },
   simHit: { fontSize: 10.5, color: T.ok ?? '#1a7f4b', marginTop: 3, lineHeight: 1.4, whiteSpace: 'normal', maxWidth: 150 },
   simMiss: { fontSize: 10.5, color: T.muted, lineHeight: 1.4, whiteSpace: 'normal', maxWidth: 150 },
   link: { color: T.accent, textDecoration: 'none' },
@@ -184,6 +188,23 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
     ? (mode === 'weighted' ? a.weightedSupply : a.simpleSupply)
     : (mode === 'weighted' ? a.weighted : a.simple));
   const usePoly = polygon?.length >= 3 && radiusBasis === 'polygon';
+
+  /*
+   * **지역 평균 분양가 기준선**(HUG · KOSIS 414/DT_41401N_005, 2026-09-17 연결).
+   * 사용자 제안 — "분양가 정보를 얻지 못할 때는 분양보증 현황에서 가져올 수 있을 것 같다".
+   * **시도 단위라 비교사업장(단지별)을 대체하지 못한다.** 규정 제16조가 요구하는 것은
+   * 반경 안 유사사업장의 평균가격이다. 이 값은 "이 지역에서 이 정도가 보통" 이라는
+   * 감각을 주는 기준선일 뿐이므로 평균에 섞지 않고 따로 적는다.
+   */
+  const [hug, setHug] = useState(null);
+  useEffect(() => {
+    if (!region) return;
+    let dead = false;
+    fetch(`/api/hug?region=${encodeURIComponent(region)}`)
+      .then(r => r.json()).then(j => !dead && setHug(j)).catch(() => {});
+    return () => { dead = true; };
+  }, [region]);
+  const hugPrice = hug?.price?.all ?? null;
 
   const collect = async () => {
     if (!coord) { setErr('사업지 주소를 먼저 확정하세요'); return; }
@@ -794,6 +815,25 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
           **분양가는 어느 원천에도 없다.** 그래서 평균에 넣지 못하고, 그 사실을 적어 둔다 —
           조용히 섞으면 분양가격지수가 통째로 틀어진다.
         */}
+        {hugPrice && (
+          <div style={S.baseline}>
+            <b>{hug.price.areaName} 지역 평균 분양가</b>
+            <span style={S.baseNum}>{won(hugPrice)}</span>
+            <span style={{ color: T.muted }}>원/㎡ · {String(hug.price.period).slice(0, 4)}년 {String(hug.price.period).slice(4)}월</span>
+            {avg != null && (
+              <span style={{ marginLeft: 8, color: T.ink2 }}>
+                비교사업장 평균은 이 값의 <b>{((avg / hugPrice) * 100).toFixed(1)}%</b>
+              </span>
+            )}
+            <span style={{ width: '100%', color: T.muted, fontSize: 11, marginTop: 4 }}>
+              {hug.price.citation} · <b>시도 단위</b>라 규정 제16조의 「인근 유사사업장 평균가격」을 대체하지 못합니다 —
+              반경 안에 비교할 단지가 없을 때 감각을 잡는 기준선입니다.
+              {' '}{hug.price.areaBasisNote}.
+              {hug.price.bySize?.T3 && <> 규모별 : 60㎡이하 {won(hug.price.bySize.T2?.won)} · 60~85 {won(hug.price.bySize.T3?.won)} · 85~102 {won(hug.price.bySize.T4?.won)} · 102초과 {won(hug.price.bySize.T5?.won)}</>}
+            </span>
+          </div>
+        )}
+
         {data.knownApts?.items?.length > 0 && (
           <div style={{ marginTop: 14 }}>
             <div style={S.secTitle}>

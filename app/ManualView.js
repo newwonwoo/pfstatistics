@@ -1,5 +1,5 @@
 'use client';
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { T, mono } from './theme';
 import { manualSummary, PENDING_ITEMS, scaleTable, unitMixTable, nearbyTable } from '../src/lib/manual';
 
@@ -90,6 +90,23 @@ export default function ManualView({ region, addr, data, facilities, manual, val
   const mixT = unitMixTable();
   const nearbyT = nearbyTable();
   const nearby = v.인근초기분양률 ?? {};
+
+  /*
+   * **지역 평균 초기분양률은 참고치다**(HUG · KOSIS 414/DT_41401N_008, 2026-09-17 연결).
+   * 규정이 말하는 것은 「인근 단지」 초기분양률이지 지역 평균이 아니다 —
+   * 그래서 **말없이 채우지 않는다.** 숫자를 보여주고 [넣기] 를 눌러야 들어간다
+   * (시공순위 자동채택을 막았던 것과 같은 이유다).
+   */
+  const [hug, setHug] = useState(null);
+  useEffect(() => {
+    if (!region) return;
+    let dead = false;
+    fetch(`/api/hug?region=${encodeURIComponent(region)}`)
+      .then(r => r.json()).then(j => !dead && setHug(j)).catch(() => {});
+    return () => { dead = true; };
+  }, [region]);
+  const hugRate = hug?.rate?.latest ?? null;
+  const qLabel = (p) => (p ? `${String(p).slice(0, 4)}년 ${String(p).slice(4)}분기` : '');
   const scaleSc = sum.formed[0].sc;
   const mixSc = sum.formed[1].sc;
   const nearbySc = sum.formed[2].sc;
@@ -194,6 +211,19 @@ export default function ManualView({ region, addr, data, facilities, manual, val
                 value={nearby.rate ?? ''} onChange={e => setNearby({ rate: e.target.value })} />
               <span style={S.sub}>{nearby.special ? '특례가 선택되어 있습니다' : ''}</span>
             </div>
+            {hugRate && !nearby.special && (
+              <div style={{ ...S.field, gap: 6 }}>
+                <span style={S.lab}>참고 — {hug?.rate?.areaName} 지역 평균</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <b style={{ fontSize: 15, ...mono }}>{hugRate.rate}%</b>
+                  <span style={{ fontSize: 11, color: T.muted }}>{qLabel(hugRate.period)}</span>
+                  <button style={S.chip(false)} onClick={() => setNearby({ rate: String(hugRate.rate) })}>
+                    이 값 넣기
+                  </button>
+                </div>
+                <span style={S.sub}>HUG 민간아파트 평균 — <b>인근 단지가 아닙니다</b></span>
+              </div>
+            )}
             <div style={{ ...S.field, gap: 6 }}>
               <span style={S.lab}>특례</span>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -212,6 +242,11 @@ export default function ManualView({ region, addr, data, facilities, manual, val
                 : <b>{nearbySc.label} · 평가점수 {nearbySc.score}점 <span style={{ fontWeight: 400, color: T.muted }}>({nearbySc.text})</span></b>}
             </div>
           </div>
+          {hugRate && (
+            <div style={{ ...S.formula, marginTop: 10, marginBottom: 0 }}>
+              {hug?.rate?.citation} · {hug?.rate?.note}
+            </div>
+          )}
           <div style={S.note}>
             ※ 본건의 <b>초기예상분양률(산정 결과)</b> 과 다른 값입니다 — 이건 옆 단지를 조사해 매기는 입력 항목입니다.<br />
             ※ 선정기준도 분양가 적정성과 다릅니다 (준공 단지를 안 쓰고, 유사도를 브랜드로 봅니다).
