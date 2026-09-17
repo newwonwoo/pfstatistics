@@ -97,14 +97,14 @@ function AvgRow({ sheetId, facilities, manual, label, span, S }) {
   );
 }
 
-export default function SheetView({ sheetId, data, facilities, manual, onManual, radiusBasis = 'polygon', onRadiusBasis }) {
+export default function SheetView({ sheetId, data, facilities, manual, onManual, sheetInput = {}, radiusBasis = 'polygon', onRadiusBasis }) {
   // 도로 후보에서 고른 지점 — 로드뷰를 그곳으로 보낸다
   const [roadSpot, setRoadSpot] = useState({});
   // 후보 목록 자체 — 큰 도로를 지도에 자동으로 찍기 위해 들고 있는다
   const [roadList, setRoadList] = useState({});
   const byId = Object.fromEntries((data?.results ?? []).map(r => [r.indicatorId, r]));
   const spec = buildSheet(sheetId, {
-    byId, region: data?.region ?? '', period: data?.period ?? '', company: data?.company,
+    byId, region: data?.region ?? '', period: data?.period ?? '', company: data?.company, sheetInput,
   });
 
   if (!spec) {

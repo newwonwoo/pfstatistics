@@ -5,6 +5,15 @@ import { statSido } from '../lib/sido.js';
 
 const BASE = 'https://kosis.kr/openapi';
 
+/**
+ * **조회 URL 에서 키를 지운다.**
+ * 이 url 은 증빙 카드·엑셀의 「조회 URL」 로 그대로 나간다 —
+ * 지우지 않으면 KOSIS_API_KEY 가 심사 파일에 박혀 외부로 나간다(2026-09-17 실측).
+ * 재현에 필요한 것은 조회조건이지 키가 아니다.
+ */
+export const maskKey = (u) => String(u ?? '').replace(/apiKey=[^&]*/g, 'apiKey=***');
+
+
 /** KOSIS 오류코드 해설 — "왜 안 되는지"를 화면에서 바로 읽을 수 있어야 한다 */
 const ERR_HINT = {
   '10': '인증키가 전달되지 않았습니다',
@@ -48,7 +57,8 @@ export async function fetchData({ orgId, tblId, prdSe, startPrdDe, endPrdDe, obj
   });
   const url = `${BASE}/Param/statisticsParameterData.do?${qs}`;
   const r = check(await getJson(url));
-  return { rows: Array.isArray(r) ? r : [], url };
+  /* 봉투·증빙으로 나가는 url 에는 키를 남기지 않는다 */
+  return { rows: Array.isArray(r) ? r : [], url: maskKey(url) };
 }
 
 const num = v => Number(String(v ?? '').replace(/,/g, ''));

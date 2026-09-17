@@ -4,11 +4,11 @@
  * 캡쳐 11장에서 시트별 컬럼 구성을 그대로 옮겼다.
  * 엑셀 하단 탭 순서도 캡쳐와 동일하게 유지한다 — 실무자가 눈으로 찾는 순서이기 때문이다.
  *
- * 평가기준·평가점수 칸은 비워둔다. 구간표 전체를 아직 못 받았고,
- * 집계는 이번 범위가 아니다. 수집된 값과 증빙만 채운다.
+ * 구간표를 받은 항목은 시트에도 평가기준·평가점수·평가를 찍는다 —
+ * A 합산표(manual.js)에만 찍고 시트를 비워두면 실무자가 옮겨 적을 칸이 빈다.
  */
 
-import { scoreRank, scoreBand } from '../src/lib/scoring';
+import { scoreRank, scoreBand, scoreCount, scoreRegionDemand } from '../src/lib/scoring';
 
 /** 이 앱이 실제로 수집하는 시트만 남긴다. 수기입력 시트(표지·종합·규모및배치·평형구성)는 제외. */
 export const SHEETS = [
@@ -38,7 +38,7 @@ const n = (v, d = 0) =>
  * cells 는 캡쳐의 표를 그대로 재현한다. value 는 수집 결과에서 뽑고,
  * 미수집이면 null 을 돌려 화면에서 "수집 대기"로 보이게 한다.
  */
-export function buildSheet(sheetId, { byId, region, period, company }) {
+export function buildSheet(sheetId, { byId, region, period, company, sheetInput = {} }) {
   const g = (id) => byId[id];
   const val = (id) => (g(id)?.ok ? g(id).value : null);
 
@@ -47,6 +47,13 @@ export function buildSheet(sheetId, { byId, region, period, company }) {
       const unsold = val('unsold_housing');
       const hh = val('resident_households');
       const ratio = unsold != null && hh ? (unsold / hh) * 100 : null;
+      /*
+        **구간표를 받아놓고 시트에는 안 찍고 있었다**(2026-09-17 실측).
+        A 합산표(manual.js)만 점수를 냈고 시트·엑셀 증빙의 평가기준·평가점수 칸은 빈 채였다 —
+        실무자가 눈으로 옮겨 적는 곳이 정작 비어 있었던 셈이다.
+      */
+      const sc = ratio == null ? null : scoreBand('지역미분양', ratio);
+      const filled = sc && !sc.pending;
       return {
         title: '지역미분양',
         subject: region,
@@ -55,22 +62,44 @@ export function buildSheet(sheetId, { byId, region, period, company }) {
           '지역 미분양비율', region,
           n(unsold), n(hh),
           ratio == null ? null : `${ratio.toFixed(2)}%`,
-          '', '', '',
+          filled ? sc.label : '',
+          filled ? `${sc.score}점` : '',
+          filled ? (sc.grade ?? '') : '',
         ]],
         formula: '(미분양주택수 / 주민등록세대수) × 100',
         evidence: ['unsold_housing', 'resident_households'],
       };
     }
-    case '지역수요':
+    case '지역수요': {
+      /*
+        **두 항목을 각각 5점 척도로 매겨 평균 → 등급 → 대표점수**(구간표 원문).
+        지역미분양과 같은 이유로 시트에는 점수가 안 찍히고 있었다.
+        인구유입요인은 원천이 없어 [수기입력] 탭에서 개수를 받는다 — 그 값을 여기로 들고 온다.
+      */
+      const supply = val('housing_supply_ratio');
+      const inflow = sheetInput?.지역수요?.inflow;
+      const a = supply == null ? null : scoreBand('지역수요:주택보급률', supply);
+      const b = scoreCount('지역수요:인구유입요인', inflow);
+      const sum = supply == null ? null : scoreRegionDemand(supply, inflow);
+      const cell = (sc, key) => (sc && !sc.pending ? (sc[key] ?? '') : '');
       return {
         title: '지역수요', subject: region,
         columns: ['평가항목', '지역', '비율', '평가기준', '점수', '평가'],
         rows: [
-          ['주택보급률', region.split(' ')[0], val('housing_supply_ratio') == null ? null : `${val('housing_supply_ratio')}%`, '', '', ''],
-          ['인구유입요인', '', null, '', '', ''],
+          ['주택보급률', region.split(' ')[0], supply == null ? null : `${supply}%`,
+            cell(a, 'label'), a && !a.pending ? `${a.score}점` : '', cell(a, 'grade')],
+          ['인구유입요인', '', b && !b.pending ? `${Number(inflow)}개` : null,
+            cell(b, 'label'), b && !b.pending ? `${b.score}점` : '', cell(b, 'grade')],
+          ['평균점수', '', sum && !sum.pending ? String(sum.avg) : null, '',
+            sum && !sum.pending ? `${sum.score}점` : '',
+            sum && !sum.pending ? `${sum.label} (${sum.text})` : (sum?.text ?? '')],
         ],
+        footnote: '※ 주택보급률은 낮을수록 높은 점수(집이 모자란 곳이 수요가 있다) ·'
+          + ' 광역시 이상은 구, 시는 시, 시급 미만은 군 단위 · 미고시면 상급 행정구역 ·'
+          + ' 인구유입요인(신도시·혁신도시·기업도시·산업단지 등)은 원천이 없어 [수기입력] 탭에서 개수를 받습니다',
         evidence: ['housing_supply_ratio'],
       };
+    }
     case '지역경쟁력': {
       /* 구간표 수령(2026-09-16) — 0.6↑5 / 0.3↑4 / 0.1↑3 / -0.06↑2 / 그 밖 1 */
       const kb = val('kb_apt_price_index');

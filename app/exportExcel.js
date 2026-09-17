@@ -431,7 +431,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
   for (const s of sheets) {
     let spec;
     try {
-      spec = buildSheet(s.id, { byId, region: data.region, period: data.period, company: data.company });
+      spec = buildSheet(s.id, { byId, region: data.region, period: data.period, company: data.company, sheetInput });
     } catch (e) { failed.push(`${s.id}: ${e.message}`); continue; }
     if (!spec) continue;
     onProgress?.(s.id);

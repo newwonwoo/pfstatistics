@@ -926,7 +926,7 @@ export default function Home() {
                 <SheetView
                   sheetId={s.id} data={data} facilities={view}
                   radiusBasis={radiusBasis} onRadiusBasis={setRadiusBasis}
-                  manual={manual}
+                  manual={manual} sheetInput={sheetInput}
                   onManual={(label, v) => setManual(m => ({ ...m, [label]: v }))}
                 />
               )}
