@@ -106,7 +106,7 @@ const BRACKET_DONG = /\(\s*([가-힣]+(?:동|리|가))\s*\)/;
  * 카카오가 준 "경기 고양시 일산동구 장항동" 을 다른 지역으로 보고 **버렸다**(실측).
  * 지구·단지·신도시 꼬리는 시군구 자리에 올 수 없다.
  */
-const NOT_SGG = /(?:신도시|그린시티|시티|지구|단지|타운|블록|블럭)$/;
+const NOT_SGG = /(?:신도시|국제도시|하늘도시|도시|그린시티|시티|지구|단지|타운|블록|블럭)$/;
 const headOf = (raw) => {
   const m = raw.match(/^\s*([가-힣]+(?:특별시|광역시|특별자치시|특별자치도|도))\s+([가-힣]+(?:시|군|구))(\s+[가-힣]+구)?/);
   if (!m) return null;
@@ -147,10 +147,30 @@ export function trimToDong(q) {
   return [m[1], m[2]?.replace(/\s+/g, '')].filter(Boolean).join(' ').trim();
 }
 
+/**
+ * 앞에서부터 **행정구역 토막만** 이어붙인다 — "인천광역시 서구 불로동".
+ *
+ * `ZONE_TAIL` 로 잘라내던 것을 버렸다. 그 정규식의 지구명 부분이
+ * **문자열 앞부터 삼켜서** "인천광역시 서구 불로동 검단신도시 AA22BL" 이 통째로 지워졌다(실측).
+ * 읍면동을 잃으면 개편 대조도 근사 좌표도 못 얻는다.
+ * "신도시"·"지구" 도 시·구로 끝나므로 `NOT_SGG` 로 먼저 막는다.
+ */
+const ADMIN_TAIL = /(?:시|군|구|읍|면|동|리|가|도)$/;
+export function adminPrefix(q) {
+  const out = [];
+  for (const w of String(q ?? '').split(/\s+/)) {
+    if (!w || NOT_SGG.test(w) || !ADMIN_TAIL.test(w)) break;
+    out.push(w);
+    /* 동·리·가보다 더 아래는 없다 — "원흥동 동산동 용두동" 나열은 첫 동까지만 */
+    if (/(?:동|리|가)$/.test(w)) break;
+  }
+  return out.length ? out.join(' ') : null;
+}
+
 /** 읍면동까지만 (지번 버림) — 대장에 지번이 없는 신규 택지의 마지막 수단 */
 export function trimToDongOnly(q) {
-  const m = q.replace(ZONE_TAIL, '').match(/^(.*(?:동|리|가|읍|면))(?:\s|$)/);
-  return m ? m[1].trim() : null;
+  const p = adminPrefix(q);
+  return p && /(?:동|리|가|읍|면)$/.test(p.split(' ').pop()) ? p : null;
 }
 
 /** "084.7459A" → 84.7459 (전용면적). 숫자를 못 읽으면 null */
@@ -411,8 +431,8 @@ export function placeNameOf(houseNm) {
  * 틀린 좌표가 조용히 반경 판정에 들어가는 자리라, 고유명이 든 질의만 쓰고
  * 결과 이름에 그 고유명이 들어있는지 **대조한 뒤에** 채택한다.
  */
-const ZONE_GENERIC = /^(?:택지개발사업지구|택지개발지구|공공주택지구|도시개발사업|일반산업단지|산업단지|택지지구|계획지구|신도시|지구)$/;
-const ZONE_KIND = '(?:택지개발사업지구|택지개발지구|공공주택지구|도시개발사업|일반산업단지|산업단지|택지지구|계획지구|그린시티|신도시|지구)';
+const ZONE_GENERIC = /^(?:택지개발사업지구|택지개발지구|공공주택지구|도시개발사업|일반산업단지|산업단지|택지지구|계획지구|국제도시|하늘도시|신도시|지구)$/;
+const ZONE_KIND = '(?:택지개발사업지구|택지개발지구|공공주택지구|도시개발사업|일반산업단지|산업단지|택지지구|계획지구|그린시티|국제도시|하늘도시|신도시|지구)';
 const ZONE_NAME = new RegExp(`([가-힣A-Za-z0-9·]+(?:\\s+[가-힣A-Za-z0-9·]+)?\\s*${ZONE_KIND})`);
 const SIDO_HEAD = /^[가-힣]+(?:특별시|광역시|특별자치시|특별자치도|도)\s+/;
 
@@ -504,9 +524,10 @@ async function currentSgg(dongQuery) {
 /** 시군구 대조 — 표기가 안 맞으면 개편 때문인지 한 번 더 확인한다 */
 async function sameSggNow(addr, raw, normalized) {
   if (sameSgg(addr, raw)) return true;
-  const dong = trimToDongOnly(normalized);
-  if (!dong) return false;
-  const now = await currentSgg(dong);
+  /* 동이 있으면 동으로, 없으면 시군구까지라도 — 둘 다 개편 후 이름을 돌려준다 */
+  const q = trimToDongOnly(normalized) ?? adminPrefix(normalized);
+  if (!q) return false;
+  const now = await currentSgg(q);
   return !!now && String(addr ?? '').split(/\s+/).includes(now);
 }
 
