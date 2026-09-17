@@ -452,7 +452,7 @@ async function geocodeZone(raw, normalized) {
       const hit = docs
         .filter(d => /개발지구|부지|아파트/.test(d.category ?? ''))
         .find(d => zoneCore(d.name).includes(c) || c.includes(zoneCore(d.name)));
-      if (hit && sameSgg(hit.address, raw)) {
+      if (hit && await sameSggNow(hit.address, raw, normalized)) {
         return { x: hit.x, y: hit.y, query: q, precision: 'zone' };
       }
     }
@@ -477,6 +477,38 @@ const sameSgg = (addr, raw) => {
   if (!sgg) return true;
   return String(addr ?? '').split(/\s+/).includes(sgg);
 };
+
+/*
+ * **행정구역이 개편되면 공고의 시군구와 카카오의 시군구가 다르다.**
+ * 실측 2026-09-17 — 인천 실패 17건 중 15건이 이것이었다:
+ *   공고 "인천광역시 서구 불로동 검단신도시 AA22BL"
+ *   카카오 "인천 검단구 불로동"        → 서구 ≠ 검단구 → 멀쩡한 매칭을 버렸다
+ * 개편 매핑을 손으로 적지 않는다(추측 금지). 공고가 적은 **읍면동을 카카오에 물으면
+ * 옛 표기로 물어도 현재 시군구를 돌려준다**(불로동→검단구 · 운서동→영종구 · 가정동→서해구 실측).
+ */
+const nowSggCache = new Map();
+async function currentSgg(dongQuery) {
+  if (nowSggCache.has(dongQuery)) return nowSggCache.get(dongQuery);
+  let v = null;
+  try {
+    const d = await getJson(
+      `${KAKAO}/search/address.json?query=${encodeURIComponent(dongQuery)}&size=1`,
+      { headers: H(), retries: 2, timeout: 12000 });
+    const doc = d.documents?.[0];
+    v = doc?.address?.region_2depth_name ?? doc?.road_address?.region_2depth_name ?? null;
+  } catch { /* 못 물어보면 옛 표기로 대조한다 */ }
+  nowSggCache.set(dongQuery, v);
+  return v;
+}
+
+/** 시군구 대조 — 표기가 안 맞으면 개편 때문인지 한 번 더 확인한다 */
+async function sameSggNow(addr, raw, normalized) {
+  if (sameSgg(addr, raw)) return true;
+  const dong = trimToDongOnly(normalized);
+  if (!dong) return false;
+  const now = await currentSgg(dong);
+  return !!now && String(addr ?? '').split(/\s+/).includes(now);
+}
 
 async function geocodeSupply(normalized, raw = '', houseNm = '') {
   const dong = trimToDong(normalized);
@@ -504,7 +536,7 @@ async function geocodeSupply(normalized, raw = '', houseNm = '') {
   if (place.length >= 3) {
     const head = headOf(String(raw)) ?? headOf(normalized) ?? '';
     const d = await geocodeDoc(`${head} ${place}`.trim());
-    if (d && sameSgg(d.address, raw)) {
+    if (d && await sameSggNow(d.address, raw, normalized)) {
       const sample = /견본주택|모델하우스|홍보관/.test(d.name ?? '');
       return { x: d.x, y: d.y, query: `${head} ${place}`.trim(), precision: sample ? 'sample' : 'name' };
     }
