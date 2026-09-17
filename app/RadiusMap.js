@@ -210,7 +210,31 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
           if (map.getLevel() > cap + 1) map.setLevel(cap + 1);
         }
       };
+      /*
+       * **반경원이 화면을 꽉 채우게 한 단계 더 당긴다**(실측 2026-09-17).
+       * `setBounds` 는 "들어가기만 하면" 되는 단계를 고르므로 한 칸 덜 확대되곤 한다 —
+       * 실측에서 1.5km 원이 817px 높이의 **46%** 밖에 안 썼다.
+       * 이 지도는 **시설이 진짜 거기 있는지 눈으로 확인**하는 도구다. 여백은 낭비다.
+       * 투영으로 원의 지름을 픽셀로 재서 짧은 변의 70% 를 넘을 때까지 당긴다.
+       */
+      const tighten = () => {
+        const node = el.current;
+        if (!node) return;
+        const lim = Math.min(node.offsetWidth, node.offsetHeight);
+        if (!lim) return;
+        const dLat = radius / 111320;                    // 정북 radius m 의 위도차
+        for (let i = 0; i < 4; i += 1) {
+          if (map.getLevel() <= 1) break;
+          const proj = map.getProjection();
+          const n = proj.containerPointFromCoords(new kakao.maps.LatLng(center.lat + dLat, center.lng));
+          const sp = proj.containerPointFromCoords(new kakao.maps.LatLng(center.lat - dLat, center.lng));
+          const dia = Math.abs(sp.y - n.y);
+          if (!Number.isFinite(dia) || dia >= lim * 0.70) break;
+          map.setLevel(map.getLevel() - 1);
+        }
+      };
       fit();
+      tighten();
       /*
        * **크기가 확정된 뒤 한 번 더 맞춘다**(실측 2026-09-17).
        * [크게 보기] 로 펴면 지도가 flex 로 커지는데, 만들어지는 시점엔 그 높이가 아직 아니라
@@ -221,6 +245,7 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
         if (!el.current) return;
         map.relayout();
         fit();
+        tighten();
       });
       /*
        * 차선 수는 위성사진으로 세기 어렵다 — 가로수·그림자·차량에 가린다.
