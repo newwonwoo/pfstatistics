@@ -44,7 +44,8 @@ async function shot(el) {
   if (!el) return null;
   const { toPng } = await import('html-to-image');
   try {
-    return await toPng(el, { pixelRatio: 2, backgroundColor: '#ffffff' });
+    /* 지도와 같은 배율로 찍는다 — 한 파일 안에서 어떤 증빙은 흐리고 어떤 증빙은 선명하면 안 된다 */
+    return await toPng(el, { pixelRatio: 3, backgroundColor: '#ffffff' });
   } catch {
     return null;   // 캡쳐 실패해도 표는 나가야 한다
   }

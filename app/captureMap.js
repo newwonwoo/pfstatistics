@@ -402,7 +402,13 @@ async function captureByDom(el, pixelRatio) {
  * RadiusMap 이 달아둔 캔버스 합성기를 먼저 쓰고, 없거나 실패하면 예전 방식으로 물러선다.
  * @returns {Promise<string>} 실패하면 사유와 함께 예외를 던진다
  */
-export async function captureMap(el, { pixelRatio = 2 } = {}) {
+/*
+ * **기본값 2 가 `composeMap` 의 3 을 덮고 있었다**(실측 2026-09-17).
+ * 지도를 3배로 찍기로 해놓고 정작 부르는 쪽이 2 를 넘겨 조용히 무력화됐다 —
+ * 엑셀 원본이 2096x1280 으로 나와 배치 1240px 대비 1.69배 여유뿐이었다.
+ * 두 곳의 기본값을 같은 수로 맞춘다.
+ */
+export async function captureMap(el, { pixelRatio = 3 } = {}) {
   if (!el) throw new Error('지도 요소를 찾지 못했습니다');
   let first = null;
   if (typeof el.__capture === 'function') {
