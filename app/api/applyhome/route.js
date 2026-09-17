@@ -44,7 +44,10 @@ export async function GET(req) {
       for (const [k, v] of q.entries()) {
         if (!['op', 'host', 'path'].includes(k)) p.set(k, v);
       }
-      const url = `https://${host.replace(/^https?:\/\//, '')}/${path.replace(/^\//, '')}?${p}`;
+      /* path 에 이미 질의문자열이 붙어 오면 물음표가 두 개가 된다 — 갈라서 합친다 */
+      const [bare, inline] = String(path).split('?');
+      if (inline) for (const [k, v] of new URLSearchParams(inline)) p.set(k, v);
+      const url = `https://${host.replace(/^https?:\/\//, '')}/${bare.replace(/^\//, '')}?${p}`;
       try {
         const d = await getJson(url, { retries: 1, timeout: 20000 });
         return NextResponse.json({ url: mask(url), ok: true, data: d });
