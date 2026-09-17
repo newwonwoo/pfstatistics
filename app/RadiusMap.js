@@ -191,18 +191,37 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
        * 라벨이 보이는 수준보다 더 멀어지지 않게 한계를 건다.
        */
       const cap = levelCapFor(radius);
-      if (markers.length) {
-        const bounds = new kakao.maps.LatLngBounds();
-        bounds.extend(c);
-        for (const m of markers) bounds.extend(new kakao.maps.LatLng(m.lat, m.lng));
-        map.setBounds(bounds, 60, 60, 60, 60);       // 여백을 줘서 라벨이 잘리지 않게
-        // 한 곳뿐이면 라벨이 보이게 확대를 당기고, 여러 곳이면 다 담기는 쪽을 택한다
-        if (markers.length <= 1 && map.getLevel() > cap) map.setLevel(cap);
-      } else {
-        // 시설이 없으면(부재) 반경원 전체를 보여줘야 "이 범위에 없다" 가 증명된다
-        map.setBounds(areaBounds());
-        if (map.getLevel() > cap + 1) map.setLevel(cap + 1);
-      }
+      const fit = () => {
+        if (markers.length) {
+          const bounds = new kakao.maps.LatLngBounds();
+          bounds.extend(c);
+          for (const m of markers) bounds.extend(new kakao.maps.LatLng(m.lat, m.lng));
+          /*
+           * **반경원도 함께 담는다.** 시설만 담으면 판정선(반경)이 화면 밖으로 나가
+           * "이 원 안에 있는 것들" 이라는 그림이 깨진다 — 확인이 목적인 지도다.
+           */
+          const ab = areaBounds();
+          bounds.extend(ab.getSouthWest()); bounds.extend(ab.getNorthEast());
+          map.setBounds(bounds, 60, 60, 60, 60);       // 여백을 줘서 라벨이 잘리지 않게
+          if (markers.length <= 1 && map.getLevel() > cap) map.setLevel(cap);
+        } else {
+          // 시설이 없으면(부재) 반경원 전체를 보여줘야 "이 범위에 없다" 가 증명된다
+          map.setBounds(areaBounds());
+          if (map.getLevel() > cap + 1) map.setLevel(cap + 1);
+        }
+      };
+      fit();
+      /*
+       * **크기가 확정된 뒤 한 번 더 맞춘다**(실측 2026-09-17).
+       * [크게 보기] 로 펴면 지도가 flex 로 커지는데, 만들어지는 시점엔 그 높이가 아직 아니라
+       * 옛 축척이 그대로 남는다 — 화면은 넓어졌는데 **반경원은 오히려 작아져 보였다**.
+       * 확인하려고 편 건데 거꾸로 되는 셈이다. relayout 뒤 다시 맞춘다.
+       */
+      requestAnimationFrame(() => {
+        if (!el.current) return;
+        map.relayout();
+        fit();
+      });
       /*
        * 차선 수는 위성사진으로 세기 어렵다 — 가로수·그림자·차량에 가린다.
        * 로드뷰로 보면 바로 세진다. 지도를 클릭하면 그 지점 로드뷰로 옮긴다.
