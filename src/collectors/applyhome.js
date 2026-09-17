@@ -552,11 +552,24 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
   const located = await mapLimit(shortlist, 10, async (n) => {
     const q = normalizeSupplyAddress(n.r.HSSPLY_ADRES);
     const p = await geocodeSupply(q, n.r.HSSPLY_ADRES, n.r.HOUSE_NM);
-    if (!p) return null;
+    if (!p) return { ...n, q, p: null };
     return { ...n, q: p.query, p, d: Math.round(dist(p)), precision: p.precision };
   });
 
-  const within = located.filter(v => v && v.d <= radius).sort((a, b) => a.d - b.d);
+  /*
+   * **좌표를 못 찾은 공고를 조용히 버리지 않는다**(사용자 지적).
+   * 다만 정직하게 — 좌표가 없으면 **반경 안인지 밖인지도 모른다.**
+   * "반경 안에 있었다" 고는 못 쓰고, 사업지와 **같은 시군구**인 것만 골라
+   * "위치를 못 찾아 비교에서 빠졌다" 고 알린다.
+   * 남은 실패는 신규 택지의 블록 표기라 대장에 지번이 아직 없다 — 어떤 주소 API 로도 못 찾는다.
+   */
+  const siteSgg = sggOf(region);
+  const unlocated = located
+    .filter(v => v && !v.p && sggOf(v.r.HSSPLY_ADRES) === siteSgg)
+    .map(v => ({ name: v.r.HOUSE_NM, address: v.r.HSSPLY_ADRES, kind: v.kind,
+                 saleStart: v.r.CNTRCT_CNCLS_BGNDE ?? null, url: v.r.PBLANC_URL ?? null }));
+
+  const within = located.filter(v => v?.p && v.d <= radius).sort((a, b) => a.d - b.d);
 
   /*
    * 분양전환 임대 아파트는 분양가가 없다 — 평균에 넣을 수 없다.
@@ -664,6 +677,7 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
     count: items.length,
     items,
     excludedRental,   // 반경 안에 있었으나 분양가가 없어 뺀 임대 아파트
+    unlocated,        // 같은 시군구인데 좌표를 못 찾아 거리조차 못 잰 공고
     source: {
       org: '한국부동산원 청약홈',
       citation: `* 출처 : 한국부동산원 청약홈 분양정보 (APT / 오피스텔·도시형·민간임대, 공공데이터포털) · ${sido} 공고 ${uniq.length}건 중 반경 ${radius >= 1000 ? `${radius / 1000}km` : `${radius}m`} 이내`,

@@ -31,6 +31,18 @@ const REG = {
 
 const HOUSE_TYPES = ['아파트', '주상복합', '기타'];
 const SIZE_BANDS = ['500세대 미만', '500~999세대', '1,000세대 이상'];
+/*
+  좌표를 어디까지 맞춰서 잰 거리인가 — `exact` 는 배지를 달지 않는다(기본이라 조용해야 한다).
+  나머지는 근사라서 **반경 판정이 뒤집힐 수 있다**는 걸 표에서 바로 보여야 한다.
+*/
+const GEOCODE_LABEL = { name: '단지명 위치', dong: '읍면동 근사', place: '지구 위치', sample: '견본주택 위치' };
+const GEOCODE_NOTE = {
+  name: '공고 주소에 지번이 없어 단지명으로 찾은 위치입니다',
+  dong: '공고 주소에 지번이 없어 읍면동 중심으로 잰 거리입니다 — 수백 m 틀어질 수 있습니다',
+  place: '지구명으로만 찾은 위치입니다 — 거리 오차가 가장 큽니다',
+  sample: '견본주택 위치입니다 — 단지와 다른 자리일 수 있습니다',
+};
+
 const RANK_BANDS = ['50위 이내', '51~100위', '101~200위', '201~300위', '300위 밖'];
 /* 이 앱이 시공능력평가순위를 이미 수집한다 — 순위를 구간으로 옮기는 일을 사람에게 시키지 않는다 */
 const rankBandOf = (rank) => {
@@ -695,7 +707,19 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
                       </span></>}
                     </td>
                     <td style={S.tdL}>{a.address}</td>
-                    <td style={S.tdNo}>{a.distance}m</td>
+                    {/*
+                      **이 거리가 정확한 좌표로 잰 것인지 보여준다.**
+                      공고 주소에 지번이 없으면(신규 택지 블록 표기) 읍면동 중심으로 잴 수밖에 없는데,
+                      그러면 수백 m 틀어진다 — 반경 1~5km 판정에 그대로 들어가므로 숨기면 안 된다.
+                    */}
+                    <td style={S.tdNo}>
+                      {a.distance}m
+                      {a.geocode && a.geocode !== 'exact' && (
+                        <><br /><span style={S.badge('warn')} title={GEOCODE_NOTE[a.geocode]}>
+                          {GEOCODE_LABEL[a.geocode]}
+                        </span></>
+                      )}
+                    </td>
                     <td style={S.tdNo}>{a.saleStart ?? '-'}</td>
                     <td style={S.tdNo}>
                       <span style={S.badge(a.timing === '1년 이내 분양개시' ? 'ok' : 'none')}>{a.timing ?? '-'}</span>
@@ -728,6 +752,27 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
             반경 안에 <b>분양전환 임대 아파트 {data.excludedRental.length}건</b>이 더 있었지만 분양가가 없어 표에서 뺐습니다 —{' '}
             {data.excludedRental.slice(0, 3).map(r => `${r.name} (${r.distance}m · ${r.kind})`).join(' · ')}
             {data.excludedRental.length > 3 && ` 외 ${data.excludedRental.length - 3}건`}
+          </div>
+        )}
+
+        {/*
+          **좌표를 못 찾아 빠진 공고를 조용히 넘기지 않는다.**
+          다만 정직하게 — 좌표가 없으면 반경 안인지 밖인지도 모른다.
+          "반경 안이었다" 고는 못 쓰고 같은 시군구라는 것까지만 말한다.
+          신규 택지의 블록 표기는 대장에 지번이 아직 없어 어떤 주소 API 로도 못 찾는다.
+        */}
+        {data.unlocated?.length > 0 && (
+          <div style={{ ...S.warn, marginTop: 10 }}>
+            같은 시군구에 <b>위치를 못 찾은 공고 {data.unlocated.length}건</b>이 있습니다 —
+            공고 주소가 지번 없이 지구·블록으로만 적혀 있어 좌표를 얻지 못했습니다.
+            <b> 반경 안인지 밖인지도 알 수 없어</b> 표에 넣지 않았습니다.<br />
+            {data.unlocated.slice(0, 4).map(r => (
+              <span key={r.name} style={{ color: T.ink2 }}>
+                · {r.url ? <a href={r.url} target="_blank" rel="noreferrer" style={S.link}>{r.name}</a> : r.name}
+                <span style={{ color: T.muted }}> ({r.address})</span><br />
+              </span>
+            ))}
+            {data.unlocated.length > 4 && <span style={{ color: T.muted }}>  외 {data.unlocated.length - 4}건</span>}
           </div>
         )}
 
