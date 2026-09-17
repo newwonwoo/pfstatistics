@@ -3,6 +3,7 @@ import { getJson } from '../lib/http.js';
 import { distanceToPolygon, haversine } from '../lib/geo.js';
 import { sidoShort } from '../lib/sido.js';
 import { lookup as rankLookup } from './constructor.js';
+import { loadSggIndex, matchByName } from './kapt.js';
 
 /**
  * 청약홈(한국부동산원) 분양정보 — 비교사업장의 **분양가** 원천.
@@ -501,7 +502,7 @@ const sggOf = (addr) => String(addr ?? '').split(/\s+/).slice(0, 2).join(' ');
  * @param {{x:number,y:number}} site  사업지 대표지번 좌표
  * @param {Array<{lat,lng}>} polygon  사업지 경계(있으면 경계 최단거리로 잰다 — 다른 시트와 같은 규칙)
  */
-export async function collectComparables({ site, region, radius = 2000, polygon = null, from = null, probe = null, census = false }) {
+export async function collectComparables({ site, region, radius = 2000, polygon = null, from = null, probe = null, census = false, sggCode = null }) {
   const sido = noticeSido(region);
   if (!sido) {
     const e = new Error('통합 시도는 시군구까지 골라야 분양정보를 가릅니다 (청약홈이 아직 광주/전남을 따로 집계합니다)');
@@ -555,6 +556,27 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
     if (!p) return { ...n, q, p: null };
     return { ...n, q: p.query, p, d: Math.round(dist(p)), precision: p.precision };
   });
+
+  /*
+   * **읍면동 근사로 잰 것만 K-apt 로 다시 잰다.**
+   * 준공된 단지라면 K-apt 에 지번주소가 있어 정확히 잴 수 있다 —
+   * 근사는 수백 m 틀어지고 그 거리가 반경 판정에 그대로 들어간다.
+   * 이미 지번까지 맞은 것(exact)·단지명으로 찾은 것(name)은 건드리지 않는다.
+   * K-apt 는 입주한 단지만 있으므로 미착공은 여기서도 안 나온다 — 그러면 근사를 그대로 쓴다.
+   */
+  const weak = located.filter(v => v?.p && (v.precision === 'dong' || v.precision === 'place'));
+  if (weak.length && sggCode) {
+    const index = await loadSggIndex(sggCode);
+    await mapLimit(weak, 5, async (v) => {
+      const b = await matchByName(v.r.HOUSE_NM, index);
+      if (!b?.jibun) return;
+      const p = await geocodeOne(b.jibun, 'address');
+      if (!p) return;
+      v.p = p; v.d = Math.round(dist(p)); v.precision = 'exact';
+      v.q = b.jibun;
+      v.kapt = b;                       // 세대수·시공사·사용승인일도 같이 들고 온다
+    });
+  }
 
   /*
    * **좌표를 못 찾은 공고를 조용히 버리지 않는다**(사용자 지적).
@@ -626,7 +648,7 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
   }
 
   // 3차 — 반경 안의 단지만 주택형별 상세를 받는다 (호출 수를 최소로)
-  const items = await mapLimit(inside, 5, async ({ r, q, p, d, src, kind, precision }) => {
+  const items = await mapLimit(inside, 5, async ({ r, q, p, d, src, kind, precision, kapt }) => {
     let types = [];
     try {
       types = src === 'urbty' ? await fetchUrbtyModels(r.HOUSE_MANAGE_NO) : await fetchModels(r.HOUSE_MANAGE_NO);
@@ -646,6 +668,8 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
       distance: d,
       /* 좌표를 어디까지 맞춰서 잰 거리인지 — dong·place 는 근사다 */
       geocode: precision ?? 'exact',
+      /* K-apt 로 지번을 찾아 다시 잰 것 — 사용승인일·세대수·시공사도 같이 왔다 */
+      kapt: kapt ?? null,
       noticeDate: r.RCRIT_PBLANC_DE,
       // 규정상 "분양 개시일" = 공급계약시작일 (모집공고일이 아니다)
       saleStart: r.CNTRCT_CNCLS_BGNDE ?? null,
