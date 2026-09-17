@@ -333,7 +333,7 @@ const sggOf = (addr) => String(addr ?? '').split(/\s+/).slice(0, 2).join(' ');
  * @param {{x:number,y:number}} site  사업지 대표지번 좌표
  * @param {Array<{lat,lng}>} polygon  사업지 경계(있으면 경계 최단거리로 잰다 — 다른 시트와 같은 규칙)
  */
-export async function collectComparables({ site, region, radius = 2000, polygon = null, from = null, probe = null }) {
+export async function collectComparables({ site, region, radius = 2000, polygon = null, from = null, probe = null, census = false }) {
   const sido = noticeSido(region);
   if (!sido) {
     const e = new Error('통합 시도는 시군구까지 골라야 분양정보를 가릅니다 (청약홈이 아직 광주/전남을 따로 집계합니다)');
@@ -398,6 +398,28 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
   const excludedRental = within.filter(v => RENTAL_APT.has(v.kind))
     .map(v => ({ name: v.r.HOUSE_NM, address: v.r.HSSPLY_ADRES, distance: v.d, kind: v.kind }));
   const inside = within.filter(v => !RENTAL_APT.has(v.kind));
+
+  /*
+   * 지오코딩 실패 전수조사 — **무엇이 왜 실패하는지 세어보지 않고는 고칠 수 없다.**
+   * 시도 전체 공고의 공급위치 주소를 정제해 카카오 주소검색에 넣고, 실패한 것만 돌려준다.
+   * 거리·상세는 건너뛴다(이 창구의 관심사가 아니다).
+   */
+  if (census) {
+    const uniqAddr = [...new Map(uniq.map(n => [normalizeSupplyAddress(n.r.HSSPLY_ADRES), n])).values()];
+    const rows = await mapLimit(uniqAddr, 10, async (n) => {
+      const q = normalizeSupplyAddress(n.r.HSSPLY_ADRES);
+      const p = await geocodeOne(q);
+      return p ? null : { name: n.r.HOUSE_NM, raw: n.r.HSSPLY_ADRES, query: q, kind: n.kind, src: n.src };
+    });
+    const failed = rows.filter(Boolean);
+    return {
+      sido, census: true,
+      notices: uniq.length, uniqueAddresses: uniqAddr.length,
+      failed: failed.length,
+      rate: `${((failed.length / Math.max(1, uniqAddr.length)) * 100).toFixed(1)}%`,
+      items: failed,
+    };
+  }
 
   /*
    * 진단창구 — "가까운 단지가 왜 안 나오나" 를 화면 밖에서 따질 수 있어야 한다.

@@ -30,6 +30,8 @@ export async function GET(req) {
       site: { x, y }, region, radius, polygon,
       from: q.get('from') || null,
       probe: q.get('probe') || null,
+      /* ?census=1 — 지오코딩 실패 전수조사 (거리·상세는 건너뛴다) */
+      census: q.get('census') === '1',
     });
     return NextResponse.json({ region, ...r });
   } catch (e) {
