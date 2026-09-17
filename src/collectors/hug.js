@@ -64,7 +64,7 @@ export async function avgPrice(region, { months = 14 } = {}) {
   const out = {};
   await Promise.all(Object.keys(SIZE).map(async (size) => {
     try {
-      const rows = await fetchData({
+      const { rows } = await fetchData({
         orgId: ORG, tblId: T_PRICE, prdSe: 'M',
         startPrdDe: start, endPrdDe: end, itmId: '00', objL1: area, objL2: size,
       });
@@ -106,7 +106,7 @@ export async function initialSaleRate(region, { quarters = 6 } = {}) {
   const endY = now.getFullYear();
   const startY = endY - Math.ceil(quarters / 4) - 1;
   /* 단일 시점은 err 30 을 준다 — **범위로만 조회된다**(실측) */
-  const rows = await fetchData({
+  const { rows } = await fetchData({
     orgId: ORG, tblId: T_RATE, prdSe: 'Q',
     startPrdDe: `${startY}1`, endPrdDe: `${endY}${q}`, itmId: 'B', objL1: area,
   });
