@@ -33,6 +33,25 @@ export async function GET(req) {
   try {
     const path = op === 'raw' ? q.get('path') : PATHS[op];
     if (!path) return NextResponse.json({ error: `알 수 없는 op: ${op}` }, { status: 400 });
+    /*
+      공공데이터포털 키는 API 마다 따로 활용신청해야 한다 — 다른 서비스(K-apt 등)도
+      **같은 키로 되는지 여기서 시험한다.** host 를 주면 odcloud 대신 그쪽으로 묻는다.
+      passthrough: 응답 규격이 서비스마다 달라 가공하지 않고 그대로 돌려준다.
+    */
+    const host = q.get('host');
+    if (host) {
+      const p = new URLSearchParams({ serviceKey: requireKey('DATA_GO_KR_KEY').trim(), _type: 'json' });
+      for (const [k, v] of q.entries()) {
+        if (!['op', 'host', 'path'].includes(k)) p.set(k, v);
+      }
+      const url = `https://${host.replace(/^https?:\/\//, '')}/${path.replace(/^\//, '')}?${p}`;
+      try {
+        const d = await getJson(url, { retries: 1, timeout: 20000 });
+        return NextResponse.json({ url: mask(url), ok: true, data: d });
+      } catch (e) {
+        return NextResponse.json({ url: mask(url), ok: false, error: e.message }, { status: 200 });
+      }
+    }
 
     const qs = new URLSearchParams({
       serviceKey: requireKey('DATA_GO_KR_KEY').trim(),
