@@ -143,6 +143,24 @@ GET api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getUrbtyOfctlLttotPblancMdl
 탐색 창구: **`/api/applyhome?op=detail|model|raw&path=`**, 수집: **`/api/apts?x=&y=&region=&radius=`**
 (`&probe=정규식` 을 붙이면 반경 밖 공고까지 지오코딩 결과·거리를 보여준다).
 
+### K-apt 공동주택 (DATA_GO_KR_KEY — 활용신청 완료, 실측 2026-09-17)
+**준공되어 입주한 단지**만 있다(관리비 의무단지). 분양중·미착공은 없고 **분양가도 없다.**
+그래서 비교사업장을 대체하지 못한다 — 좌표·세대수·시공사·사용승인일을 **보강**하는 데 쓴다.
+```
+단지목록  GET apis.data.go.kr/1613000/AptListService4/getSigunguAptList4?sigunguCode=41610
+          getSidoAptList4 · getLegaldongAptList4(bjdCode) · getRoadnameAptList4 · getTotalAptList4
+          → kaptCode · kaptName · bjdCode · as1~as4(시도/시군구/읍면동/리)   좌표·지번 없음
+기본정보  GET apis.data.go.kr/1613000/AptBasisInfoServiceV5/getAphusBassInfoV5?kaptCode=A10023961
+          → kaptAddr(**지번주소**) · doroJuso(도로명) · kaptUsedate(사용승인일)
+            hoCnt(세대) · kaptBcompany(시공사) · kaptTopFloor · privArea …
+```
+**버전 숫자를 찍지 말 것** — `AptListService2/3` 도, `AptBasisInfoServiceV2/V3` 도 전부
+`NO_OPENAPI_SERVICE_ERROR`(코드 12, "서비스가 없거나 폐기됨") 다. 키 문제로 오해하기 쉽다.
+실제 경로는 포털 상세페이지 HTML 에서 찾았다 —
+`www.data.go.kr/data/15057332/openapi.do`(단지목록) · `/data/15058453/`(기본정보) 를 받아
+`apis\.data\.go\.kr/...` 와 `get[A-Z]...` 를 긁으면 나온다.
+탐색 창구: **`/api/applyhome?op=raw&host=apis.data.go.kr&path=...`** (다른 포털 서비스도 이걸로 시험)
+
 ### 시공능력평가순위
 연 1회(8월) 공시라 API 불필요. **원본 공시를 통째로 적재**한다 (`tools/build-constructor-rank.mjs`).
 ```
