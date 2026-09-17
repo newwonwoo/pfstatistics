@@ -7,7 +7,7 @@ import Steps from './Steps';
 import SheetTabs from './SheetTabs';
 import { expectedRateOf } from '../src/lib/compare';
 import { manualSummary } from '../src/lib/manual';
-import { reviewScore } from '../src/lib/scoring';
+import { reviewScore, applyHidden } from '../src/lib/scoring';
 import CompareView from './CompareView';
 import RateView from './RateView';
 import ReviewView from './ReviewView';
@@ -398,7 +398,7 @@ export default function Home() {
     try {
       const { exportWorkbook } = await import('./exportExcel');
       await exportWorkbook({
-        data, facilities, manual, compare: compare && { ...compare, addr }, rate, review, sheetInput, excl: mSum.excl, manualSum: mSum, sheets: SHEETS, buildSheet,
+        data, facilities: view, manual, compare: compare && { ...compare, addr }, rate, review, sheetInput, excl: mSum.excl, manualSum: mSum, sheets: SHEETS, buildSheet,
         getCardEl: (id) => document.querySelector(`[data-evidence="${id}"]`),
         onProgress: (label) => setMsg({ kind: 'warn', text: `엑셀 생성 중 — ${label}` }),
       });
@@ -426,8 +426,16 @@ export default function Home() {
    * 뒤 두 단계가 단계 줄에 없으면 "수집하면 끝" 으로 읽힌다(사용자 지적 2026-09-16).
    */
   /* A(제외 항목 점수)는 수기입력 탭이 단일 지점으로 만든다 */
-  const mSum = useMemo(() => manualSummary({ sheetInput: sheetInput ?? {}, data, facilities, manual }),
-    [sheetInput, data, facilities, manual]);
+  /*
+   * **목록에서 지운 시설은 판정에서도 빠진다**(사용자 요청 2026-09-17).
+   * 원본(`facilities`)은 그대로 두고 — 보관·되돌리기가 가능해야 한다 —
+   * 화면·판정·엑셀이 **전부 이 파생본 하나만** 본다. 한 곳이라도 원본을 보면
+   * "지웠는데 점수가 안 바뀐다" 가 된다.
+   */
+  const view = useMemo(() => applyHidden(facilities, manual), [facilities, manual]);
+
+  const mSum = useMemo(() => manualSummary({ sheetInput: sheetInput ?? {}, data, facilities: view, manual }),
+    [sheetInput, data, view, manual]);
   const rateRes = useMemo(() => expectedRateOf(compare, rate, mSum.excl, sheetInput), [compare, rate, mSum.excl, sheetInput]);
   const ratePct = rateRes.res && !rateRes.res.pending ? rateRes.res.rate : null;
   const reviewRes = useMemo(
@@ -848,14 +856,14 @@ export default function Home() {
             {s.kind === 'manual'
               ? (
                 <ManualView
-                  region={region} addr={addr} data={data} facilities={facilities} manual={manual}
+                  region={region} addr={addr} data={data} facilities={view} manual={manual}
                   value={sheetInput} onChange={setSheetInput}
                 />
               )
               : s.kind === 'review'
               ? (
                 <ReviewView
-                  region={region} addr={addr} data={data} facilities={facilities}
+                  region={region} addr={addr} data={data} facilities={view}
                   compare={compare} rate={rate} excl={mSum.excl} sheetInput={sheetInput}
                   value={review} onChange={setReview} onJump={setTab}
                 />
@@ -863,7 +871,7 @@ export default function Home() {
               : s.kind === 'rate'
               ? (
                 <RateView
-                  region={region} addr={addr} facilities={facilities}
+                  region={region} addr={addr} facilities={view}
                   compare={compare} excl={mSum.excl} manualSum={mSum} sheetInput={sheetInput}
                   value={rate} onChange={setRate} onJump={setTab}
                 />
@@ -882,7 +890,7 @@ export default function Home() {
               )
               : (
                 <SheetView
-                  sheetId={s.id} data={data} facilities={facilities}
+                  sheetId={s.id} data={data} facilities={view}
                   radiusBasis={radiusBasis} onRadiusBasis={setRadiusBasis}
                   manual={manual}
                   onManual={(label, v) => setManual(m => ({ ...m, [label]: v }))}

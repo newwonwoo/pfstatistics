@@ -77,10 +77,28 @@ export function scoreSheet(sheetId, facilities) {
   const t = TABLE[sheetId];
   if (!t || t.scope !== 'sheet' || !facilities) return null;
   if (!sheetGathered(facilities, sheetId)) return NOT_GATHERED(sheetId);
+  /* **무엇이 몇 m 라서 이 구간인지** 같이 적는다 — 구간 이름만으로는 검산이 안 된다(사용자 지적) */
+  const measured = measuredOf(facilities, t);
   for (const rule of t.rules) {
-    if (matches(rule, facilities)) return { score: rule.score, label: rule.label, text: rule.text, rule };
+    if (matches(rule, facilities)) {
+      return { score: rule.score, label: rule.label, text: [measured, rule.text].filter(Boolean).join(' → '), measured, rule };
+    }
   }
-  return { score: t.base.score, label: t.base.label, text: t.base.text, rule: null };
+  return { score: t.base.score, label: t.base.label,
+           text: [measured, t.base.text].filter(Boolean).join(' → '), measured, rule: null };
+}
+
+/** 그 구간표가 보는 시설들의 실제 거리 — "초등학교 343m · 중학교 780m" */
+function measuredOf(facilities, t) {
+  const labels = [...new Set([
+    ...(t.members ?? []),
+    ...(t.rules ?? []).flatMap(r => Object.values(r.all ?? {}).flat()),
+  ])];
+  const parts = labels.map(l => {
+    const d = distOf(facilities, l);
+    return `${l} ${d == null ? '부재' : `${d}m`}`;
+  });
+  return parts.length ? parts.join(' · ') : null;
 }
 
 /**
@@ -200,10 +218,11 @@ export function scoreRank(key, rank) {
   if (!t || t.scope !== 'rank') return null;
   const n = Number(rank);
   if (!Number.isFinite(n) || n <= 0) return { pending: true, text: '시공능력평가순위를 조회하지 못했습니다' };
+  /* **실제 순위를 같이 돌려준다** — 근거 칸에 "1위 ~ 10위" 만 적히면 몇 위인지 알 수 없다(사용자 지적) */
   for (const rule of t.rules) {
-    if (n <= rule.lte) return { score: rule.score, label: rule.label, text: rule.text, rule };
+    if (n <= rule.lte) return { score: rule.score, label: rule.label, text: `${n}위 · ${rule.text}`, applied: n, rule };
   }
-  return { score: t.base.score, label: t.base.label, text: t.base.text, rule: null };
+  return { score: t.base.score, label: t.base.label, text: `${n}위 · ${t.base.text}`, applied: n, rule: null };
 }
 
 /**
@@ -251,17 +270,41 @@ export function scoreBand(key, raw) {
  * 한 항목이라도 판정이 안 되면 평균을 내지 않는다 — 빠진 항목을 0 으로 치면
  * "아직 모르는 점수" 가 "아주 나쁜 점수" 로 둔갑한다.
  */
+/** 그 시설의 최근접 거리 문구 — "343m" · "부재" · null(수집 전) */
+const distText = (facilities, label) => {
+  const v = facilities?.facilities?.[label];
+  if (!v) return null;
+  return v.nearest ? `${v.nearest.distance}m` : '부재';
+};
+
+/** 묶음 판정의 실측 — "대형마트 480m · 의료시설 부재" */
+function groupText(sheetId, groupLabel, facilities) {
+  const key = Object.keys(TABLE).find(
+    (k) => TABLE[k].scope === 'group' && TABLE[k].sheet === sheetId && TABLE[k].group === groupLabel);
+  const members = key ? (TABLE[key].members ?? []) : [];
+  const parts = members.map(l => `${l} ${distText(facilities, l) ?? '수집 전'}`);
+  return parts.length ? parts.join(' · ') : null;
+}
+
 export function scoreAverage(sheetId, { facilities, manual } = {}) {
   let parts = null;
+  /* **실측치를 같이 들고 간다** — "지하철역 5" 만 적으면 몇 m 라서 5점인지 검산이 안 된다(사용자 지적) */
+  const road = manual?.['6차선 왕복도로'];
   if (sheetId === '교통환경') {
     parts = [
-      { name: '지하철역', sc: scorePoi('지하철역', facilities) },
-      { name: '6차선 왕복도로', sc: scoreFacility('6차선 왕복도로', manual?.['6차선 왕복도로']) },
+      { name: '지하철역', basis: distText(facilities, '지하철역'), sc: scorePoi('지하철역', facilities) },
+      { name: '6차선 왕복도로',
+        basis: road?.name
+          ? `${road.name} ${road.distance ?? '?'}m · 왕복 ${road.lanes || '?'}차선`
+          : '도로 미선택',
+        sc: scoreFacility('6차선 왕복도로', road) },
     ];
   } else if (sheetId === '주거편의') {
     parts = [
-      { name: '상업·의료시설', sc: scoreGroup(sheetId, '상업시설 및 의료시설', facilities) },
-      { name: '문화·공공시설 및 공원', sc: scoreGroup(sheetId, '공원, 문화, 공공시설', facilities) },
+      { name: '상업·의료시설', basis: groupText(sheetId, '상업시설 및 의료시설', facilities),
+        sc: scoreGroup(sheetId, '상업시설 및 의료시설', facilities) },
+      { name: '문화·공공시설 및 공원', basis: groupText(sheetId, '공원, 문화, 공공시설', facilities),
+        sc: scoreGroup(sheetId, '공원, 문화, 공공시설', facilities) },
     ];
   }
   if (!parts) return null;
@@ -285,7 +328,15 @@ export function scoreAverage(sheetId, { facilities, manual } = {}) {
     avg: Number(avg.toFixed(2)),      // 평균점수 — 평가표의 "평균점수" 칸
     score: band?.score ?? null,       // 평가점수 — **등급 대표점수**이지 평균이 아니다
     label: band?.label ?? '',
-    text: `${parts.map(p => `${p.name} ${p.sc.score}`).join(' + ')} ÷ ${parts.length}`,
+    /*
+     * **산술평균을 (a + b) / 2 꼴로 적는다**(사용자 요청 2026-09-17).
+     * 전에는 "지하철역 5 + 6차선 왕복도로 4 ÷ 2" 라 괄호가 없어
+     * 무엇을 무엇으로 나눈 것인지 눈으로 안 잡혔다.
+     * 평균은 등급을 내는 값이고, **평가표에 적히는 점수는 그 등급의 대표점수**다 — 둘 다 적는다.
+     */
+    text: `${parts.map(p => `${p.name} ${p.basis ? `${p.basis} → ` : ''}${p.sc.score}점`).join(' · ')}`
+        + `　⇒　(${parts.map(p => p.sc.score).join(' + ')}) / ${parts.length} = ${Number(avg.toFixed(2))}`
+        + ` → ${band?.label ?? ''} → ${band?.score ?? '?'}점`,
     caution: unset.length ? `${unset.map(p => p.name).join(' · ')} 미입력 상태의 기본점수가 섞여 있습니다` : null,
     parts,
   };
@@ -527,3 +578,39 @@ export const tableOf = (key) => TABLE[key] ?? null;
 
 /** 구간표가 들어와 있는 항목인지 (없으면 화면에서 빗금을 유지한다) */
 export const hasTable = (key) => Boolean(TABLE[key]);
+
+/**
+ * **목록에서 지운 시설을 판정에서도 뺀다**(사용자 요청 2026-09-17).
+ *
+ * 도로는 × 로 지울 수 있는데 상업·의료·공원·공공·문화는 못 지웠다.
+ * 반경 안에 수십 곳이 잡히면 표가 못 읽히고, 심사 대상이 아닌 것도 섞인다.
+ *
+ * **화면에서만 지우면 안 된다.** 판정은 `nearest.distance` 로 나는데
+ * 지운 것이 최근접이면 점수가 그대로 남아 "지웠는데 점수가 안 바뀐다" 가 된다.
+ * 그래서 목록·최근접·건수를 한자리에서 다시 계산해 **시트·지도·엑셀이 같은 것을 본다.**
+ *
+ * @param {object} facilities  `/api/facilities` 응답
+ * @param {object} manual      시설 라벨별 { hidden: [시설명…] }
+ */
+export function applyHidden(facilities, manual) {
+  if (!facilities?.facilities) return facilities;
+  const out = {};
+  let touched = false;
+  for (const [label, v] of Object.entries(facilities.facilities)) {
+    const hidden = manual?.[label]?.hidden ?? [];
+    if (!hidden.length || !Array.isArray(v.items)) { out[label] = v; continue; }
+    const items = v.items.filter(it => !hidden.includes(it.name));
+    if (items.length === v.items.length) { out[label] = v; continue; }
+    touched = true;
+    out[label] = {
+      ...v,
+      items,
+      count: items.length,
+      nearest: items.length
+        ? items.reduce((a, b) => (Number(b.distance) < Number(a.distance) ? b : a))
+        : null,
+      hiddenCount: v.items.length - items.length,
+    };
+  }
+  return touched ? { ...facilities, facilities: out } : facilities;
+}

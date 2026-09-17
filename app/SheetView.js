@@ -8,6 +8,10 @@ import RadiusMap from './RadiusMap';
 import RoadPicker from './RoadPicker';
 
 const S = {
+  /* 시설 행 지우기 — 도로 후보 목록과 같은 모양이어야 같은 동작으로 읽힌다 */
+  del: { border: 0, background: 'none', color: '#b8bec7', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '2px 4px' },
+  undo: { border: 0, background: 'none', color: '#1b4fd8', cursor: 'pointer', fontSize: 11.5, textDecoration: 'underline', padding: 0, marginLeft: 8 },
+  hiddenBar: { padding: '6px 4px', fontSize: 11.5, color: '#4b525c' },
   page: { background: T.panel, border: `1px solid ${T.lineStrong}`, borderTop: 0, borderRadius: `0 0 ${T.radius}px ${T.radius}px`, padding: '22px 24px 26px' },
   h2: { fontSize: 17, fontWeight: 700, margin: '0 0 6px', letterSpacing: '-.02em' },
   subject: { fontSize: 12.5, color: T.ink2, margin: '0 0 16px' },
@@ -411,7 +415,7 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                   ) : items.length ? (
                     <div style={S.scroll}>
                       <table style={S.table}>
-                        <thead><tr>{['#', '시설명', '거리', '분류', '주소'].map(c => <th key={c} style={S.th}>{c}</th>)}</tr></thead>
+                        <thead><tr>{['#', '시설명', '거리', '분류', '주소', ''].map((c, i) => <th key={i} style={S.th}>{c}</th>)}</tr></thead>
                         <tbody>
                           {items.map((it, i) => (
                             <tr key={i}>
@@ -420,10 +424,32 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                               <td style={i === 0 ? S.tdVal : S.td}>{it.distance}m</td>
                               <td style={{ ...S.td, textAlign: 'left', color: T.muted, fontSize: 11.5 }}>{it.category ?? '-'}</td>
                               <td style={{ ...S.td, textAlign: 'left', color: T.ink2 }}>{it.address}</td>
+                              {/*
+                                **도로처럼 지울 수 있어야 한다**(사용자 요청 2026-09-17).
+                                지우면 표·지도·최근접 판정에서 같이 빠진다 — 화면에서만 지우면
+                                "지웠는데 점수가 안 바뀐다" 가 된다(`applyHidden`).
+                              */}
+                              <td style={{ ...S.td, width: 28 }}>
+                                <button style={S.del} title="이 시설을 목록·지도·판정에서 뺍니다"
+                                  onClick={() => onManual?.(f.label, {
+                                    ...(manual?.[f.label] ?? {}),
+                                    hidden: [...(manual?.[f.label]?.hidden ?? []), it.name],
+                                  })}>×</button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
+                      {(manual?.[f.label]?.hidden?.length > 0) && (
+                        <div style={S.hiddenBar}>
+                          뺀 시설 {manual[f.label].hidden.length}곳 —{' '}
+                          <span style={{ color: T.muted }}>{manual[f.label].hidden.join(' · ')}</span>
+                          <button style={S.undo}
+                            onClick={() => onManual?.(f.label, { ...(manual?.[f.label] ?? {}), hidden: [] })}>
+                            되돌리기
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div style={S.absent}>
