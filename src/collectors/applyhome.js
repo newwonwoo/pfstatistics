@@ -380,12 +380,22 @@ export function placeNameOf(houseNm) {
     .trim();
 }
 
-/** 장소검색 결과가 그 공고의 시군구 안인지 — 아니면 엉뚱한 동명 단지다 */
+/**
+ * 장소검색 결과가 그 공고의 시군구 안인지 — 아니면 엉뚱한 동명 단지다.
+ *
+ * **시도도 "시" 로 끝난다.** `/(?:시|군|구)$/` 로 첫 단어를 잡으면
+ * "서울특별시"·"부산광역시" 가 시군구로 잡히고, 카카오는 주소를 "서울 강북구 …" 로 줘서
+ * 표기가 안 맞아 **결과를 전부 거부한다**(실측: 서울·부산에서 단지명 검색 성공 0건).
+ * 시도 접미사를 먼저 걸러낸 뒤 시군구를 찾는다.
+ */
+const SIDO_SUFFIX = /(?:특별시|광역시|특별자치시|특별자치도|자치시|자치도|도)$/;
+const sggOfWords = (text) => String(text ?? '').split(/\s+/)
+  .find(w => w.length > 1 && !SIDO_SUFFIX.test(w) && /(?:시|군|구)$/.test(w)) ?? null;
+
 const sameSgg = (addr, raw) => {
-  const a = String(addr ?? '').split(/\s+/);
-  const b = String(raw ?? '').split(/\s+/);
-  const sgg = b.find(w => /(?:시|군|구)$/.test(w) && w.length > 1);
-  return !sgg || a.some(w => w === sgg);
+  const sgg = sggOfWords(raw);
+  if (!sgg) return true;
+  return String(addr ?? '').split(/\s+/).includes(sgg);
 };
 
 async function geocodeSupply(normalized, raw = '', houseNm = '') {
