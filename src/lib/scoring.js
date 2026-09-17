@@ -14,6 +14,25 @@ import TABLE from '../../config/scoring.json' with { type: 'json' };
 /** 그 시설의 최근접 거리(m). 없으면 null */
 const distOf = (facilities, label) => facilities?.facilities?.[label]?.nearest?.distance ?? null;
 
+/**
+ * 그 시트의 반경시설을 **실제로 수집했는가.**
+ *
+ * `distOf` 가 null 을 주는 경우가 둘인데 뜻이 정반대다 —
+ *   ① 수집했는데 반경 안에 없다  → 부재. 구간표의 base(1점)가 맞다.
+ *   ② 아직 수집하지 않았다      → **아직 모른다.** 점수를 내면 안 된다.
+ * 둘을 구분하지 않아 수집도 안 한 주거편의·교육환경에 `1점 · 매우열악` 이 붙고 있었다(실측).
+ * 판단요소마다 따로 판정해 평균을 내는 구조라, 판정 안 한 항목이 섞이면 평균이 통째로 틀어진다.
+ *
+ * 판정은 page.js 의 `poiDone()` 과 같은 기준을 쓴다 — 그 시트로 수집된 항목이 하나라도 있는가.
+ * (0건으로 수집된 항목도 봉투는 남으므로 "수집했는데 0건" 은 여기서 참이 된다)
+ */
+const sheetGathered = (facilities, sheetId) =>
+  Object.values(facilities?.facilities ?? {}).some((v) => v?.sheet === sheetId);
+
+const NOT_GATHERED = (sheetId) => ({
+  pending: true, text: `${sheetId} 반경시설을 아직 수집하지 않았습니다 — [${sheetId} 수집] 을 누르세요`,
+});
+
 /** labels 전부가 radius 안에 있는가 */
 function allWithin(facilities, radius, labels) {
   return labels.every((l) => {
@@ -57,6 +76,7 @@ function matches(rule, facilities, members) {
 export function scoreSheet(sheetId, facilities) {
   const t = TABLE[sheetId];
   if (!t || t.scope !== 'sheet' || !facilities) return null;
+  if (!sheetGathered(facilities, sheetId)) return NOT_GATHERED(sheetId);
   for (const rule of t.rules) {
     if (matches(rule, facilities)) return { score: rule.score, label: rule.label, text: rule.text, rule };
   }
@@ -73,6 +93,7 @@ export function scoreGroup(sheetId, groupLabel, facilities) {
     (k) => TABLE[k].scope === 'group' && TABLE[k].sheet === sheetId && TABLE[k].group === groupLabel);
   const t = key ? TABLE[key] : null;
   if (!t || !facilities) return null;
+  if (!sheetGathered(facilities, t.sheet ?? sheetId)) return NOT_GATHERED(t.sheet ?? sheetId);
   for (const rule of t.rules) {
     if (!matches(rule, facilities, t.members)) continue;
     if (rule.pending) return { pending: true, text: rule.text };
@@ -90,6 +111,7 @@ export function scoreGroup(sheetId, groupLabel, facilities) {
 export function scorePoi(label, facilities) {
   const t = TABLE[label];
   if (!t || t.scope !== 'poi' || !facilities) return null;
+  if (t.sheet && !sheetGathered(facilities, t.sheet)) return NOT_GATHERED(t.sheet);
   for (const rule of t.rules) {
     if (!matches(rule, facilities, [label])) continue;
     if (rule.pending) return { pending: true, text: rule.text };
@@ -246,7 +268,14 @@ export function scoreAverage(sheetId, { facilities, manual } = {}) {
 
   const bad = parts.filter(p => !p.sc || p.sc.pending || !Number.isFinite(p.sc.score));
   if (bad.length) {
-    return { pending: true, text: `${bad.map(p => p.name).join(' · ')} 판정 전 — 평균은 전 항목이 판정돼야 냅니다` };
+    /* 사유가 하나뿐이면 그 사유를 그대로 쓴다 — "판정 전" 만 적으면 어디로 가야 하는지 모른다 */
+    const reasons = [...new Set(bad.map(p => p.sc?.text).filter(Boolean))];
+    return {
+      pending: true,
+      text: reasons.length === 1
+        ? reasons[0]
+        : `${bad.map(p => p.name).join(' · ')} 판정 전 — 평균은 전 항목이 판정돼야 냅니다`,
+    };
   }
   const avg = parts.reduce((t, p) => t + p.sc.score, 0) / parts.length;
   const band = gradeOf(avg);
