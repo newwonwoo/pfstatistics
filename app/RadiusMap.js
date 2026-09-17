@@ -21,10 +21,17 @@ const S = {
   btnOn: { borderColor: T.accent, background: T.accentSoft, color: T.accent },
   /*
    * **지도를 크게 쓴다**(사용자 요청 2026-09-17).
-   * 420px 에서는 축소돼 시설명을 못 읽었다 — 증빙으로 붙였을 때 확인이 안 된다.
-   * 크기를 키우면 같은 축척에서 타일이 더 들어와 실제 정보량 자체가 는다.
+   * 이 지도의 목적은 예쁘게 보이는 게 아니라 **시설이 실제로 거기 있는지 눈으로 확인**하는 것이다.
+   * 420px → 640px → **760px**. 반경원이 세로에 꽉 차므로 높이가 곧 볼 수 있는 범위다.
+   * 그래도 모자라면 [크게 보기] 로 창 전체에 편다.
    */
-  map: { width: '100%', height: 640 },
+  map: { width: '100%', height: 760 },
+  mapBig: { width: '100%', flex: 1, minHeight: 0 },
+  /* 전체화면 — 확인만 하고 닫는 자리라 배경을 덮어 지도에만 집중하게 한다 */
+  overlay: {
+    position: 'fixed', inset: 0, zIndex: 9000, background: '#fff',
+    display: 'flex', flexDirection: 'column', border: 0, borderRadius: 0,
+  },
   fallback: { padding: '36px 20px', textAlign: 'center', color: T.warn, fontSize: 12.5, background: T.warnSoft, lineHeight: 1.7 },
   cap: { padding: '9px 14px', fontSize: 11.5, color: T.muted, borderTop: `1px solid ${T.line}` },
 };
@@ -69,6 +76,21 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
    * 기본은 이름을 보여주고(증빙에 이름이 있어야 한다), 번호 동그라미만 볼 수도 있게 둔다.
    */
   const [labels, setLabels] = useState(true);
+  /*
+   * **창 전체로 펴서 확인한다**(사용자 요청 2026-09-17).
+   * 시설이 진짜 그 자리에 있는지 보려면 지도가 커야 한다 —
+   * 증빙 캡쳐용 크기와 확인용 크기는 다른 요구다.
+   */
+  const [big, setBig] = useState(false);
+  useEffect(() => {
+    if (!big) return;
+    const esc = (e) => { if (e.key === 'Escape') setBig(false); };
+    window.addEventListener('keydown', esc);
+    /* 뒤 화면이 같이 스크롤되면 어디를 보는지 잃는다 */
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { window.removeEventListener('keydown', esc); document.body.style.overflow = prev; };
+  }, [big]);
   const [saving, setSaving] = useState(null);   // null | 'busy' | 실패사유
   const rvEl = useRef(null);
   const rvRef = useRef(null);
@@ -212,7 +234,7 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
       ...opts,
     });
     return () => { if (node) delete node.__capture; };
-  }, [ready, center.lat, center.lng, radius, mkey, pkey, rkey, title, mapType, labels]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, center.lat, center.lng, radius, mkey, pkey, rkey, title, mapType, labels, big]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * 클릭 지점에서 가장 가까운 로드뷰로 옮긴다.
@@ -307,7 +329,7 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
   }
 
   return (
-    <div style={S.box}>
+    <div style={big ? { ...S.box, ...S.overlay } : S.box}>
       <div style={S.bar}>
         <span style={S.name}>{title} · 반경 {radius >= 1000 ? `${radius / 1000}km` : `${radius}m`}</span>
         <span style={{ display: 'flex', gap: 4, marginLeft: 'auto', alignItems: 'center' }}>
@@ -328,6 +350,11 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
               }}
             >{t.label}</button>
           ))}
+          <button style={{ ...S.btn, ...(big ? S.btnOn : null) }}
+            title={big ? '원래 크기로 돌아갑니다 (Esc)' : '창 전체로 펴서 시설 위치를 확인합니다'}
+            onClick={() => setBig(v => !v)}>
+            {big ? '닫기 (Esc)' : '크게 보기'}
+          </button>
           {markers.length > 0 && (
             <button style={{ ...S.btn, ...(labels ? S.btnOn : null) }}
               title={labels ? '이름표를 끄고 번호 동그라미만 봅니다' : '시설 이름표를 답니다'}
@@ -351,7 +378,7 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
         ? <div style={S.fallback}>
             지도를 불러오지 못했습니다.<br />{err}
           </div>
-        : <div ref={el} data-map={title} style={S.map} />}
+        : <div ref={el} data-map={title} style={big ? S.mapBig : S.map} />}
       {rvOn && (
         <>
           <div ref={rvEl} style={{ width: '100%', height: 340, borderTop: `1px solid ${T.line}` }} />
