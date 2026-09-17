@@ -694,6 +694,25 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
           <span style={{ fontSize: 12 }}>한국부동산원 청약홈 분양정보에서 반경 안의 분양 단지를 찾습니다.</span>
         </div>
       )}
+      {hugPrice && (
+        <div style={S.baseline}>
+          <b>{hug.price.areaName} 지역 평균 분양가</b>
+          <span style={S.baseNum}>{won(hugPrice)}</span>
+          <span style={{ color: T.muted }}>원/㎡ · {String(hug.price.period).slice(0, 4)}년 {String(hug.price.period).slice(4)}월</span>
+          {avg != null && (
+            <span style={{ marginLeft: 8, color: T.ink2 }}>
+              비교사업장 평균은 이 값의 <b>{((avg / hugPrice) * 100).toFixed(1)}%</b>
+            </span>
+          )}
+          <span style={{ width: '100%', color: T.muted, fontSize: 11, marginTop: 4 }}>
+            {hug.price.citation} · <b>시도 단위</b>라 규정 제16조의 「인근 유사사업장 평균가격」을 대체하지 못합니다 —
+            반경 안에 비교할 단지가 없을 때 감각을 잡는 기준선입니다.
+            {' '}{hug.price.areaBasisNote}.
+            {hug.price.bySize?.T3 && <> 규모별 : 60㎡이하 {won(hug.price.bySize.T2?.won)} · 60~85 {won(hug.price.bySize.T3?.won)} · 85~102 {won(hug.price.bySize.T4?.won)} · 102초과 {won(hug.price.bySize.T5?.won)}</>}
+          </span>
+        </div>
+      )}
+
       {data && all.length === 0 && (
         <div style={S.warn}>
           반경 {rLabel(data.radius)} 안에 분양공고 이력이 있는 단지가 없습니다
@@ -815,25 +834,6 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
           **분양가는 어느 원천에도 없다.** 그래서 평균에 넣지 못하고, 그 사실을 적어 둔다 —
           조용히 섞으면 분양가격지수가 통째로 틀어진다.
         */}
-        {hugPrice && (
-          <div style={S.baseline}>
-            <b>{hug.price.areaName} 지역 평균 분양가</b>
-            <span style={S.baseNum}>{won(hugPrice)}</span>
-            <span style={{ color: T.muted }}>원/㎡ · {String(hug.price.period).slice(0, 4)}년 {String(hug.price.period).slice(4)}월</span>
-            {avg != null && (
-              <span style={{ marginLeft: 8, color: T.ink2 }}>
-                비교사업장 평균은 이 값의 <b>{((avg / hugPrice) * 100).toFixed(1)}%</b>
-              </span>
-            )}
-            <span style={{ width: '100%', color: T.muted, fontSize: 11, marginTop: 4 }}>
-              {hug.price.citation} · <b>시도 단위</b>라 규정 제16조의 「인근 유사사업장 평균가격」을 대체하지 못합니다 —
-              반경 안에 비교할 단지가 없을 때 감각을 잡는 기준선입니다.
-              {' '}{hug.price.areaBasisNote}.
-              {hug.price.bySize?.T3 && <> 규모별 : 60㎡이하 {won(hug.price.bySize.T2?.won)} · 60~85 {won(hug.price.bySize.T3?.won)} · 85~102 {won(hug.price.bySize.T4?.won)} · 102초과 {won(hug.price.bySize.T5?.won)}</>}
-            </span>
-          </div>
-        )}
-
         {data.knownApts?.items?.length > 0 && (
           <div style={{ marginTop: 14 }}>
             <div style={S.secTitle}>

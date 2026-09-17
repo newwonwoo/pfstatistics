@@ -106,7 +106,7 @@ export default function ManualView({ region, addr, data, facilities, manual, val
     return () => { dead = true; };
   }, [region]);
   const hugRate = hug?.rate?.latest ?? null;
-  const qLabel = (p) => (p ? `${String(p).slice(0, 4)}년 ${String(p).slice(4)}분기` : '');
+  const qLabel = (p) => (p ? `${String(p).slice(0, 4)}년 ${Number(String(p).slice(4))}분기` : '');
   const scaleSc = sum.formed[0].sc;
   const mixSc = sum.formed[1].sc;
   const nearbySc = sum.formed[2].sc;
