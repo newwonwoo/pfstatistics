@@ -490,9 +490,11 @@ export default function Home() {
         <h1 style={S.h1}>PF 보증심사 통계 자동수집</h1>
         <span style={S.tag}>원천 직결</span>
       </div>
-      <p style={S.lead}>사업장 시군구를 입력하면 심사에 필요한 수치와 증빙을 원천에서 직접 수집합니다.</p>
+      {/* 안내문은 처음 한 번만 읽는다 — 확정 뒤에는 그 자리를 일에 쓴다 */}
+      {!fixed && <p style={S.lead}>사업장 시군구를 입력하면 심사에 필요한 수치와 증빙을 원천에서 직접 수집합니다.</p>}
 
-      <SourceHealth />
+      {/* 원천 상태는 수집할 때 보는 것이다 — 뒤 단계에서는 그 자리를 표에 내준다 */}
+      {gatherTab && <SourceHealth />}
       <Steps current={current} done={done} />
 
       <div style={S.panel}>
@@ -512,7 +514,20 @@ export default function Home() {
               {facilities ? ` · 시설 ${POI_SHEETS.filter(poiDone).length}/${POI_SHEETS.length}` : ''}
               {compare?.data ? ' · 비교사업장' : ''}
             </span>
-            <button style={S.summaryBtn} onClick={() => setPanelOpenManual(true)}>사업지 바꾸기</button>
+            {/* 내보내기는 어느 단계에서나 쓴다 — 요약 줄에 붙여 한 줄을 아낀다 */}
+            {data && (
+              <>
+                <button style={{ ...S.summaryBtn, marginLeft: 'auto' }} onClick={saveRecord} disabled={!!busy}>
+                  이 조회 보관
+                </button>
+                <button style={{ ...S.summaryBtn, marginLeft: 0 }} onClick={exportXlsx} disabled={!!busy}>
+                  {busy === 'xlsx' ? '생성 중…' : '엑셀 다운로드'}
+                </button>
+              </>
+            )}
+            <button style={{ ...S.summaryBtn, marginLeft: data ? 0 : 'auto' }} onClick={() => setPanelOpenManual(true)}>
+              사업지 바꾸기
+            </button>
           </div>
         )}
 
@@ -714,9 +729,9 @@ export default function Home() {
             </>
           )}
 
-          {data && fixed && (
+          {data && fixed && panelOpen && (
             <>
-              <button style={panelOpen ? { ...S.btn({}), ...S.spacer } : S.btn({})} onClick={saveRecord} disabled={!!busy}>
+              <button style={{ ...S.btn({}), ...S.spacer }} onClick={saveRecord} disabled={!!busy}>
                 이 조회 보관
               </button>
               <button style={S.btn({ busy: busy === 'xlsx' })} onClick={exportXlsx} disabled={!!busy}>
@@ -806,7 +821,8 @@ export default function Home() {
       {data && gatherTab && <Overview data={data} onJump={setTab} />}
 
       <div style={{ marginTop: 20 }}>
-        <SheetTabs sheets={SHEETS} active={tab} onSelect={(id) => { setTab(id); setMapOpenManual(null); }} status={status} />
+        <SheetTabs sheets={SHEETS} active={tab}
+          onSelect={(id) => { setTab(id); setMapOpenManual(null); setMsg(null); }} status={status} />
         {/*
           모든 시트를 항상 마운트해 둔다.
           엑셀 내보내기가 각 시트의 증빙 카드와 지도를 캡쳐하는데,

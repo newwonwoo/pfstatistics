@@ -24,6 +24,9 @@ export default function SavedList({ onOpen, refreshKey }) {
 
   useEffect(() => { setItems(store.list()); }, [refreshKey]);
 
+  /* 보관한 게 없으면 이 줄은 아무 뜻이 없다 — 자리를 비워 탭을 위로 올린다 */
+  if (items.length === 0 && !open) return null;
+
   return (
     <div style={S.wrap}>
       <div style={S.head} onClick={() => setOpen(!open)}>

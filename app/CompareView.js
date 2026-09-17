@@ -56,7 +56,7 @@ const S = {
   }),
   ghost: { padding: '6px 13px', fontSize: 11.5, fontWeight: 700, borderRadius: 6, cursor: 'pointer', border: `1px solid ${T.accent}`, background: '#fff', color: T.accent },
   take: {
-    marginTop: 4, alignSelf: 'flex-start', padding: '2px 8px', fontSize: 10.5, fontWeight: 700, cursor: 'pointer',
+    whiteSpace: 'nowrap', padding: '3px 8px', fontSize: 10.5, fontWeight: 700, cursor: 'pointer',
     border: `1px solid ${T.accent}`, borderRadius: 4, background: T.accentSoft, color: T.accent,
   },
   autoMsg: {
@@ -64,6 +64,13 @@ const S = {
     background: '#f7f9fb', border: `1px solid ${T.line}`, fontSize: 11.5, color: T.ink2, lineHeight: 1.6,
   },
   label: { fontSize: 11.5, color: T.muted },
+  regHead: {
+    width: '100%', display: 'flex', alignItems: 'baseline', gap: 10, cursor: 'pointer',
+    padding: '9px 14px', marginBottom: 12, textAlign: 'left',
+    background: '#f7f9fb', border: `1px solid ${T.line}`, borderRadius: 7, fontSize: 12.5, color: T.ink,
+  },
+  regHeadNote: { fontSize: 11.5, color: T.muted, fontWeight: 400 },
+  regHeadArrow: { marginLeft: 'auto', fontSize: 11, color: T.muted, fontWeight: 700 },
   reg: { padding: '11px 14px', marginBottom: 14, borderRadius: 7, background: '#f7f9fc', border: `1px solid ${T.line}`, fontSize: 11.5, color: T.ink2, lineHeight: 1.85 },
   regKey: { display: 'inline-block', minWidth: 52, fontWeight: 700, color: T.muted },
   card: { padding: '14px 16px', marginBottom: 14, borderRadius: 8, background: '#fffdf5', border: '1px solid #ecdfc0' },
@@ -138,6 +145,7 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [autoMsg, setAutoMsg] = useState(null);   // [규정대로 자동선택] 이 무엇을 했는지
+  const [regOpen, setRegOpen] = useState(false);  // 선정기준 원문 — 기본은 접힘
 
   const v = value ?? {};
   const radius = v.radius ?? baseRadius(region);
@@ -310,8 +318,19 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
       <h2 style={S.h2}>비교사업장 · 분양가 적정성</h2>
       <p style={S.subject}>▶ 사업지 : {addr ?? '주소 미확정'}{company ? ` · 시공사 ${company}` : ''}</p>
 
-      {/* 규정을 화면에 펴 둔다 — 무엇을 근거로 거르는지 보이지 않으면 결과를 믿을 수 없다 */}
-      <div style={S.reg}>
+      {/*
+        규정은 보이는 자리에 있어야 하지만 **매번 읽는 글은 아니다.**
+        150px 을 늘 먹어서 정작 고르는 표가 그만큼 아래로 밀렸다 — 접어 두고 필요할 때 편다.
+        머리줄에 요약을 남겨 "무엇을 근거로 거르는지" 는 접힌 채로도 보인다.
+      */}
+      <button style={S.regHead} onClick={() => setRegOpen(o => !o)}>
+        <span style={{ fontWeight: 700 }}>인근 유사사업장 선정기준</span>
+        <span style={S.regHeadNote}>
+          제16조 · 거리 {radius / 1000}km · 1년 이내 분양개시 우선 · 유사도 2개 이상 · 공공분양/10년경과 제외
+        </span>
+        <span style={S.regHeadArrow}>{regOpen ? '접기 ▲' : '펴기 ▼'}</span>
+      </button>
+      <div style={{ ...S.reg, display: regOpen ? 'block' : 'none' }}>
         <div><span style={S.regKey}>① 거리</span> {REG.거리}</div>
         <div><span style={S.regKey}></span><span style={{ color: T.muted }}>측정 : {REG.거리측정}</span></div>
         <div><span style={S.regKey}>② 시기</span> {REG.시기}</div>
@@ -414,20 +433,23 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
           </label>
           <label style={S.field}>
             <span style={S.label}>다. 시공능력평가순위{companyRank ? ` (${companyRank}위)` : ''}</span>
-            <select style={S.select} value={site.rankBand ?? ''} onChange={e => setSite({ rankBand: e.target.value })}>
-              <option value="">선택</option>
-              {RANK_BANDS.map(x => <option key={x} value={x}>{x}</option>)}
-            </select>
             {/*
               순위를 알면서 구간을 또 고르게 하지 않는다. 말없이 채우면 입력값과 구분이 안 되므로
               **누를 때만** 들어간다 — 공동시공처럼 다른 시공자로 볼 때가 있어 자동채택이 늘 옳지도 않다.
+              버튼을 select 아래에 두었더니 이 칸만 2줄이 되어 옆 칸(택지유형)이 밀렸다 — 같은 줄에 둔다.
             */}
-            {rankBandOf(companyRank) && site.rankBand !== rankBandOf(companyRank) && (
-              <button type="button" style={S.take}
-                onClick={() => setSite({ rankBand: rankBandOf(companyRank) })}>
-                {rankBandOf(companyRank)} 넣기
-              </button>
-            )}
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <select style={S.select} value={site.rankBand ?? ''} onChange={e => setSite({ rankBand: e.target.value })}>
+                <option value="">선택</option>
+                {RANK_BANDS.map(x => <option key={x} value={x}>{x}</option>)}
+              </select>
+              {rankBandOf(companyRank) && site.rankBand !== rankBandOf(companyRank) && (
+                <button type="button" style={S.take}
+                  onClick={() => setSite({ rankBand: rankBandOf(companyRank) })}>
+                  {rankBandOf(companyRank)}
+                </button>
+              )}
+            </span>
           </label>
           <label style={S.field}>
             <span style={S.label}>라. 택지유형</span>
