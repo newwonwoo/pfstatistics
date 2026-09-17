@@ -258,6 +258,13 @@ export async function composeMap(el, spec = {}) {
      */
     markers.forEach((m, i) => {
       const q = pt(m.lat, m.lng);
+      /* `faint` 는 도로가 지나는 자리 — 시설이 아니라 자취라 번호를 달지 않는다 */
+      if (m.faint) {
+        ctx.beginPath(); ctx.arc(q.x, q.y, 5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(27,79,216,.55)'; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+        return;
+      }
       drawPin(ctx, q.x, q.y, i === 0 ? '#1b4fd8' : '#EA4335', m.no ?? i + 1);
     });
     drawPin(ctx, c.x, c.y, '#111111');       // 사업지
@@ -267,9 +274,9 @@ export async function composeMap(el, spec = {}) {
      * 사업지와 모든 시설 핀의 자리를 먼저 막아두고 라벨 자리를 찾는다.
      */
     const pinBox = (q) => ({ x1: q.x - 12, y1: q.y - 33, x2: q.x + 12, y2: q.y + 3 });
-    const placed = [pinBox(c), ...markers.map(m => pinBox(pt(m.lat, m.lng)))];
+    const placed = [pinBox(c), ...markers.filter(m => !m.faint).map(m => pinBox(pt(m.lat, m.lng)))];
 
-    markers.slice(0, LABEL_MAX).forEach((m, i) => {
+    markers.filter(m => !m.faint).slice(0, LABEL_MAX).forEach((m, i) => {
       const q = pt(m.lat, m.lng);
       const no = m.no ?? i + 1;
       placeLabel(ctx, placed, q.x, q.y - 36,

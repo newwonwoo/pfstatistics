@@ -114,6 +114,8 @@ const S = {
   funnel: { marginBottom: 10, padding: '7px 12px', background: T.soft ?? '#f6f7f9', border: '1px solid #e5e7eb',
             borderRadius: 6, fontSize: 12, color: T.ink2, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2 },
   arrow: { color: '#b8bec7', margin: '0 6px' },
+  simHit: { fontSize: 10.5, color: T.ok ?? '#1a7f4b', marginTop: 3, lineHeight: 1.4, whiteSpace: 'normal', maxWidth: 150 },
+  simMiss: { fontSize: 10.5, color: T.muted, lineHeight: 1.4, whiteSpace: 'normal', maxWidth: 150 },
   link: { color: T.accent, textDecoration: 'none' },
   kind: { fontSize: 11, color: T.muted, background: '#f1f3f5', padding: '2px 7px', borderRadius: 4 },
   chips: { display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', margin: '0 0 14px' },
@@ -188,6 +190,8 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
     setBusy(true); setErr(null);
     try {
       const qs = new URLSearchParams({ x: String(coord.x), y: String(coord.y), region, radius: String(radius) });
+      /* 본건(심사대상) 단지가 제 목록에 앉지 않도록 확정한 주소를 같이 넘긴다 */
+      if (addr) qs.set('site', `${region} ${addr}`.trim());
       // 그린 선이 곧 판정선이어야 한다 — 지도에 경계 기준으로 그릴 때만 경계로 잰다
       if (usePoly) qs.set('polygon', JSON.stringify(polygon));
       const res = await fetch(`/api/apts?${qs}`);
@@ -230,7 +234,8 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [all, kinds, site.houseType, site.sizeBand, site.rankBand, site.landType]);
 
-  const chosen = useMemo(() => items.filter(a => picked.includes(a.manageNo)), [items, picked]);
+  /* 본건은 보관본에서 복원돼도 평균에 들어가지 않는다 */
+  const chosen = useMemo(() => items.filter(a => picked.includes(a.manageNo) && !a.isSite), [items, picked]);
 
   const toggleKind = (k) => {
     const next = kinds.includes(k) ? kinds.filter(x => x !== k) : [...kinds, k];
@@ -255,7 +260,7 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
   const autoPick = () => {
     const sale = items.filter(isSale);
     const excluded = sale.filter(a => a.publicSale || a.years > 10).length;
-    let c = sale.filter(a => a.sim.n >= 2 && !a.publicSale && !(a.years > 10));
+    let c = sale.filter(a => a.sim.n >= 2 && !a.isSite && !a.publicSale && !(a.years > 10));
     if (!c.length) {
       setAutoMsg(`규정 요건(유사도 2개 이상 일치)을 채우는 단지가 없습니다`
         + `${excluded ? ` (공공분양·10년 경과로 제외한 ${excluded}건 별도)` : ''}`
@@ -718,8 +723,9 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
                 return (
                   <tr key={a.manageNo} style={on ? S.rowOn : drop ? S.rowOut : undefined}>
                     <td style={S.td}>
-                      <input type="checkbox" checked={on} disabled={!isSale(a)}
-                        title={isSale(a) ? '' : '임대보증금이라 분양가 평균에 넣을 수 없습니다'}
+                      <input type="checkbox" checked={on} disabled={!isSale(a) || a.isSite}
+                        title={a.isSite ? '본건(심사대상)이라 비교사업장에 넣을 수 없습니다'
+                             : isSale(a) ? '' : '임대보증금이라 분양가 평균에 넣을 수 없습니다'}
                         onChange={() => toggle(a.manageNo)} />
                     </td>
                     <td style={S.td}>{i + 1}</td>
@@ -727,6 +733,9 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
                     <td style={S.tdL}>
                       {a.url ? <a href={a.url} target="_blank" rel="noreferrer" style={S.link}>{a.name}</a> : a.name}
                       {a.builder && <span style={{ color: T.muted, fontSize: 11 }}> · {a.builder}{a.builderRank ? ` ${a.builderRank}위` : ''}</span>}
+                      {a.isSite && <><br /><span style={S.badge('ok')} title="사업지와 같은 지번입니다 — 자기 자신은 비교사업장이 될 수 없습니다">
+                        본건 (심사대상) — 비교에서 제외
+                      </span></>}
                       {drop && <><br /><span style={S.badge('warn')}>
                         {a.publicSale ? '공공분양 — 제외 권고' : '분양개시 10년 경과 — 제외 권고'}
                       </span></>}
@@ -760,10 +769,17 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
                       : <td style={S.tdNo} title="민간임대의 공급금액은 임대보증금입니다">
                           <span style={S.pend}>임대보증금 {won(priceOf(a))}</span>
                         </td>}
-                    <td style={S.tdNo} title={siteFilled ? `일치 : ${a.sim.hit.join(', ') || '없음'}\n불일치 : ${a.sim.miss.join(', ')}` : '위 [본건 제원] 을 채우면 유사도를 판정합니다'}>
-                      {siteFilled
-                        ? <span style={S.badge(a.sim.n >= 3 ? 'ok' : a.sim.n >= 2 ? 'none' : 'warn')}>{a.sim.n}개 일치</span>
-                        : <span style={S.pend}>본건 제원 미입력</span>}
+                    {/*
+                      **무엇이 일치했는지 화면에 적는다**(사용자 요청 2026-09-17).
+                      전에는 `title` 에만 있어 마우스를 올리기 전엔 안 보였다 —
+                      이 앱이 이미 두 번 겪은 함정이다. 선정 근거라 증빙에도 남아야 한다.
+                    */}
+                    <td style={S.tdNo}>
+                      {siteFilled ? (<>
+                        <span style={S.badge(a.sim.n >= 3 ? 'ok' : a.sim.n >= 2 ? 'none' : 'warn')}>{a.sim.n}개 일치</span>
+                        <div style={S.simHit}>{a.sim.hit.join(' · ') || '일치 없음'}</div>
+                        {a.sim.miss.length > 0 && <div style={S.simMiss}>{a.sim.miss.join(' · ')}</div>}
+                      </>) : <span style={S.pend}>본건 제원 미입력</span>}
                     </td>
                   </tr>
                 );

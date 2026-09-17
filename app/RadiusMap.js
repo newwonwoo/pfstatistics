@@ -119,6 +119,18 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
       markers.forEach((m, i) => {
         const p = new kakao.maps.LatLng(m.lat, m.lng);
         const no = m.no ?? i + 1;
+        /*
+         * `faint` 는 **도로가 지나는 자리**를 잇는 점이다 — 시설이 아니라 자취라
+         * 번호도 라벨도 달지 않는다. 번호를 달면 표의 # 와 어긋나 읽는 사람을 헷갈리게 한다.
+         */
+        if (m.faint) {
+          new kakao.maps.CustomOverlay({
+            position: p, map, yAnchor: 0.5, zIndex: 2,
+            content: `<div style="width:11px;height:11px;border-radius:11px;background:#1b4fd8;opacity:.55;
+              border:2px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.3)"></div>`,
+          });
+          return;
+        }
         new kakao.maps.CustomOverlay({
           position: p, map, yAnchor: 1, zIndex: 3,
           content: `<div style="width:24px;height:24px;border-radius:24px;background:${i === 0 ? '#1b4fd8' : '#EA4335'};

@@ -215,13 +215,25 @@ export async function nearbyRoads({ x, y }, radius = 300) {
     } catch { return null; }
   }));
 
+  /*
+   * **표본점을 버리지 말고 다 들고 온다.**
+   * 전에는 가장 가까운 표본점 하나만 남겼는데, 그 점은 도로 위가 아니라
+   * 그 도로에 접한 **필지**라 지도에 찍힌 핀이 도로와 어긋나 보였다(사용자 지적).
+   * 같은 도로명이 나온 점을 모두 주면 지도가 **도로가 지나는 자리**를 보여줄 수 있다.
+   */
   for (const r of results) {
     if (!r) continue;
     const cur = found.get(r.name);
-    if (!cur || r.dist < cur.distance) {
-      found.set(r.name, { name: r.name, distance: r.dist, x: r.x, y: r.y, address: r.addr, ...grade(r.name) });
+    if (!cur) {
+      found.set(r.name, { name: r.name, distance: r.dist, x: r.x, y: r.y, address: r.addr,
+                          points: [{ x: r.x, y: r.y, dist: r.dist }], ...grade(r.name) });
+      continue;
     }
+    cur.points.push({ x: r.x, y: r.y, dist: r.dist });
+    if (r.dist < cur.distance) { cur.distance = r.dist; cur.x = r.x; cur.y = r.y; cur.address = r.addr; }
   }
+  /* 가까운 순으로 — 지도에 몇 개만 찍을 때 사업지 쪽부터 남는다 */
+  for (const v of found.values()) v.points.sort((a, b) => a.dist - b.dist);
   // 큰 도로부터, 같은 급이면 가까운 것부터
   return [...found.values()].sort((a, b) => a.rank - b.rank || a.distance - b.distance);
 }

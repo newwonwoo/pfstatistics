@@ -133,10 +133,21 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
       const sorted = picked
         ? [...big.filter(r => r.name === picked), ...big.filter(r => r.name !== picked)]
         : big;
-      return sorted.map((r, i) => ({
+      const pins = sorted.map((r, i) => ({
         no: i + 1, lat: Number(r.y), lng: Number(r.x),
         name: `${r.name} (${r.grade})`, distance: r.distance,
       }));
+      /*
+       * **고른 도로가 지나는 자리를 다 찍는다**(사용자 지적 2026-09-17).
+       * 표본점 하나만 찍으면 "배지 거리와 지도 위치가 다르다" 로 보인다 —
+       * 그 점은 도로 중심선이 아니라 도로에 접한 필지이기 때문이다.
+       * 고른 도로에 한해 표본점을 전부 찍어 도로의 走向이 눈에 보이게 한다.
+       */
+      const cur = sorted.find(r => r.name === picked);
+      const trail = (cur?.points ?? []).slice(1, 12).map(p => ({
+        lat: Number(p.y), lng: Number(p.x), name: `${cur.name} 지나는 지점`, distance: p.dist, faint: true,
+      }));
+      return [...pins, ...trail];
     };
 
     /** 시설명 셀 — 수집 전이면 대기, 수집 후 없으면 '부재' */

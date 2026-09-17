@@ -39,6 +39,8 @@ const S = {
   applyTxt: { flex: 1, minWidth: 200, fontSize: 12, color: T.ink2 },
   applyBtn: { padding: '8px 16px', borderRadius: 6, border: 0, background: T.accent, color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' },
   undo: { border: 0, background: 'none', color: T.accent, cursor: 'pointer', fontSize: 11.5, textDecoration: 'underline', padding: 0 },
+  more: { border: '1px solid #e2e5ea', background: '#fff', color: T.ink2, cursor: 'pointer', fontSize: 11.5,
+          borderRadius: 5, padding: '4px 10px', alignSelf: 'flex-start' },
 
   lanes: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, padding: '10px 12px', borderRadius: 6, background: '#f7f9fb', border: `1px solid ${T.line}`, flexWrap: 'wrap' },
   lbl: { fontSize: 12, fontWeight: 700, color: T.ink2 },
@@ -79,8 +81,16 @@ export default function RoadPicker({ coord, radius = 300, value, onChange, onRoa
     return () => { dead = true; };
   }, [coord?.x, coord?.y, radius]);
 
+  /*
+   * **기본은 대로·로만 편다**(사용자 지적 2026-09-17).
+   * 실측(성동구 용답동 1km): 후보 53곳 중 대로 2 · 로 8 · 길/번길 43.
+   * 6차선이 될 수 있는 것은 사실상 대로·로뿐인데 길이 43줄을 먹어 목록이 못 읽힌다.
+   */
+  const [showSmall, setShowSmall] = useState(false);
   const set = (patch) => onChange?.({ ...(value ?? {}), ...patch });
-  const visible = (rows ?? []).filter(r => !dismissed.includes(r.name));
+  const kept = (rows ?? []).filter(r => !dismissed.includes(r.name));
+  const smallCount = kept.filter(r => r.rank > 1).length;
+  const visible = showSmall ? kept : kept.filter(r => r.rank <= 1);
   // 지도에 찍히는 것은 큰 도로(대로·로)만 — 길·번길까지 찍으면 핀에 덮인다
   const bigCount = visible.filter(r => r.rank <= 1).length;
   const lanes = value?.lanes ?? 0;
@@ -99,12 +109,20 @@ export default function RoadPicker({ coord, radius = 300, value, onChange, onRoa
           다만 같은 영 §8②1 단서가 <b>대로↔로, 로↔길을 바꿔 쓸 수 있게</b> 열어두었고
           도로명은 구간 설정 시점 기준이라, <b>이름으로 차로수를 단정할 수 없습니다.</b>
           아래 로드뷰로 세어 차선 수만 넣으면 판정됩니다.
+          <br /><b>거리(*)는 격자 표본점 기준</b>입니다 — 도로 중심선이 아니라 그 도로에 접한 지점까지의 거리라
+          수십 m 차이가 납니다. 고른 도로가 <b>지나는 자리는 지도에 전부 표시</b>됩니다.
         </span>
       </div>
 
       {err && <div style={{ ...S.msg, color: T.warn }}>도로명 조회 실패: {err}</div>}
       {!rows && !err && <div style={S.msg}>주변 도로를 훑는 중…</div>}
       {rows?.length === 0 && <div style={S.msg}>주변에서 도로명을 찾지 못했습니다.</div>}
+
+      {smallCount > 0 && (
+        <button style={S.more} onClick={() => setShowSmall(v => !v)}>
+          {showSmall ? `길·번길 ${smallCount}곳 접기` : `길·번길 ${smallCount}곳 더 보기`}
+        </button>
+      )}
 
       {visible.map(r => {
         const applied = value?.name === r.name;
@@ -121,8 +139,9 @@ export default function RoadPicker({ coord, radius = 300, value, onChange, onRoa
               <span style={S.badge(r.rank)}>{r.grade}</span>
               {applied && <span style={S.applied}>적용됨</span>}
               <span style={S.hint}>{r.hint ?? ''}</span>
-              <span style={{ ...S.dist, color: band.score > 1 ? T.ink2 : T.muted }}>
-                {r.distance}m · 6차선이면 {band.score}점
+              <span style={{ ...S.dist, color: band.score > 1 ? T.ink2 : T.muted }}
+                    title="격자로 훑은 표본점까지의 거리입니다 — 도로 중심선이 아니라 그 도로에 접한 지점입니다">
+                {r.distance}m<span style={{ color: T.muted, fontWeight: 400 }}>*</span> · 6차선이면 {band.score}점
               </span>
             </button>
             <button

@@ -667,7 +667,18 @@ const sggOf = (addr) => String(addr ?? '').split(/\s+/).slice(0, 2).join(' ');
  * @param {{x:number,y:number}} site  사업지 대표지번 좌표
  * @param {Array<{lat,lng}>} polygon  사업지 경계(있으면 경계 최단거리로 잰다 — 다른 시트와 같은 규칙)
  */
-export async function collectComparables({ site, region, radius = 2000, polygon = null, from = null, probe = null, census = false, sggCode = null }) {
+/**
+ * **본건(심사대상) 판별** — 사업지 자체가 비교사업장 목록에 앉는다(사용자 지적 2026-09-17).
+ * 실측: 서울 성동구 용답동 108-1 로 조회하니 「청계리버뷰자이 · 0m」 가 1번 줄에 나왔다.
+ * 자기 자신을 평균에 넣으면 분양가격지수가 1.00 쪽으로 끌려간다.
+ * 지우지는 않는다 — **「본건」이라고 적고 선택만 막는다**(같은 자리에 다른 공고가 있을 수 있다).
+ */
+const jibunKey = (addr) => {
+  const m = String(addr ?? '').match(/([가-힣]+(?:동|리|가))\s*(산\s*)?(\d+(?:-\d+)?)/);
+  return m ? `${m[1]} ${m[2] ? '산' : ''}${m[3]}` : null;
+};
+
+export async function collectComparables({ site, region, radius = 2000, polygon = null, from = null, probe = null, census = false, sggCode = null, siteAddress = null }) {
   const sido = noticeSido(region);
   if (!sido) {
     const e = new Error('통합 시도는 시군구까지 골라야 분양정보를 가릅니다 (청약홈이 아직 광주/전남을 따로 집계합니다)');
@@ -756,6 +767,7 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
     .map(v => ({ name: v.r.HOUSE_NM, address: v.r.HSSPLY_ADRES, kind: v.kind,
                  saleStart: v.r.CNTRCT_CNCLS_BGNDE ?? null, url: v.r.PBLANC_URL ?? null }));
 
+  const siteKey = jibunKey(siteAddress ?? region);
   const within = located.filter(v => v?.p && v.d <= radius).sort((a, b) => a.d - b.d);
 
   /*
@@ -831,6 +843,8 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
       query: q,
       x: p.x, y: p.y,
       distance: d,
+      /* 본건(심사대상)인가 — 같은 지번이거나 사실상 같은 자리(30m 이내) */
+      isSite: (siteKey != null && jibunKey(r.HSSPLY_ADRES) === siteKey) || d <= 30,
       /* 좌표를 어디까지 맞춰서 잰 거리인지 — dong·place 는 근사다 */
       geocode: precision ?? 'exact',
       /* K-apt 로 지번을 찾아 다시 잰 것 — 사용승인일·세대수·시공사도 같이 왔다 */

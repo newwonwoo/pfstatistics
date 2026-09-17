@@ -46,6 +46,8 @@ export async function GET(req) {
         클라이언트에 새 파라미터를 요구하면 보관본·재조회 경로마다 빠뜨리기 쉽다.
       */
       sggCode: q.get('sgg') || await sggCodeOf(region),
+      /* 본건(심사대상) 단지를 비교사업장에서 가리려면 확정한 사업지 주소가 필요하다 */
+      siteAddress: q.get('site') || null,
     });
     return NextResponse.json({ region, ...r });
   } catch (e) {
