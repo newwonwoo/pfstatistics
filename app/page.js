@@ -845,8 +845,13 @@ export default function Home() {
         <button style={S.mapToggle} onClick={() => setMapOpen(o => !o)}>
           <span style={{ fontWeight: 700 }}>사업지 경계 지도</span>
           <span style={S.mapToggleNote}>
+            {/*
+              기본값이 경계가 된 뒤로 "미지정 = 중심 기준" 이라고만 적으면 기본값이 중심인 것처럼 읽힌다.
+              지금 상태(미지정)와 다음 동작(수집 때 그린다)을 같이 적는다.
+            */}
             {polygon?.length >= 3 ? `경계 ${polygon.length}점 지정됨 — 경계 기준으로 잽니다`
-              : '경계 미지정 — 대표지번 중심으로 잽니다'}
+              : basisMode === 'polygon' ? '경계 미지정 — [반경시설 수집] 을 누르면 여기서 그립니다'
+              : '중심 기준 — 대표지번 한 점에서 잽니다'}
           </span>
           <span style={S.mapToggleArrow}>{mapOpen ? '접기 ▲' : '펴기 ▼'}</span>
         </button>
