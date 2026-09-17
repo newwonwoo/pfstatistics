@@ -587,8 +587,12 @@ export default function Home() {
             확정하려면 마우스가 990px 을 되돌아갔다(실측). 입력이 끝나는 자리에 버튼을 둔다.
           */}
           {!fixed && (
-            <div style={S.field}>
-              <span style={S.label} aria-hidden>&nbsp;</span>
+            /*
+              그리드 한 칸으로 넣었더니 칸이 모자라 **다음 줄 왼쪽 끝**으로 떨어졌다(실측 x=157).
+              마지막 입력칸(시공사 x=1105)에서 여전히 950px 을 되돌아간다 —
+              한 줄을 통째로 쓰고 **오른쪽 끝에 붙여** 입력이 끝나는 자리 바로 아래에 둔다.
+            */
+            <div style={{ ...S.field, gridColumn: '1 / -1', alignItems: 'flex-end' }}>
               <button style={S.btn({ busy: busy === 'geo', primary: true })} onClick={locate} disabled={!!busy}>
                 {busy === 'geo' ? '주소 확인 중…' : '주소 확정'}
               </button>
