@@ -23,7 +23,8 @@ export async function GET(req) {
   const x = q.get('x'), y = q.get('y');
   const radius = Math.min(20000, Number(q.get('radius')) || 3000);
   const pages = Math.min(3, Math.max(1, Number(q.get('pages')) || 3));
-  const kind = q.get('category') ? 'category' : 'keyword';
+  /* addr=1 이면 주소검색 — 행정구역 개편으로 시군구가 바뀌었는지 확인하는 창구 */
+  const kind = q.get('addr') ? 'address' : q.get('category') ? 'category' : 'keyword';
 
   try {
     const H = { Authorization: `KakaoAK ${requireKey('KAKAO_REST_KEY').trim()}` };
@@ -35,6 +36,7 @@ export async function GET(req) {
       if (x && y) { p.set('x', x); p.set('y', y); p.set('radius', String(radius)); p.set('sort', 'distance'); }
       if (kind === 'category') p.set('category_group_code', q.get('category'));
       else p.set('query', q.get('q') ?? '아파트');
+      if (kind === 'address') { p.delete('x'); p.delete('y'); p.delete('radius'); p.delete('sort'); }
       const d = await getJson(`${BASE}/${kind}.json?${p}`, { headers: H, retries: 2, timeout: 12000 });
       total ??= d.meta?.total_count ?? null;
       docs.push(...(d.documents ?? []));
@@ -48,8 +50,11 @@ export async function GET(req) {
       kind, radius, totalCount: total, returned: docs.length,
       byCategory,
       items: docs.map(d => ({
-        name: d.place_name, category: d.category_name,
+        name: d.place_name ?? d.address_name, category: d.category_name,
         address: d.address_name, road: d.road_address_name,
+        /* 주소검색이 주는 현재 행정구역 — 개편 전 표기와 다를 수 있다 */
+        sido: d.address?.region_1depth_name ?? null,
+        sgg: d.address?.region_2depth_name ?? d.road_address?.region_2depth_name ?? null,
         distance: d.distance ? Number(d.distance) : null,
         x: d.x, y: d.y,
       })),
