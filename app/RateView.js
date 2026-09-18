@@ -1,8 +1,9 @@
 'use client';
 import { useMemo } from 'react';
 import { T, mono } from './theme';
-import { tableOf } from '../src/lib/scoring';
+import { tableOf, scorePresaleRate } from '../src/lib/scoring';
 import { expectedRateOf } from '../src/lib/compare';
+import PresaleChain from './PresaleChain';
 
 /**
  * 초기예상분양률 — **평가표 전체의 결론**.
@@ -87,6 +88,15 @@ export default function RateView({ region, addr, facilities, compare, excl: excl
   const t = tableOf('초기예상분양률');
   const bands = t?.series?.[series]?.bands ?? [];
 
+  /* 「초기분양률」 세 곳의 현재 값 — 세 탭이 같은 그림을 같은 값으로 보여준다 */
+  const pct = res?.pending || total == null ? null : res.rate;
+  const presale = pct == null ? null : scorePresaleRate(pct);
+  const chainValues = {
+    input: sheetInput?.인근초기분양률?.rate,
+    pct,
+    score: presale && !presale.pending ? presale.score : null,
+  };
+
   return (
     <div style={S.page}>
       <h2 style={S.h2}>초기예상분양률</h2>
@@ -95,11 +105,10 @@ export default function RateView({ region, addr, facilities, compare, excl: excl
       <div style={S.intro}>
         평가표의 <b>결론</b>입니다. 다른 시트들이 내는 항목 점수가 모여 <b>종합평가 점수</b>가 되고,
         그 점수를 급간표에 대면 <b>초기예상분양률</b>이 나옵니다.<br />
-        <span style={{ color: T.muted }}>
-          같은 말이 두 곳에 나오니 주의 — 「인근아파트 초기 분양률(10)」은 옆 단지를 조사해 매기는
-          <b> 입력 항목</b>이고, 여기 초기예상분양률은 본건의 <b>산정 결과</b>입니다.
-        </span>
       </div>
+
+      {/* 「초기분양률」 이 세 곳에 나와 헷갈린다 — 세 탭에 같은 그림을 둔다 */}
+      <PresaleChain here="result" values={chainValues} />
 
       <div style={S.bar}>
         <span style={S.label}>주택 종류</span>

@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { T, mono } from './theme';
 import { reviewScore, tableOf } from '../src/lib/scoring';
 import { expectedRateOf } from '../src/lib/compare';
+import PresaleChain from './PresaleChain';
 
 /**
  * 최종 심사평점표.
@@ -106,6 +107,15 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
           사업성·시공자 항목은 <b>값만 넣으면 점수가 납니다</b> (2026-09-16 전체 구간표 수령).
           그 값들은 사업수지표·신용평가에서 나오므로 이 앱이 수집하지는 않습니다.
         </span>
+        {/* 「초기분양률」 이 세 곳에 나와 헷갈린다 — 세 탭에 같은 그림을 둔다 */}
+        <PresaleChain
+          here="score"
+          values={{
+            input: sheetInput?.인근초기분양률?.rate,
+            pct,
+            score: r.presale?.pending ? null : r.presale.score,
+          }}
+        />
       </div>
 
       {r.zero && (

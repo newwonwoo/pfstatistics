@@ -2,6 +2,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { T, mono } from './theme';
 import { manualSummary, PENDING_ITEMS, scaleTable, unitMixTable, nearbyTable } from '../src/lib/manual';
+import PresaleChain from './PresaleChain';
 
 /**
  * 수기입력 — **분양가격지수 제외 항목 점수(A)** 를 여기서 완성한다.
@@ -203,6 +204,8 @@ export default function ManualView({ region, addr, data, facilities, manual, val
           <span style={S.headNote}>배점 10 · 입력 항목</span>
         </div>
         <div style={S.body}>
+          {/* 「초기분양률」 이 세 곳에 나와 헷갈린다 — 세 탭에 같은 그림을 둔다 */}
+          <PresaleChain here="input" values={{ input: nearby.rate }} />
           <div style={S.formula}>옆 단지의 실제 분양률(분양개시 후 6개월 이내)을 조사해 넣습니다</div>
           <div style={S.grid}>
             <div style={S.field}>
@@ -246,8 +249,8 @@ export default function ManualView({ region, addr, data, facilities, manual, val
             </div>
           )}
           <div style={S.note}>
-            ※ 본건의 <b>초기예상분양률(산정 결과)</b> 과 다른 값입니다 — 이건 옆 단지를 조사해 매기는 입력 항목입니다.<br />
-            ※ 선정기준도 분양가 적정성과 다릅니다 (준공 단지를 안 쓰고, 유사도를 브랜드로 봅니다).
+            ※ 선정기준은 분양가 적정성(제16조)과 다릅니다 — 준공 단지를 안 쓰고, 유사도를 브랜드로 봅니다.
+            같은 목록을 돌려 쓰면 안 됩니다.
           </div>
         </div>
       </div>
