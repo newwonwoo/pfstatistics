@@ -210,6 +210,17 @@ export default function RateView({ region, addr, facilities, compare, excl: excl
               </tr>
             </tbody>
           </table>
+          {/*
+            오피스텔 급간의 맨 아랫줄은 **원문에서 읽은 값이 아니라 「한 칸씩 낮다」 규칙으로 만든 값**이다.
+            아파트만 다루면 안 걸리므로, 그 계열을 고른 그 자리에서만 말한다.
+          */}
+          {series !== '주택' && (
+            <div style={{ marginTop: 8, fontSize: 11, color: T.warn, lineHeight: 1.6 }}>
+              ※ 이 계열의 급간은 주택 급간에서 <b>한 칸씩(10%p) 낮춘 것</b>입니다.
+              맨 아랫줄(35점 미만 = 20%)은 <b>원문 표를 직접 대조하지 못했습니다</b> —
+              원문이 30%에서 끝날 수도 있어 그 구간에 걸리면 원문으로 확인하세요.
+            </div>
+          )}
         </div>
       </div>
 
