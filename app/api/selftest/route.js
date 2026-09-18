@@ -5,6 +5,7 @@ import * as kb from '../../../src/collectors/kb.js';
 import * as kofia from '../../../src/collectors/kofia.js';
 import * as kosis from '../../../src/collectors/kosis.js';
 import * as constructor from '../../../src/collectors/constructor.js';
+import { checkScoringGolden } from '../../../src/lib/goldenScoring.js';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -61,12 +62,18 @@ export async function GET() {
   }));
 
   const fail = checks.filter(c => c.status === 'MISMATCH' || c.status === 'error');
+  /*
+    **원천만 감시하면 반쪽이다.** 값을 맞게 받아와도 구간표가 틀리면 점수가 조용히 틀린다 —
+    골든 평가표를 이 앱의 판정 함수로 다시 내어 한 줄씩 대조한다.
+  */
+  const scoring = checkScoringGolden();
   return NextResponse.json({
     checkedAt: new Date().toISOString(),
     commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'local',
-    healthy: fail.length === 0,
-    summary: `${checks.filter(c => c.status === 'pass').length}/${checks.length} 정상`,
-    failures: fail,
+    healthy: fail.length === 0 && scoring.healthy,
+    summary: `${checks.filter(c => c.status === 'pass').length}/${checks.length} 정상 · ${scoring.summary}`,
+    failures: [...fail, ...scoring.failures.map(f => ({ name: f.name, reason: `정답 ${f.expected} → 실제 ${f.actual}` }))],
+    scoring,
     checks,
   }, { status: fail.length ? 503 : 200 });   // 감시도구가 상태코드로 판별할 수 있게
 }
