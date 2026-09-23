@@ -56,7 +56,7 @@ const S = {
 /** 구간표(config/scoring.json)로 점수를 낸다 */
 export const roadScore = (m) => scoreFacility('6차선 왕복도로', m);
 
-export default function RoadPicker({ coord, radius = 300, value, onChange, onRoads, onPreview }) {
+export default function RoadPicker({ coord, radius = 300, polygon = null, value, onChange, onRoads, onPreview }) {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
   const dismissed = value?.dismissed ?? [];
@@ -64,12 +64,18 @@ export default function RoadPicker({ coord, radius = 300, value, onChange, onRoa
   // 평가표와 지도에 박힌다. 누르자마자 반영되면 되돌리기가 번거롭다.
   const [sel, setSel] = useState(null);
 
+  /* 배열을 그대로 의존성에 넣으면 렌더마다 새 배열이라 계속 다시 훑는다 */
+  const polyKey = JSON.stringify(polygon ?? null);
+
   useEffect(() => {
     if (!coord?.x || !coord?.y) return;
     let dead = false;
     setRows(null); setErr(null);
     // 구간표의 가장 먼 구간(1km)까지 훑는다. 조금 더 봐야 경계 밖도 눈에 들어온다
-    fetch(`/api/roads?x=${coord.x}&y=${coord.y}&radius=${Math.round(radius * 1.2)}`)
+    /* 경계가 있으면 경계 최단거리로 잰다 — 중심점 기준이면 도로가 붙어 있어도 멀게 나온다 */
+    const poly = (polygon?.length >= 3)
+      ? `&poly=${polygon.map(pt => `${pt.lng},${pt.lat}`).join(';')}` : '';
+    fetch(`/api/roads?x=${coord.x}&y=${coord.y}&radius=${Math.round(radius * 1.2)}${poly}`)
       .then(r => r.json())
       .then(j => {
         if (dead) return;
@@ -79,7 +85,7 @@ export default function RoadPicker({ coord, radius = 300, value, onChange, onRoa
       })
       .catch(e => !dead && setErr(e.message));
     return () => { dead = true; };
-  }, [coord?.x, coord?.y, radius]);
+  }, [coord?.x, coord?.y, radius, polyKey]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   /*
    * **기본은 대로·로만 편다**(사용자 지적 2026-09-17).
@@ -109,8 +115,11 @@ export default function RoadPicker({ coord, radius = 300, value, onChange, onRoa
           다만 같은 영 §8②1 단서가 <b>대로↔로, 로↔길을 바꿔 쓸 수 있게</b> 열어두었고
           도로명은 구간 설정 시점 기준이라, <b>이름으로 차로수를 단정할 수 없습니다.</b>
           아래 로드뷰로 세어 차선 수만 넣으면 판정됩니다.
-          <br /><b>거리(*)는 격자 표본점 기준</b>입니다 — 도로 중심선이 아니라 그 도로에 접한 지점까지의 거리라
-          수십 m 차이가 납니다. 고른 도로가 <b>지나는 자리는 지도에 전부 표시</b>됩니다.
+          <br /><b>거리는 {rows?.[0]?.basis === 'polygon' ? '사업지 경계' : '대표지번 중심'}에서 격자로 훑은
+          표본점까지</b>입니다 — 도로 중심선이 아니라 그 도로에 접한 지점입니다.
+          <b>가까울수록 촘촘하게</b> 훑습니다(150m 안 25m · 350m 안 50m · 700m 안 100m · 그 밖 150m) —
+          뒤에 붙는 ± 가 그 간격, 곧 거리의 오차 한계입니다.
+          고른 도로가 <b>지나는 자리는 지도에 전부 표시</b>됩니다.
         </span>
       </div>
 
@@ -140,8 +149,14 @@ export default function RoadPicker({ coord, radius = 300, value, onChange, onRoa
               {applied && <span style={S.applied}>적용됨</span>}
               <span style={S.hint}>{r.hint ?? ''}</span>
               <span style={{ ...S.dist, color: band.score > 1 ? T.ink2 : T.muted }}
-                    title="격자로 훑은 표본점까지의 거리입니다 — 도로 중심선이 아니라 그 도로에 접한 지점입니다">
-                {r.distance}m<span style={{ color: T.muted, fontWeight: 400 }}>*</span> · 6차선이면 {band.score}점
+                    title={`${r.basis === 'polygon' ? '사업지 경계' : '대표지번 중심'}에서 잰 거리입니다.`
+                      + ` 격자로 ${r.precision ?? '?'}m 간격으로 훑었으므로 그만큼 오차가 있습니다`
+                      + ' — 도로 중심선이 아니라 그 도로에 접한 지점까지입니다'}>
+                {r.distance}m
+                {r.precision != null && (
+                  <span style={{ color: T.muted, fontWeight: 400 }}> ±{r.precision}</span>
+                )}
+                {' · '}6차선이면 {band.score}점
               </span>
             </button>
             <button

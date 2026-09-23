@@ -398,6 +398,8 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                     <RoadPicker
                       coord={facilities.coord}
                       radius={h.radius}
+                      /* 다른 시설과 같은 규칙 — 경계로 수집했으면 도로도 경계에서 잰다 */
+                      polygon={facilities.basis === 'polygon' ? facilities.polygon : null}
                       value={manual?.[f.label]}
                       onRoads={(rows) => setRoadList(prev => ({ ...prev, [f.label]: rows }))}
                       /* 누르기만 해도 로드뷰는 그쪽으로 — 보고 나서 적용한다 */

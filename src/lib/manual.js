@@ -53,7 +53,19 @@ export function manualSummary({ sheetInput = {}, data = null, facilities = null,
    */
   const unsold = val('unsold_housing');
   const households = val('resident_households');
-  const unsoldRatio = (Number.isFinite(Number(unsold)) && Number(households) > 0)
+  /*
+    **분자·분모의 기준시점이 같아야 한다**(사용자 확정 2026-09-18).
+    두 원천은 공표 시차가 다르다 — 주민등록세대수(KOSIS)가 미분양(통계누리)보다 한 달쯤 앞선다.
+    시점이 어긋난 채로 나눈 값은 검산이 안 되므로 **점수를 내지 않고 사유를 남긴다.**
+  */
+  const perOf = (id) => {
+    const r = (data?.results ?? []).find(x => x.indicatorId === id && x.ok);
+    return r ? String(r.period ?? '') : null;
+  };
+  const pUnsold = perOf('unsold_housing');
+  const pHouseholds = perOf('resident_households');
+  const periodMismatch = !!(pUnsold && pHouseholds && pUnsold !== pHouseholds);
+  const unsoldRatio = (!periodMismatch && Number.isFinite(Number(unsold)) && Number(households) > 0)
     ? (Number(unsold) / Number(households)) * 100 : null;
   /* 인구유입요인(신도시·혁신도시·기업도시·산업단지 등)은 원천이 없다 — 실무자가 개수를 넣는다 */
   const supplyRatio = val('housing_supply_ratio');
@@ -68,7 +80,10 @@ export function manualSummary({ sheetInput = {}, data = null, facilities = null,
     { id: '주택담보대출금리', max: 5, sc: loan },
     { id: '지역경쟁력', max: 5, sc: kb == null ? null : scoreBand('지역경쟁력', kb) },
     { id: '부동산시장 소비심리지수', max: 15, sc: cs == null ? null : scoreBand('소비심리지수', cs) },
-    { id: '지역미분양', max: 15, sc: unsoldRatio == null ? null : scoreBand('지역미분양', unsoldRatio) },
+    { id: '지역미분양', max: 15,
+      sc: periodMismatch
+        ? { pending: true, text: `기준시점이 다릅니다 — 미분양 ${pUnsold} · 주민등록세대수 ${pHouseholds}. 같은 달로 맞춰야 비율이 성립합니다` }
+        : unsoldRatio == null ? null : scoreBand('지역미분양', unsoldRatio) },
     /* 지역수요만 반쪽이 수기다 — 주택보급률은 자동, 인구유입요인은 개수를 받는다 */
     { id: '지역수요', max: 5, sc: supplyRatio == null ? null : scoreRegionDemand(supplyRatio, inflow) },
   ].map(r => ({

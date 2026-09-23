@@ -154,7 +154,7 @@ export async function geocode(address) {
  * 차로수는 여기서 안 나온다(좌표→주소 변환에는 그 속성이 없다).
  * 이름을 찾아주는 데까지가 여기 몫이고, 차선은 로드뷰로 센다.
  */
-export async function nearbyRoads({ x, y }, radius = 300) {
+export async function nearbyRoads({ x, y }, radius = 300, { polygon = null } = {}) {
   const R = 6371008.8;
   const rad = (d) => (d * Math.PI) / 180;
   const k = Math.cos(rad(Number(y)));
@@ -170,14 +170,44 @@ export async function nearbyRoads({ x, y }, radius = 300) {
    * 300m 고리에서 표본 간격이 157m 라 그 사이를 지나는 도로는 한 점도 안 걸린다.
    * (송도에서 랜드마크로가 통째로 안 잡혔다)
    * 도로는 선이라 간격이 도시 블록(보통 100~200m)보다 촘촘해야 걸린다.
+   *
+   * **그런데 균일 격자는 거리를 못 잰다**(사용자 지적, 두 번째).
+   * 1km 를 훑느라 간격이 120m 였고, 배지에 찍히는 거리는 **격자점까지의 거리**라
+   * 도로가 사업지에 붙어 있어도 120m 로 나왔다(수원 서둔동 수인로 실측).
+   * 지도에 찍히는 핀도 그 격자점이라 눈으로 보면 어긋난다.
+   *
+   * 구간표가 100m / 300m / 500m / 1km 에서 갈리므로 **가까울수록 촘촘하게** 훑는다.
+   * 먼 구간은 "그 도로가 있다"만 알면 되고, 가까운 구간은 몇 m 인지가 점수를 가른다.
    */
-  const step = Math.min(120, Math.max(50, Math.round(radius / 4)));
+  const SHELLS = [
+    { to: 150, step: 25 },
+    { to: 350, step: 50 },
+    { to: 700, step: 100 },
+    { to: Infinity, step: 150 },
+  ];
+  const stepAt = (d) => SHELLS.find(sh => d <= sh.to).step;
+
+  /* 사업지가 폴리곤이면 거리는 **경계 최단거리**다 — 다른 시트와 같은 규칙 */
+  const ring = Array.isArray(polygon) && polygon.length >= 3 ? polygon : null;
+  const distOf = (p) => (ring
+    ? Math.round(distanceToPolygon({ lat: p.y, lng: p.x }, ring))
+    : Math.round(Math.hypot(p.dx, p.dy)));
+
+  const seen = new Set();
   const pts = [];
-  for (let dy = -radius; dy <= radius; dy += step) {
-    for (let dx = -radius; dx <= radius; dx += step) {
-      const dist = Math.round(Math.hypot(dx, dy));
-      if (dist > radius) continue;
-      pts.push({ dist, ...toLngLat(dx, dy) });
+  const finest = SHELLS[0].step;
+  for (let dy = -radius; dy <= radius; dy += finest) {
+    for (let dx = -radius; dx <= radius; dx += finest) {
+      const r = Math.hypot(dx, dy);
+      if (r > radius) continue;
+      /* 그 껍질의 간격에 맞는 점만 남긴다 — 가까울수록 촘촘, 멀수록 성기게 */
+      const st = stepAt(r);
+      if (Math.round(dx) % st !== 0 || Math.round(dy) % st !== 0) continue;
+      const key = `${dx},${dy}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const ll = toLngLat(dx, dy);
+      pts.push({ dx, dy, ...ll, dist: distOf({ ...ll, dx, dy }), step: st });
     }
   }
 
@@ -211,7 +241,7 @@ export async function nearbyRoads({ x, y }, radius = 300) {
         `${BASE}/geo/coord2address.json?x=${p.x}&y=${p.y}`, { headers: H() });
       const road = d.documents?.[0]?.road_address;
       return road?.road_name ? { name: road.road_name, dist: p.dist, x: p.x, y: p.y,
-                                 addr: road.address_name ?? null } : null;
+                                 step: p.step, addr: road.address_name ?? null } : null;
     } catch { return null; }
   }));
 
@@ -226,11 +256,15 @@ export async function nearbyRoads({ x, y }, radius = 300) {
     const cur = found.get(r.name);
     if (!cur) {
       found.set(r.name, { name: r.name, distance: r.dist, x: r.x, y: r.y, address: r.addr,
+                          /* 그 점을 찍은 격자 간격 = 이 거리의 오차 한계 */
+                          precision: r.step, basis: ring ? 'polygon' : 'point',
                           points: [{ x: r.x, y: r.y, dist: r.dist }], ...grade(r.name) });
       continue;
     }
     cur.points.push({ x: r.x, y: r.y, dist: r.dist });
-    if (r.dist < cur.distance) { cur.distance = r.dist; cur.x = r.x; cur.y = r.y; cur.address = r.addr; }
+    if (r.dist < cur.distance) {
+      cur.distance = r.dist; cur.x = r.x; cur.y = r.y; cur.address = r.addr; cur.precision = r.step;
+    }
   }
   /* 가까운 순으로 — 지도에 몇 개만 찍을 때 사업지 쪽부터 남는다 */
   for (const v of found.values()) v.points.sort((a, b) => a.dist - b.dist);

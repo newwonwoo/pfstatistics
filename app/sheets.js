@@ -46,7 +46,19 @@ export function buildSheet(sheetId, { byId, region, period, company, sheetInput 
     case '지역미분양': {
       const unsold = val('unsold_housing');
       const hh = val('resident_households');
-      const ratio = unsold != null && hh ? (unsold / hh) * 100 : null;
+      /*
+        **두 값의 기준시점이 같아야 비율이 성립한다**(사용자 확정 2026-09-18).
+        원문 산식은 「해당지역 (미분양주택수 ÷ 주민등록세대수) × 100」 인데
+        두 원천은 공표 시차가 다르다 — 주민등록세대수(KOSIS)가 미분양(통계누리)보다 한 달쯤 앞선다.
+        시점이 어긋난 분자·분모로 낸 비율은 검산이 안 되므로, **다르면 점수를 내지 않고 그 사실을 적는다.**
+        (지금은 앱이 두 지표를 같은 조회월로 요청하므로 정상경로에서는 늘 같다 —
+         원천이 그 달을 안 주기 시작하면 조용히 어긋나는 대신 여기서 드러난다)
+      */
+      const pOf = (id) => (g(id)?.ok ? String(g(id).period ?? '') : null);
+      const pUnsold = pOf('unsold_housing');
+      const pHh = pOf('resident_households');
+      const samePeriod = !pUnsold || !pHh || pUnsold === pHh;
+      const ratio = samePeriod && unsold != null && hh ? (unsold / hh) * 100 : null;
       /*
         **구간표를 받아놓고 시트에는 안 찍고 있었다**(2026-09-17 실측).
         A 합산표(manual.js)만 점수를 냈고 시트·엑셀 증빙의 평가기준·평가점수 칸은 빈 채였다 —
@@ -57,16 +69,19 @@ export function buildSheet(sheetId, { byId, region, period, company, sheetInput 
       return {
         title: '지역미분양',
         subject: region,
-        columns: ['평가항목', '지역', '미분양주택수', '주민등록세대수', '미분양비율', '평가기준', '평가점수', '평가'],
+        columns: ['평가항목', '지역', '기준시점', '미분양주택수', '주민등록세대수', '미분양비율', '평가기준', '평가점수', '평가'],
         rows: [[
           '지역 미분양비율', region,
+          samePeriod ? (pUnsold ?? period) : `미분양 ${pUnsold} · 세대수 ${pHh}`,
           n(unsold), n(hh),
           ratio == null ? null : `${ratio.toFixed(2)}%`,
           filled ? sc.label : '',
           filled ? `${sc.score}점` : '',
-          filled ? (sc.grade ?? '') : '',
+          samePeriod ? (filled ? (sc.grade ?? '') : '')
+            : '기준시점이 달라 비율을 내지 않았습니다',
         ]],
-        formula: '(미분양주택수 / 주민등록세대수) × 100',
+        formula: '(미분양주택수 / 주민등록세대수) × 100'
+          + ' — 두 값은 같은 기준시점이어야 합니다(분자·분모 시점이 다르면 검산이 안 됩니다)',
         evidence: ['unsold_housing', 'resident_households'],
       };
     }
