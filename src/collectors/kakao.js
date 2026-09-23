@@ -23,6 +23,7 @@ export const FACILITY_SPEC = {
   상업시설: {
     sheet: '주거편의', category: 'MT1', keywordAlso: '백화점', radius: 1500,
     categoryFilter: /대형마트|백화점/,
+    accept: '대형마트·백화점',
   },
   /*
    * 의료시설: HP8(병원)에는 동물병원도 들어간다("송정동물의료센터" 확인).
@@ -39,6 +40,7 @@ export const FACILITY_SPEC = {
   공원: {
     sheet: '주거편의', keyword: '공원', radius: 1000,
     categoryFilter: /공원/,
+    accept: '공원',
     excludeName: /주차장|화장실|매점/,
   },
   문화시설:   { sheet: '주거편의', category: 'CT1', radius: 1000 },
@@ -62,6 +64,7 @@ export const FACILITY_SPEC = {
   공공시설: {
     sheet: '주거편의', category: 'PO3', keywordAlso: '도서관', radius: 1000,
     categoryFilter: /사회,공공기관|국공립도서관/,
+    accept: '공공기관·국공립도서관',
     /*
       **외국기관은 뺀다**(사용자 확정 2026-09-23).
       PO3 에는 대사관·영사관·외국공관도 들어 있어, 강남 역삼동에서
@@ -71,9 +74,17 @@ export const FACILITY_SPEC = {
     categoryExclude: /외국기관|대사관|영사관|외국공관/,
   },
   // 교육환경 (500m / 1km 2단 판정)
-  초등학교:   { sheet: '교육환경', category: 'SC4', radius: 1000, nameFilter: /초등학교$/ },
-  중학교:     { sheet: '교육환경', category: 'SC4', radius: 1000, nameFilter: /중학교$/ },
-  고등학교:   { sheet: '교육환경', category: 'SC4', radius: 1000, nameFilter: /고등학교$/ },
+  초등학교:   { sheet: '교육환경', category: 'SC4', radius: 1000, nameFilter: /초등학교$/ , accept: '초등학교' },
+  중학교:     { sheet: '교육환경', category: 'SC4', radius: 1000, nameFilter: /중학교$/ , accept: '중학교' },
+  고등학교:   { sheet: '교육환경', category: 'SC4', radius: 1000, nameFilter: /고등학교$/ , accept: '고등학교' },
+};
+
+/** 받침이 있으면 「이 아닌」, 없으면 「가 아닌」 — 조사를 틀리면 증빙 문구가 어색해진다 */
+const hasBatchim = (w) => {
+  const s = String(w ?? '');
+  const c = s.charCodeAt(s.length - 1);
+  if (!(c >= 0xAC00 && c <= 0xD7A3)) return true;
+  return (c - 0xAC00) % 28 !== 0;
 };
 
 /**
@@ -401,9 +412,22 @@ export async function collectFacilities({ x, y }, only = null, polygon = null) {
 
     /* 제외된 것들의 분류 분포 — "왜 0건인가" 를 증빙이 스스로 설명하게 한다 */
     const droppedBy = {};
+    /*
+      **제외 라벨이 검색어를 그대로 되풀이하면 아무것도 설명하지 못한다**(실측 2026-09-23).
+      부천 상동에서 공공시설 제외가 「도서관 10」 으로 찍혔다 — 「도서관을 왜 빼느냐」 로 읽힌다.
+      실제로는 작은도서관 8 · 사설 영어도서관 2 였다(국공립만 채택하기로 한 결과다).
+      카카오 분류가 `교육,학문 > 학습시설 > 도서관 > 작은도서관` 인데 3번째 토막만 보니
+      작은도서관과 도서관이 한 칸에 뭉쳤다.
+
+      **말단으로 통째로 바꾸면 안 된다** — 같은 실측에서 상업시설이 나빠진다
+      (「대형슈퍼 9」 → 「홈플러스익스프레스 6 · 노브랜드 2 · GS더프레시 1」, 제외 사유가 사라진다).
+      그래서 **검색어와 같은 말이 라벨로 나올 때만** 한 단계 더 들어간다.
+    */
+    const term = spec.keywordAlso ?? spec.keyword ?? null;
     for (const d of dropped) {
       const leaf = String(d.category_name ?? '기타').split('>').map(t => t.trim()).filter(Boolean);
-      const key = leaf[2] ?? leaf[1] ?? leaf[0] ?? '기타';
+      let key = leaf[2] ?? leaf[1] ?? leaf[0] ?? '기타';
+      if (term && key === term && leaf.length > 3) key = leaf[leaf.length - 1];
       droppedBy[key] = (droppedBy[key] ?? 0) + 1;
     }
 
@@ -435,6 +459,14 @@ export async function collectFacilities({ x, y }, only = null, polygon = null) {
           ? `카테고리 ${spec.category}${spec.keywordAlso ? ` + 키워드 "${spec.keywordAlso}"` : ''}`
           : `키워드 "${spec.keyword}"`,
         filter: spec.categoryFilter ? `카카오 분류 ${spec.categoryFilter}` : null,
+        /*
+          **무엇을 남겼는지를 같이 적는다.** 「분류가 맞지 않아 N곳 제외」 만으로는
+          어떤 기준에 안 맞았다는 것인지 알 수 없다 — 의료시설은 「병원급이 아닌」 이라
+          사유가 읽히는데 카카오 쪽만 그 말이 없었다.
+        */
+        accept: spec.accept ?? null,
+        /* 조사까지 붙여 **한 군데서** 만든다 — 화면과 엑셀이 각자 붙이면 갈린다 */
+        acceptNot: spec.accept ? `${spec.accept}${hasBatchim(spec.accept) ? '이' : '가'} 아닌` : null,
       },
       count: items.length,
       nearest: items[0] ?? null,

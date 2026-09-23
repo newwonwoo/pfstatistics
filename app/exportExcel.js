@@ -612,7 +612,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
               화면은 「분류가 맞지 않아 92곳 제외」인데 엑셀 출처 줄은 거기서 끝났다.
               증빙이 화면과 달라지면 안 된다(CLAUDE.md).
             */
-            + (hit?.excluded ? ` · 분류가 맞지 않아 ${hit.excluded}곳 제외${hit.excludedBy ? ` (${hit.excludedBy})` : ''}` : '')
+            + (hit?.excluded ? ` · ${hit.source?.acceptNot ?? '분류가 맞지 않아'} ${hit.excluded}곳 제외${hit.excludedBy ? ` (${hit.excludedBy})` : ''}` : '')
             + (hit?.capped ? ' · 카카오 45건 상한에 걸림 (가까운 순으로 받으므로 최근접·존재여부 판정은 그대로이나 건수는 반경 안 전부가 아님)' : '');
         ws.getCell(row, 2).font = { size: 9 };
         row += 2;

@@ -479,7 +479,7 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                       {h.source.detail ? ` · ${h.source.detail}` : ''}
                       {h.source.filter ? <><br />　{h.source.filter}</> : null}
                       {h.excluded ? (
-                        <><br />　분류가 맞지 않아 <b>{h.excluded}곳 제외</b>
+                        <><br />　{h.source.acceptNot ?? '분류가 맞지 않아'} <b>{h.excluded}곳 제외</b>
                           {h.excludedBy ? ` (${h.excludedBy})` : ''}</>
                       ) : null}
                       {h.capped ? (
