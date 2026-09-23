@@ -41,6 +41,11 @@ const n = (v, d = 0) =>
 export function buildSheet(sheetId, { byId, region, period, company, sheetInput = {} }) {
   const g = (id) => byId[id];
   const val = (id) => (g(id)?.ok ? g(id).value : null);
+  /*
+    **지표마다 채택한 시점이 다르다**(2026-09-23). 전에는 전 지표가 조회월 하나에 묶여 있었는데,
+    이제 각 원천의 최신을 쓰므로(미분양·주민등록세대수만 조회월 고정) 시트가 그 달을 직접 적어야 한다.
+  */
+  const per = (id) => (g(id)?.ok ? String(g(id).period ?? '') : '');
 
   switch (sheetId) {
     case '지역미분양': {
@@ -99,13 +104,14 @@ export function buildSheet(sheetId, { byId, region, period, company, sheetInput 
       const cell = (sc, key) => (sc && !sc.pending ? (sc[key] ?? '') : '');
       return {
         title: '지역수요', subject: region,
-        columns: ['평가항목', '지역', '비율', '평가기준', '점수', '평가'],
+        columns: ['평가항목', '지역', '기준시점', '비율', '평가기준', '점수', '평가'],
         rows: [
-          ['주택보급률', region.split(' ')[0], supply == null ? null : `${supply}%`,
+          ['주택보급률', region.split(' ')[0], per('housing_supply_ratio'),
+            supply == null ? null : `${supply}%`,
             cell(a, 'label'), a && !a.pending ? `${a.score}점` : '', cell(a, 'grade')],
-          ['인구유입요인', '', b && !b.pending ? `${Number(inflow)}개` : null,
+          ['인구유입요인', '', '', b && !b.pending ? `${Number(inflow)}개` : null,
             cell(b, 'label'), b && !b.pending ? `${b.score}점` : '', cell(b, 'grade')],
-          ['평균점수', '', sum && !sum.pending ? String(sum.avg) : null, '',
+          ['평균점수', '', '', sum && !sum.pending ? String(sum.avg) : null, '',
             sum && !sum.pending ? `${sum.score}점` : '',
             sum && !sum.pending ? `${sum.label} (${sum.text})` : (sum?.text ?? '')],
         ],
@@ -121,9 +127,10 @@ export function buildSheet(sheetId, { byId, region, period, company, sheetInput 
       const sc = kb == null ? null : scoreBand('지역경쟁력', kb);
       return {
         title: '지역경쟁력 (월별 아파트 매매가격 종합지수)', subject: region,
-        columns: ['평가항목', '지역', '전월대비 증감률', '평가기준', '평가점수', '평가'],
+        columns: ['평가항목', '지역', '기준시점', '전월대비 증감률', '평가기준', '평가점수', '평가'],
         rows: [[
           '매매가격 종합지수 전월대비 증감률', region,
+          per('kb_apt_price_index'),
           kb == null ? null : `${Number(kb).toFixed(3)}%`,
           sc && !sc.pending ? sc.label : '',
           sc && !sc.pending ? `${sc.score}점` : '',
@@ -162,10 +169,10 @@ export function buildSheet(sheetId, { byId, region, period, company, sheetInput 
       const sc = cd == null ? null : scoreBand('주택담보대출금리', cd);
       return {
         title: '부동산시장', subject: region,
-        columns: ['평가항목', '지역', '수치', '평가기준', '평가점수', '평가'],
+        columns: ['평가항목', '지역', '기준시점', '수치', '평가기준', '평가점수', '평가'],
         rows: [
           [
-            '주택담보대출금리', '전국',
+            '주택담보대출금리', '전국', per('cd_rate_91'),
             cd == null ? null : `CD ${cd}% + 1.57% = ${sc.applied.toFixed(2)}%`,
             sc && !sc.pending ? sc.text : '',
             sc && !sc.pending ? `${sc.score}점` : '',
@@ -176,7 +183,7 @@ export function buildSheet(sheetId, { byId, region, period, company, sheetInput 
             const cs = val('consumer_sentiment');
             const s2 = cs == null ? null : scoreBand('소비심리지수', cs);
             return [
-              '부동산시장 소비심리지수', region.split(' ')[0], cs,
+              '부동산시장 소비심리지수', region.split(' ')[0], per('consumer_sentiment'), cs,
               s2 && !s2.pending ? s2.label : '',
               s2 && !s2.pending ? `${s2.score}점` : '',
               s2 && !s2.pending ? s2.grade : '',

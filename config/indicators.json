@@ -25,7 +25,9 @@
         "region": "경기도 광주시",
         "period": "202607",
         "value": 93
-      }
+      },
+      "periodPolicy": "anchor",
+      "periodPolicyNote": "이 지표가 조회월의 기준이다 — /api/latest 가 통계누리를 되짚어 최신월을 정한다"
     },
     {
       "id": "resident_households",
@@ -52,7 +54,9 @@
         "region": "경기도 광주시",
         "period": "202607",
         "value": 178187
-      }
+      },
+      "periodPolicy": "anchor",
+      "periodPolicyNote": "미분양주택수와 **같은 달**이어야 비율이 성립한다(사용자 확정 2026-09-18)"
     },
     {
       "id": "housing_supply_ratio",
@@ -98,7 +102,9 @@
         "region": "경기도",
         "period": "2024",
         "value": 99.4
-      }
+      },
+      "periodPolicy": "latest",
+      "periodPolicyNote": "원천이 가진 최신 연도를 쓴다 (공표가 2년 지연된다)"
     },
     {
       "id": "consumer_sentiment",
@@ -144,7 +150,9 @@
         "region": "경기도",
         "period": "202607",
         "value": 125.1
-      }
+      },
+      "periodPolicy": "latest",
+      "periodPolicyNote": "원천이 가진 최신 월을 쓴다"
     },
     {
       "id": "cd_rate_91",
@@ -198,7 +206,9 @@
         "region": "경기도 광주시",
         "period": "202608",
         "value": 0.341
-      }
+      },
+      "periodPolicy": "latest",
+      "periodPolicyNote": "원천이 가진 최신 월을 쓴다 — 미분양보다 한 달 앞선다(골든도 202608)"
     },
     {
       "id": "construction_capability_rank",

@@ -61,8 +61,20 @@ export async function GET(req) {
      * 수집기가 알아서 필요한 만큼만 쓴다.
      */
     const target = ind.regionLevel === 'company' ? company : region;
-    // 시공능력평가는 연 단위라 조회월(YYYYMM)이 아니라 평가연도를 넘겨야 한다
-    const p = ind.regionLevel === 'company' ? rankYear : period;
+    /*
+      시공능력평가는 연 단위라 조회월(YYYYMM)이 아니라 평가연도를 넘긴다.
+
+      **나머지는 지표마다 시점 정책이 다르다**(사용자 확정 2026-09-23).
+      전에는 전 지표를 조회월 하나에 묶었는데, 그러면 원천이 더 최신을 갖고 있어도
+      미분양(가장 늦게 나오는 지표)에 맞춰 한 달씩 뒤처진다 —
+      실측: KB 매매지수는 202608 이 있는데 202607(1.839%)을 쓰고 있었다(골든도 202608 이다).
+        · anchor : 조회월 그대로. 미분양주택수(기준)와 주민등록세대수(미분양과 맞춰야 비율이 성립)
+        · latest : 시점을 넘기지 않는다 — 수집기가 원천의 **최신**을 찾는다
+      골든 자가진단은 시점을 명시해 부르므로 영향받지 않는다.
+    */
+    const p = ind.regionLevel === 'company' ? rankYear
+      : ind.periodPolicy === 'latest' ? null
+      : period;
 
     if (ind.regionLevel === 'company' && !company) {
       return { indicatorId: ind.id, name: ind.name, sheet: ind.sheet, ok: false, reason: '시공사명 미입력' };

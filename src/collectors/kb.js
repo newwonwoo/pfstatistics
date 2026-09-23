@@ -73,7 +73,13 @@ export async function collect(indicator, { region, period }) {
   if (!hit) throw new Error(`"${sgg}" 미발견. ${sido} 시군구: ${regions.map(r => r.지역명).join(', ').slice(0, 200)}`);
 
   const series = toMoMRates(hit.dataList, dates);
-  const row = series.find(s => s.period === period) ?? series.at(-1);
+  /*
+    시점을 안 주면 **원천이 가진 최신 달**을 쓴다(periodPolicy: latest).
+    증감률은 전월 지수가 있어야 나오므로 뒤에서부터 값이 있는 달을 찾는다.
+  */
+  const row = period
+    ? (series.find(s => s.period === period) ?? series.at(-1))
+    : ([...series].reverse().find(s => s.momRate != null) ?? series.at(-1));
 
   /*
    * 증감률은 전월 지수가 있어야 나온다. 신설 시군구(예: 2026 인천 검단구)는

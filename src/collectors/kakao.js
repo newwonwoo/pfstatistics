@@ -62,6 +62,13 @@ export const FACILITY_SPEC = {
   공공시설: {
     sheet: '주거편의', category: 'PO3', keywordAlso: '도서관', radius: 1000,
     categoryFilter: /사회,공공기관|국공립도서관/,
+    /*
+      **외국기관은 뺀다**(사용자 확정 2026-09-23).
+      PO3 에는 대사관·영사관·외국공관도 들어 있어, 강남 역삼동에서
+      「주한산마리노공화국 명예총영사관 316m」 가 공공시설 최근접으로 잡혔다 —
+      규정이 말하는 「시·군·구청사·도서관」 과 성격이 다르다.
+    */
+    categoryExclude: /외국기관|대사관|영사관|외국공관/,
   },
   // 교육환경 (500m / 1km 2단 판정)
   초등학교:   { sheet: '교육환경', category: 'SC4', radius: 1000, nameFilter: /초등학교$/ },
@@ -388,6 +395,7 @@ export async function collectFacilities({ x, y }, only = null, polygon = null) {
     if (spec.categoryLeaf) {
       keep(d => spec.categoryLeaf.test(String(d.category_name ?? '').split('>').pop().trim()));
     }
+    if (spec.categoryExclude) keep(d => !spec.categoryExclude.test(d.category_name ?? ''));
     if (spec.excludeName) keep(d => !spec.excludeName.test(d.place_name));
     if (spec.nameFilter) keep(d => spec.nameFilter.test(d.place_name));
 

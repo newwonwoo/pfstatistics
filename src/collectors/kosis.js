@@ -137,9 +137,23 @@ export async function collect(indicator, { region, period }) {
    *   (주택보급률은 공표가 2년 지연되어 2026년에도 최신치가 2024)
    */
   const annual = indicator.period === 'Y';
+  /*
+   * **시점을 안 주면 원천의 최신을 찾는다**(periodPolicy: latest, 2026-09-23).
+   * 전에는 전 지표가 조회월 하나에 묶여, 원천이 더 최신을 갖고 있어도
+   * 가장 늦게 나오는 지표(미분양)에 맞춰 뒤처졌다.
+   * 월 단위는 이번 달부터, 연 단위는 올해부터 하나씩 되짚는다.
+   */
+  const now = new Date();
+  const thisYm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const backMonths = (from, n) => Array.from({ length: n }, (_, i) => {
+    const y = Number(String(from).slice(0, 4)), m = Number(String(from).slice(4, 6));
+    const d = new Date(y, m - 1 - i, 1);
+    return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const baseYear = period ? String(period).slice(0, 4) : String(now.getFullYear());
   const attempts = annual
-    ? Array.from({ length: 5 }, (_, i) => String(Number(String(period).slice(0, 4)) - i))
-    : [period];
+    ? Array.from({ length: 5 }, (_, i) => String(Number(baseYear) - i))
+    : (period ? [period] : backMonths(thisYm, 8));
 
   let rows = [], url = '', lastErr = null;
   for (const prd of attempts) {
