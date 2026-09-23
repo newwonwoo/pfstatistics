@@ -305,15 +305,42 @@ export async function collectFacilities({ x, y }, only = null, polygon = null) {
     // 경계 기준이면 중심에서 더 넓게 훑어야 경계 근처 시설을 놓치지 않는다
     const searchRadius = Math.min(20000, spec.radius + pad);
     const params = { x: ox, y: oy, radius: searchRadius, sort: 'distance' };
+
+    /*
+     * **일반명사 키워드는 거리순으로 받으면 안 된다**(구리 롯데백화점 실측 2026-09-23).
+     *
+     * 카카오는 한 질의에 **45건(15×3)** 까지만 준다. "백화점" 을 거리순으로 물으면
+     * 그 45칸을 **백화점 안에 입점한 매장들**이 0m 로 채운다 —
+     * 세라 롯데백화점구리점 · 티쏘 롯데백화점 구리점 · 카페연무장 롯데백화점 구리점 …
+     * 정작 「롯데백화점 구리점」(15m, 분류 `가정,생활 > 백화점`)은 45건 밖으로 밀려
+     * 분류 필터까지 가지도 못했다. 반경 1.8km 안 239건 중 거리순 45건에 백화점 분류 **0건**.
+     * 공원도 같은 함정이다("○○공원 주차장·편의점"이 먼저 온다).
+     *
+     * 정확도순(sort=accuracy)은 같은 질의에서 「롯데백화점 구리점」을 1건으로 준다.
+     * 어느 한쪽만 쓰면 다른 쪽을 놓치므로 **두 정렬을 모두 받아 합친다.**
+     */
+    const byKeyword = async (query) => {
+      const [near, exact] = await Promise.all([
+        searchAll('keyword', { ...params, query }),
+        searchAll('keyword', { ...params, query, sort: 'accuracy' }),
+      ]);
+      const seen = new Set();
+      return [...near, ...exact].filter((d) => {
+        const key = d.id ?? `${d.place_name}@${d.x},${d.y}`;
+        if (seen.has(key)) return false;
+        seen.add(key); return true;
+      });
+    };
+
     let docs = spec.category
       ? await searchAll('category', { ...params, category_group_code: spec.category })
-      : await searchAll('keyword', { ...params, query: spec.keyword });
+      : await byKeyword(spec.keyword);
     if (spec.keywordAlso) {
-      const extra = await searchAll('keyword', { ...params, query: spec.keywordAlso });
+      const extra = await byKeyword(spec.keywordAlso);
       const seen = new Set(docs.map(d => d.id ?? d.place_name));
       docs = [...docs, ...extra.filter(d => !seen.has(d.id ?? d.place_name))];
-      docs.sort((a, b) => Number(a.distance) - Number(b.distance));
     }
+    docs.sort((a, b) => Number(a.distance) - Number(b.distance));
     // 카카오가 붙인 분류(category_name)로 걸러야 상호에 낚이지 않는다
     if (spec.categoryFilter) docs = docs.filter(d => spec.categoryFilter.test(d.category_name ?? ''));
     // 분류 말단만 본다: "의료,건강 > 병원 > 치과" → "치과"
