@@ -77,6 +77,18 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
    */
   const [labels, setLabels] = useState(true);
   /*
+    **[이름표 끄기] 가 화면에서 안 먹었다**(사용자 지적 2026-09-23, 실측: 라벨 22개 → 끈 뒤에도 22개).
+    `labels` 가 **캡쳐 등록 effect 의 의존성에만** 들어 있어, 끄면 엑셀·PNG 캡쳐는 꺼지는데
+    화면 지도는 다시 그려지지 않았다 — 버튼 색만 바뀌고 이름표는 그대로 남았다.
+    증빙이 화면과 달라지면 안 되는데(CLAUDE.md) **반대로 화면이 증빙과 달랐다.**
+
+    지도를 통째로 다시 그리면 타일을 다시 받고 확대·이동이 초기화된다 —
+    **라벨 오버레이만 들고 있다가 `setMap` 으로 켜고 끈다.**
+  */
+  const labelOverlays = useRef([]);
+  const labelsOnRef = useRef(labels);
+  labelsOnRef.current = labels;   // 렌더마다 최신값. effect 실행 순서와 무관하게 읽힌다
+  /*
    * **창 전체로 펴서 확인한다**(사용자 요청 2026-09-17).
    * 시설이 진짜 그 자리에 있는지 보려면 지도가 커야 한다 —
    * 증빙 캡쳐용 크기와 확인용 크기는 다른 요구다.
@@ -154,6 +166,7 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
        * 다만 라벨을 전부 띄우면 서로 겹쳐 아무것도 못 읽는다 —
        * 가까운 것부터 LABEL_MAX 개만 이름을 달고, 나머지는 번호로 표에서 찾게 한다.
        */
+      const made = [];
       markers.forEach((m, i) => {
         const p = new kakao.maps.LatLng(m.lat, m.lng);
         const no = m.no ?? i + 1;
@@ -175,16 +188,20 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
             border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);color:#fff;
             font:700 12px 'Malgun Gothic',sans-serif;display:flex;align-items:center;justify-content:center">${no}</div>`,
         });
-        if (labels && i < LABEL_MAX) {
+        if (i < LABEL_MAX) {
           // 같은 높이에 다 걸면 서로 덮는다. 높이를 엇갈려 겹침을 줄인다.
-          new kakao.maps.CustomOverlay({
-            position: p, map, yAnchor: 2.4 + (i % 3) * 0.95, zIndex: 4,
+          const lo = new kakao.maps.CustomOverlay({
+            position: p, yAnchor: 2.4 + (i % 3) * 0.95, zIndex: 4,
             content: `<div style="background:#fff;border:2px solid #111;padding:2px 8px;border-radius:4px;
               font:700 12px 'Malgun Gothic',sans-serif;white-space:nowrap;
               box-shadow:0 1px 4px rgba(0,0,0,.35)">${no}. ${m.name}${m.distance != null ? ` · ${m.distance}m` : ''}</div>`,
           });
+          /* 만들어만 두고 보이기는 현재 상태에 맞춘다 — 끈 채로 지도가 다시 그려질 수 있다 */
+          lo.setMap(labelsOnRef.current ? map : null);
+          made.push(lo);
         }
       });
+      labelOverlays.current = made;
       /*
        * 확대 결정.
        * 판정 대상(사업지 + 최근접 시설)이 들어오게 맞추되,
@@ -270,6 +287,13 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
   // markers/polygon 은 렌더마다 새 배열이라 그대로 넣으면 지도가 매번 다시 만들어진다.
   // 내용이 같으면 다시 만들지 않도록 문자열로 비교한다.
   }, [center.lat, center.lng, radius, mkey, pkey, rkey, defaultMapType]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* [이름표 끄기] — 지도를 다시 그리지 않고 라벨 오버레이만 켜고 끈다 */
+  useEffect(() => {
+    const m = mapRef.current?.map;
+    if (!m) return;
+    labelOverlays.current.forEach(o => o.setMap(labels ? m : null));
+  }, [labels, ready, mkey, pkey, rkey]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   /*
    * 캡쳐 등록.
