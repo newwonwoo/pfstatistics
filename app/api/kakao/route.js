@@ -33,7 +33,13 @@ export async function GET(req) {
     for (let page = 1; page <= pages; page++) {
       /* sort=distance 는 중심좌표가 있어야 한다 — 없이 보내면 400 (Required Parameter x,y) */
       const p = new URLSearchParams({ size: '15', page: String(page) });
-      if (x && y) { p.set('x', x); p.set('y', y); p.set('radius', String(radius)); p.set('sort', 'distance'); }
+      /*
+        **정렬을 고를 수 있어야 한다.** 키워드가 일반명사면(백화점·공원) 상호에 그 말이 든
+        동네 가게가 더 가까워서, sort=distance 로는 45건 상한 안에 진짜 대상이 안 들어온다
+        (구리 롯데백화점 실측 — 반경 2km 241건 중 45건을 거리순으로 받으니 백화점이 0건).
+      */
+      const sort = q.get('sort') === 'accuracy' ? 'accuracy' : 'distance';
+      if (x && y) { p.set('x', x); p.set('y', y); p.set('radius', String(radius)); p.set('sort', sort); }
       if (kind === 'category') p.set('category_group_code', q.get('category'));
       else p.set('query', q.get('q') ?? '아파트');
       if (kind === 'address') { p.delete('x'); p.delete('y'); p.delete('radius'); p.delete('sort'); }
@@ -47,7 +53,8 @@ export async function GET(req) {
     for (const d of docs) byCategory[d.category_name ?? '?'] = (byCategory[d.category_name ?? '?'] ?? 0) + 1;
 
     return NextResponse.json({
-      kind, radius, totalCount: total, returned: docs.length,
+      kind, radius, sort: q.get('sort') === 'accuracy' ? 'accuracy' : 'distance',
+      totalCount: total, returned: docs.length,
       byCategory,
       items: docs.map(d => ({
         name: d.place_name ?? d.address_name, category: d.category_name,
