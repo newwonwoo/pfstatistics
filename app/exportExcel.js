@@ -161,6 +161,20 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
    * 화면에서 고른 단지와 그 산술평균을 그대로 옮긴다.
    * 엑셀은 화면 상태를 읽는다는 원칙대로, 따로 저장하지 않아도 들어간다.
    */
+  /*
+    **수집을 안 했어도 시트는 만든다**(2026-09-23 실측).
+    빈 탭 확인창이 "비어 있는 칸은 빗금으로 들어갑니다" 라고 해놓고
+    비교사업장은 **시트 자체가 없었다** — 받는 쪽은 탭이 사라진 이유를 알 방법이 없다.
+  */
+  if (!compare?.data?.items?.length) {
+    const cw = wb.addWorksheet('비교사업장', { views: [{ showGridLines: false }] });
+    cw.getColumn(2).width = 100;
+    cw.getCell(2, 2).value = '비교사업장 · 분양가 적정성';
+    cw.getCell(2, 2).font = { bold: true, size: 13 };
+    cw.getCell(4, 2).value = '수집하지 않았습니다 — [비교사업장 · 분양가] 탭에서 반경을 고르고 수집하면 채워집니다.';
+    cw.getCell(5, 2).value = '주택분양보증 심사지침 제16조 · 인근 유사사업장 평균가격과 본건 예정분양가로 적정분양가를 냅니다.';
+    cw.getCell(5, 2).font = { size: 10, color: { argb: 'FF767E8A' } };
+  }
   if (compare?.data?.items?.length) {
     onProgress?.('비교사업장');
     const c = compare.data;
@@ -591,7 +605,15 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
             + (hit?.source?.detail ? ` (${hit.source.detail})` : '')
             + ` · 반경 ${hit?.radius ?? ''}m · 반경 내 ${hit?.count ?? 0}건`
             + (hit?.basis === 'polygon' ? ' · 사업지 경계 기준' : ' · 대표지번 기준')
-            + (hit?.excludedClinics ? ` · 병원급이 아닌 ${hit.excludedClinics}곳 제외${hit.excludedByGrade ? ` (${hit.excludedByGrade})` : ''}` : '');
+            + (hit?.excludedClinics ? ` · 병원급이 아닌 ${hit.excludedClinics}곳 제외${hit.excludedByGrade ? ` (${hit.excludedByGrade})` : ''}` : '')
+            /*
+              **화면에 적히는 것은 엑셀에도 적혀야 한다.**
+              카카오 쪽 제외 건수와 45건 상한이 화면에만 있고 증빙에는 빠져 있었다(2026-09-23 실측) —
+              화면은 「분류가 맞지 않아 92곳 제외」인데 엑셀 출처 줄은 거기서 끝났다.
+              증빙이 화면과 달라지면 안 된다(CLAUDE.md).
+            */
+            + (hit?.excluded ? ` · 분류가 맞지 않아 ${hit.excluded}곳 제외${hit.excludedBy ? ` (${hit.excludedBy})` : ''}` : '')
+            + (hit?.capped ? ' · 카카오 45건 상한에 걸림 (가까운 순으로 받으므로 최근접·존재여부 판정은 그대로이나 건수는 반경 안 전부가 아님)' : '');
         ws.getCell(row, 2).font = { size: 9 };
         row += 2;
       }
