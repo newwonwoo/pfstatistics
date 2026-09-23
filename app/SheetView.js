@@ -461,6 +461,10 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                         ? ` — 심사 대상(병원급 이상)이 아닌 ${h.excludedClinics}곳을 제외했습니다`
                           + (h.excludedByGrade ? ` (${h.excludedByGrade})` : '')
                         : ''}
+                      {h.excluded
+                        ? ` — 분류가 맞지 않는 ${h.excluded}곳을 제외했습니다`
+                          + (h.excludedBy ? ` (${h.excludedBy})` : '')
+                        : ''}
                       {h.error ? ` · ${h.error}` : ''}
                     </div>
                   )}
@@ -474,6 +478,15 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                       * 출처 : <b style={{ color: T.ink2 }}>{h.source.name}</b>
                       {h.source.detail ? ` · ${h.source.detail}` : ''}
                       {h.source.filter ? <><br />　{h.source.filter}</> : null}
+                      {h.excluded ? (
+                        <><br />　분류가 맞지 않아 <b>{h.excluded}곳 제외</b>
+                          {h.excludedBy ? ` (${h.excludedBy})` : ''}</>
+                      ) : null}
+                      {h.capped ? (
+                        <><br />　<b style={{ color: T.warn }}>카카오 45건 상한에 걸렸습니다</b>
+                          {' '}— 가까운 순으로 받으므로 최근접·존재여부 판정은 그대로지만
+                          건수는 반경 안 전부가 아닙니다</>
+                      ) : null}
                     </div>
                   )}
 

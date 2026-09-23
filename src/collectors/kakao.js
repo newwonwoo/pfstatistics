@@ -272,13 +272,23 @@ export async function nearbyRoads({ x, y }, radius = 300, { polygon = null } = {
   return [...found.values()].sort((a, b) => a.rank - b.rank || a.distance - b.distance);
 }
 
+/**
+ * 카카오는 한 질의에 **45건(15×3)** 까지만 준다.
+ * 상한에 걸렸는지를 **알아야 한다** — 걸렸는데 모르면 "이 반경엔 이것뿐" 으로 읽힌다.
+ * 총건수(total_count)를 같이 들고 나와 봉투에 싣는다(실측: 신촌 문화시설 74건 → 45건).
+ */
 async function searchAll(path, params) {
   const out = [];
+  let total = null, capped = false;
   for (let page = 1; page <= 3; page++) {   // 카카오 최대 45건(15×3)
     const d = await getJson(`${BASE}/search/${path}.json?${new URLSearchParams({ ...params, page, size: 15 })}`, { headers: H() });
+    total ??= d.meta?.total_count ?? null;
     out.push(...(d.documents ?? []));
     if (d.meta?.is_end) break;
+    if (page === 3 && !d.meta?.is_end) capped = true;
   }
+  out.__total = total;
+  out.__capped = capped;
   return out;
 }
 
@@ -340,15 +350,34 @@ export async function collectFacilities({ x, y }, only = null, polygon = null) {
       const seen = new Set(docs.map(d => d.id ?? d.place_name));
       docs = [...docs, ...extra.filter(d => !seen.has(d.id ?? d.place_name))];
     }
+    const capped = Boolean(docs.__capped);
+    const scanned = docs.length;
     docs.sort((a, b) => Number(a.distance) - Number(b.distance));
+
+    /*
+      **걸러낸 것이 무엇이었는지 남긴다**(의료시설의 「의원급 22곳 제외」와 같은 규칙).
+      강남 역삼동 1.5km 실측: MT1 10곳이 전부 **대형슈퍼**(롯데슈퍼프레시·GS더프레시…)라
+      규정의 「대형마트·백화점」에 안 맞아 0건이 된다 — 판정은 맞지만
+      사유가 화면에 없으면 "강남역인데 상업시설이 없다고?" 를 의심하게 된다.
+    */
+    const dropped = [];
+    const keep = (pred) => { docs = docs.filter(d => (pred(d) ? true : (dropped.push(d), false))); };
     // 카카오가 붙인 분류(category_name)로 걸러야 상호에 낚이지 않는다
-    if (spec.categoryFilter) docs = docs.filter(d => spec.categoryFilter.test(d.category_name ?? ''));
+    if (spec.categoryFilter) keep(d => spec.categoryFilter.test(d.category_name ?? ''));
     // 분류 말단만 본다: "의료,건강 > 병원 > 치과" → "치과"
     if (spec.categoryLeaf) {
-      docs = docs.filter(d => spec.categoryLeaf.test(String(d.category_name ?? '').split('>').pop().trim()));
+      keep(d => spec.categoryLeaf.test(String(d.category_name ?? '').split('>').pop().trim()));
     }
-    if (spec.excludeName) docs = docs.filter(d => !spec.excludeName.test(d.place_name));
-    if (spec.nameFilter) docs = docs.filter(d => spec.nameFilter.test(d.place_name));
+    if (spec.excludeName) keep(d => !spec.excludeName.test(d.place_name));
+    if (spec.nameFilter) keep(d => spec.nameFilter.test(d.place_name));
+
+    /* 제외된 것들의 분류 분포 — "왜 0건인가" 를 증빙이 스스로 설명하게 한다 */
+    const droppedBy = {};
+    for (const d of dropped) {
+      const leaf = String(d.category_name ?? '기타').split('>').map(t => t.trim()).filter(Boolean);
+      const key = leaf[2] ?? leaf[1] ?? leaf[0] ?? '기타';
+      droppedBy[key] = (droppedBy[key] ?? 0) + 1;
+    }
 
     // 거리 재계산: 폴리곤이 있으면 경계 최단거리, 없으면 카카오가 준 점 기준 거리
     let items = docs.map(d => ({
@@ -381,6 +410,14 @@ export async function collectFacilities({ x, y }, only = null, polygon = null) {
       },
       count: items.length,
       nearest: items[0] ?? null,
+      /* 카카오 45건 상한에 걸렸다는 사실 — 건수를 "이게 전부" 로 읽으면 안 된다 */
+      capped: capped || null,
+      scanned,
+      excluded: dropped.length || null,
+      excludedBy: dropped.length
+        ? Object.entries(droppedBy).sort((a, b) => b[1] - a[1]).slice(0, 6)
+            .map(([k, v]) => `${k} ${v}`).join(' · ')
+        : null,
       items,
     };
   }
