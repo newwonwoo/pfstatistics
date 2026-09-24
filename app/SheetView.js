@@ -30,9 +30,15 @@ const S = {
   absent: { padding: '12px 14px', background: T.warnSoft, border: `1px solid #f0dcb4`, borderRadius: 6, fontSize: 12.5, color: T.warn, lineHeight: 1.6 },
   srcLine: { marginTop: 7, fontSize: 11, color: T.muted, lineHeight: 1.65 },
   seg: { display: 'inline-flex', border: `1px solid ${T.lineStrong}`, borderRadius: 6, overflow: 'hidden', marginLeft: 'auto' },
+  /*
+    **고른 상태는 옅게, 실행만 진하게**(색 문법 — 이미 비교사업장에서 정한 규칙).
+    진한 파랑으로 두면 「지금 눌러야 할 다음 버튼」 으로 읽혀 주버튼이 한 화면에 여럿이 된다
+    (실측 2026-09-24: 자료수집 단계에서 주버튼 3 중 하나가 이 토글이었다).
+  */
   segBtn: (on, off) => ({
     padding: '5px 12px', fontSize: 11.5, fontWeight: 700, border: 0, cursor: off ? 'not-allowed' : 'pointer',
-    background: on ? T.accent : '#fff', color: on ? '#fff' : (off ? T.muted : T.ink2),
+    background: on ? T.accentSoft : '#fff', color: on ? T.accent : (off ? T.muted : T.ink2),
+    boxShadow: on ? `inset 0 -2px 0 ${T.accent}` : 'none',
     opacity: off ? 0.55 : 1,
   }),
   note: { marginTop: 9, fontSize: 11.5, color: T.ink2 },

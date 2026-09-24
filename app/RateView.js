@@ -27,7 +27,10 @@ const S = {
   bar: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 },
   label: { fontSize: 11.5, color: T.muted, fontWeight: 700 },
   seg: { display: 'inline-flex', border: `1px solid ${T.lineStrong}`, borderRadius: 6, overflow: 'hidden' },
-  segBtn: (on) => ({ padding: '6px 13px', fontSize: 12, fontWeight: 700, border: 0, cursor: 'pointer', background: on ? T.accent : '#fff', color: on ? '#fff' : T.ink2 }),
+  /* 고른 상태는 옅게, 실행만 진하게 — 색 문법 */
+  segBtn: (on) => ({ padding: '6px 13px', fontSize: 12, fontWeight: 700, border: 0, cursor: 'pointer',
+    background: on ? T.accentSoft : '#fff', color: on ? T.accent : T.ink2,
+    boxShadow: on ? `inset 0 -2px 0 ${T.accent}` : 'none' }),
 
   box: { marginBottom: 14, borderRadius: 8, border: `1px solid ${T.lineStrong}`, overflow: 'hidden', background: '#fff' },
   head: { display: 'flex', alignItems: 'baseline', gap: 10, padding: '10px 16px', background: '#eef2f7', borderBottom: `1px solid ${T.line}`, fontSize: 12.5, fontWeight: 700, color: T.ink },
