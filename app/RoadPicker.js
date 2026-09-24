@@ -145,6 +145,48 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
   const lanes = value?.lanes ?? 0;
   const verdict = scoreFacility('6차선 왕복도로', value);
 
+
+  /*
+    **[이 도로로 적용] 이 고른 행에서 1,770px 떨어져 있었다**(실측 2026-09-24).
+    목록 **아래**에 한 벌만 두었는데 후보가 34줄이라 화면을 두 번 넘겨야 닿는다 —
+    「넣는 버튼은 넣는 칸에 둔다」 를 어긴 것이다(심사평점표에서 같은 것을 이미 고쳤다).
+    이제 **고른 행 바로 밑**에 붙어 나타난다. 0px 이다.
+  */
+  const ApplyBar = () => (
+        <div style={S.applyBar}>
+        <span style={S.applyTxt}>
+          <b>{sel.name}</b> · {sel.distance}m — 로드뷰로 확인했으면 적용하세요
+        </span>
+        <button
+          style={S.applyBtn}
+          onClick={() => {
+            /*
+              적용한 도로가 지도에 없으면 판정 근거가 안 보인다 — 체크를 같이 켠다.
+              **아직 체크를 손대지 않았으면 적용한 도로만 남긴다** — 판정 근거가 그 한 줄이라
+              증빙 지도에 다른 후보가 같이 그려져 있을 이유가 없다.
+              이미 골라둔 것이 있으면 **지우지 않는다**(조용히 비우면 고른 것이 날아간다).
+            */
+            const cur = Array.isArray(value?.shown) ? [...shown] : [];
+            set({
+              name: sel.name, distance: sel.distance, x: sel.x, y: sel.y,
+              /*
+                **거리를 무엇으로 쟀는지 값과 같이 들고 간다.**
+                엑셀 증빙은 화면 상태만 받으므로, 여기서 안 실으면
+                출처 줄이 「카카오 좌표→주소 역산」으로 박힌 채 나간다(실제로 그랬다).
+              */
+              source: src?.name ?? null,
+              method: src?.method ?? null,
+              precision: sel.precision ?? null,
+              shown: cur.includes(sel.name) ? cur : [...cur, sel.name],
+              // 도로가 바뀌면 차선 수는 다시 센다 — 앞 도로 값을 물려받으면 판정이 틀린다
+              lanes: 0,
+            });
+            setSel(null);
+          }}
+        >이 도로로 적용</button>
+      </div>
+  );
+
   return (
     <div style={S.box}>
       <div style={S.head}>
@@ -206,8 +248,10 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
         const on = applied || sel?.name === r.name;
         // 어느 점수 구간에 드는지 미리 보여준다 (6차선이라고 가정한 값)
         const band = scoreFacility('6차선 왕복도로', { distance: r.distance, lanes: 6 });
+        const showApply = sel?.name === r.name && sel.name !== value?.name;
         return (
-          <div key={r.name} style={S.row(on)}>
+          <div key={r.name}>
+          <div style={S.row(on)}>
             {/*
               **체크 영역은 넓게**(사용자 요청) — 작은 네모만 누를 수 있으면 잘 안 눌린다.
               label 로 감싸 체크박스 + 그 둘레 패딩까지 클릭 영역이 된다.
@@ -216,7 +260,12 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
             <label style={S.check} title={`지도·엑셀에 ${shown.has(r.name) ? '표시 중' : '표시하지 않음'}`}>
               <input type="checkbox" style={S.checkBox} checked={shown.has(r.name)}
                 onChange={() => {
-                  const cur = (rows ?? []).filter(x => roadShown(value, x)).map(x => x.name);
+                  /*
+                    **`roadShown(value, x)` 를 rows 없이 부르면 기본 5곳이 빈 집합이 된다** —
+                    손대지 않은 상태에서 하나를 체크하면 나머지 넷이 조용히 사라졌다.
+                    이미 계산해 둔 `shown` 을 그대로 쓴다.
+                  */
+                  const cur = [...shown];
                   const next = cur.includes(r.name) ? cur.filter(n => n !== r.name) : [...cur, r.name];
                   set({ shown: next });
                 }} />
@@ -231,8 +280,10 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
               <span style={S.hint}>{r.hint ?? ''}</span>
               <span style={{ ...S.dist, color: band.score > 1 ? T.ink2 : T.muted }}
                     title={`${r.basis === 'polygon' ? '사업지 경계' : '대표지번 중심'}에서 잰 거리입니다.`
-                      + ` 격자로 ${r.precision ?? '?'}m 간격으로 훑었으므로 그만큼 오차가 있습니다`
-                      + ' — 도로 중심선이 아니라 그 도로에 접한 지점까지입니다'}>
+                      + (r.geometry
+                        ? ` 도로 선까지의 최단거리이며 ${r.precision ?? 5}m 간격으로 잘라 재므로 그만큼 오차가 있습니다`
+                        : ` 격자로 ${r.precision ?? '?'}m 간격으로 훑었으므로 그만큼 오차가 있습니다`
+                          + ' — 도로 중심선이 아니라 그 도로에 접한 지점까지입니다')}>
                 {r.distance}m
                 {r.precision != null && (
                   <span style={{ color: T.muted, fontWeight: 400 }}> ±{r.precision}</span>
@@ -252,43 +303,10 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
               }); }}
             >×</button>
           </div>
+          {showApply && <ApplyBar />}
+          </div>
         );
       })}
-
-      {sel && sel.name !== value?.name && (
-        <div style={S.applyBar}>
-          <span style={S.applyTxt}>
-            <b>{sel.name}</b> · {sel.distance}m — 로드뷰로 확인했으면 적용하세요
-          </span>
-          <button
-            style={S.applyBtn}
-            onClick={() => {
-              /*
-                적용한 도로가 지도에 없으면 판정 근거가 안 보인다 — 체크를 같이 켠다.
-                **아직 체크를 손대지 않았으면 적용한 도로만 남긴다** — 판정 근거가 그 한 줄이라
-                증빙 지도에 다른 후보가 같이 그려져 있을 이유가 없다.
-                이미 골라둔 것이 있으면 **지우지 않는다**(조용히 비우면 고른 것이 날아간다).
-              */
-              const cur = Array.isArray(value?.shown) ? [...shown] : [];
-              set({
-                name: sel.name, distance: sel.distance, x: sel.x, y: sel.y,
-                /*
-                  **거리를 무엇으로 쟀는지 값과 같이 들고 간다.**
-                  엑셀 증빙은 화면 상태만 받으므로, 여기서 안 실으면
-                  출처 줄이 「카카오 좌표→주소 역산」으로 박힌 채 나간다(실제로 그랬다).
-                */
-                source: src?.name ?? null,
-                method: src?.method ?? null,
-                precision: sel.precision ?? null,
-                shown: cur.includes(sel.name) ? cur : [...cur, sel.name],
-                // 도로가 바뀌면 차선 수는 다시 센다 — 앞 도로 값을 물려받으면 판정이 틀린다
-                lanes: 0,
-              });
-              setSel(null);
-            }}
-          >이 도로로 적용</button>
-        </div>
-      )}
 
       {dismissed.length > 0 && (
         <button style={S.undo} onClick={() => set({ dismissed: [] })}>

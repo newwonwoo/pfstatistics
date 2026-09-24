@@ -558,9 +558,10 @@ export default function Home() {
     이제 주소를 확정하면 바로 그리기 모드로 열리고, [경계 확정] 을 누르면 접힌다.
     확정했거나 중심 기준을 고르면 더는 자리를 먹지 않는다.
   */
+  /* 수집이 끝났으면 경계 지도는 접는다 — 끝난 단계가 화면을 계속 먹으면 안 된다 */
   const mapWanted = Boolean(SHEETS.find(x => x.id === tab)?.map)
     && basisMode === 'polygon'
-    && !polyDone
+    && !polyDone && !allPoi
     && (pending !== undefined || (fixed && !(polygon?.length >= 3)));
   /* [사업지 경계 기준] 을 고르면 접혀 있어도 펴야 한다 — 안 그리면 그릴 곳이 안 보인다 */
   const mapOpen = drawNow ? true : (mapOpenManual ?? mapWanted);
@@ -921,7 +922,13 @@ export default function Home() {
               다음에 할 일이 "버튼을 또 누르는 것" 으로 읽힌다 — 실제로 할 일은 지도를 찍는 것이다.
               1~2점만 찍은 중간 상태도 말해준다(3점이 있어야 경계가 된다).
             */}
-            {polyDone && polygon?.length >= 3 ? `✓ 경계 ${polygon.length}점 확정됨 — 경계 기준으로 잽니다`
+            {/*
+              **이미 그 경계로 수집까지 끝냈는데 「[경계 확정] 을 누르세요」 라고 적혀 있었다**
+              (실측 2026-09-24 — 시설 3/3 이 끝난 화면에서도 그대로였다).
+              [이 경계로 … 수집] 으로 흐름을 끝낸 경우 `polyDone` 이 안 서기 때문인데,
+              **수집이 끝난 것이 곧 그 경계를 쓴 것**이다. 할 일이 남은 것처럼 읽히면 안 된다.
+            */}
+            {(polyDone || allPoi) && polygon?.length >= 3 ? `✓ 경계 ${polygon.length}점 확정됨 — 경계 기준으로 잽니다`
               : polygon?.length >= 3 ? `경계 ${polygon.length}점 지정됨 — [경계 확정] 을 누르세요`
               : basisMode !== 'polygon' ? '중심 기준 — 대표지번 한 점에서 잽니다'
               : drawNow ? `지도를 클릭해 경계를 찍으세요 — ${polygon?.length ?? 0}점 (3점부터 경계가 됩니다)`
@@ -942,7 +949,7 @@ export default function Home() {
           onCollect={pending !== undefined && basisMode === 'polygon'
             ? () => runPoi(pending ?? null, polygon)
             : null}
-          done={polyDone}
+          done={polyDone || allPoi}
           onConfirm={() => {
             setPolyDone(true); setDrawNow(false); setMapOpenManual(false);
             setMsg({ kind: 'ok', text: `경계 ${polygon?.length ?? 0}점 확정 — 이제 [통계 수집] 을 누르세요.` });
