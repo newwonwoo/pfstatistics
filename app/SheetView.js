@@ -535,6 +535,13 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                       roadviewAt={roadSpot[f.label] ?? roadMarkers(f)[0] ?? null}
                       /* 표에 있는 것은 지도에도 전부 있어야 한다 — 번호는 표의 # 와 같다 */
                       lines={f.manual ? roadPaths(f) : []}
+                      /*
+                        도로 후보는 수십 곳이라 이름표를 다 달면 지도가 흰 박스로 덮인다
+                        (실측 2026-09-24 부천 상동: 후보 34곳 → 지도 한복판이 라벨 더미).
+                        시설 지도는 표와 1:1 이라 전부 달지만, 도로는 **선이 이미 어느 도로인지 말한다** —
+                        가까운 몇 곳만 이름을 달고 나머지는 번호로 표에서 찾게 한다.
+                      */
+                      labelMax={f.manual ? 6 : null}
                       markers={f.manual ? roadMarkers(f) : items.map((it, i) => ({
                         no: i + 1, lat: Number(it.y), lng: Number(it.x),
                         name: it.name, distance: it.distance,

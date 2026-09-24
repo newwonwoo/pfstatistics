@@ -64,7 +64,7 @@ const LABEL_MAX = 999;
 
 const levelCapFor = (r) => MAX_LEVEL[r] ?? (r <= 300 ? 3 : r <= 500 ? 4 : r <= 1000 ? 5 : 6);
 
-export default function RadiusMap({ title, center, radius, markers = [], lines = [], polygon = null, caption, defaultMapType = 'ROADMAP', roadview = false, roadviewOpen = false, roadviewAt = null, radiusBasis }) {
+export default function RadiusMap({ title, center, radius, markers = [], lines = [], polygon = null, labelMax = null, caption, defaultMapType = 'ROADMAP', roadview = false, roadviewOpen = false, roadviewAt = null, radiusBasis }) {
   const el = useRef(null);
   const mapRef = useRef(null);
   const [err, setErr] = useState(null);
@@ -208,7 +208,7 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
             border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);color:#fff;
             font:700 12px 'Malgun Gothic',sans-serif;display:flex;align-items:center;justify-content:center">${no}</div>`,
         });
-        if (i < LABEL_MAX) {
+        if (i < (labelMax ?? LABEL_MAX)) {
           // 같은 높이에 다 걸면 서로 덮는다. 높이를 엇갈려 겹침을 줄인다.
           const lo = new kakao.maps.CustomOverlay({
             position: p, yAnchor: 2.4 + (i % 3) * 0.95, zIndex: 4,
@@ -307,7 +307,7 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
     return () => { dead = true; };
   // markers/polygon 은 렌더마다 새 배열이라 그대로 넣으면 지도가 매번 다시 만들어진다.
   // 내용이 같으면 다시 만들지 않도록 문자열로 비교한다.
-  }, [center.lat, center.lng, radius, mkey, lkey, pkey, rkey, defaultMapType]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [center.lat, center.lng, radius, mkey, lkey, pkey, rkey, defaultMapType, labelMax]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   /* [이름표 끄기] — 지도를 다시 그리지 않고 라벨 오버레이만 켜고 끈다 */
   useEffect(() => {
@@ -327,13 +327,13 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
     node.__capture = (opts) => composeMap(node, {
       map: mapRef.current.map,
       kakao: mapRef.current.kakao,
-      center, radius, markers, lines, polygon, title, radiusRing: ring,
+      center, radius, markers, lines, polygon, title, radiusRing: ring, labelMax,
       /* 화면에서 이름표를 껐으면 캡쳐도 끈다 — 증빙이 화면과 달라지면 안 된다 */
       labels,
       ...opts,
     });
     return () => { if (node) delete node.__capture; };
-  }, [ready, center.lat, center.lng, radius, mkey, lkey, pkey, rkey, title, mapType, labels, big]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, center.lat, center.lng, radius, mkey, lkey, pkey, rkey, title, mapType, labels, big, labelMax]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * 클릭 지점에서 가장 가까운 로드뷰로 옮긴다.
