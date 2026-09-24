@@ -55,6 +55,10 @@ const S = {
   tdWhy: { border: `1px solid ${T.sheetLine}`, padding: '7px 12px', textAlign: 'left', fontSize: 11.5, color: T.muted, lineHeight: 1.6 },
   filled: { border: `1px solid ${T.sheetLine}`, padding: '6px 10px', textAlign: 'center', fontWeight: 700, background: '#fffdf0', ...mono },
   blank: { border: `1px solid ${T.sheetLine}`, padding: '6px 10px', background: 'repeating-linear-gradient(45deg,#fafbfc,#fafbfc 5px,#f1f3f5 5px,#f1f3f5 10px)' },
+  wait: { fontSize: 10.5, fontWeight: 700, color: T.muted, opacity: 0.85 },
+  go: { marginLeft: 8, padding: '2px 8px', fontSize: 11, fontWeight: 700, borderRadius: 4,
+        cursor: 'pointer', border: `1px solid ${T.accent}`, background: '#fff', color: T.accent,
+        whiteSpace: 'nowrap' },
   final: { border: `2px solid ${T.lineStrong}`, padding: '10px 12px', textAlign: 'center', fontWeight: 800, background: '#fffdf0', fontSize: 16, ...mono },
   kind: (k) => ({
     display: 'inline-block', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 3, marginLeft: 6,
@@ -73,7 +77,14 @@ const S = {
 
 const KIND_LABEL = { auto: '자동', form: '값→점수', typed: '점수 직접' };
 
-export default function ManualView({ region, addr, data, facilities, manual, value, onChange }) {
+/** 아직 안 찬 항목을 어느 탭에서 채우는가 — 글로만 적지 말고 그 자리에서 보낸다 */
+const GOTO_TAB = {
+  '교통환경': '교통환경', '주거편의': '주거편의', '교육환경': '교육환경',
+  '브랜드경쟁력': '교통환경', '주택담보대출금리': '교통환경', '지역경쟁력': '교통환경',
+  '부동산시장 소비심리지수': '교통환경', '지역미분양': '교통환경',
+};
+
+export default function ManualView({ region, addr, data, facilities, manual, value, onChange, onJump }) {
   const v = value ?? {};
   const set = (patch) => onChange?.({ ...v, ...patch });
   const setScale = (k, x) => set({ 규모및배치: { ...(v.규모및배치 ?? {}), [k]: x } });
@@ -328,8 +339,23 @@ export default function ManualView({ region, addr, data, facilities, manual, val
               <tr key={r.id}>
                 <td style={S.tdL}>{r.id}<span style={S.kind(r.kind)}>{KIND_LABEL[r.kind]}</span></td>
                 <td style={S.td}>{r.max ?? <span style={S.pend}>미상</span>}</td>
-                {r.score != null ? <td style={S.filled}>{r.score}</td> : <td style={S.blank} />}
-                <td style={S.tdWhy}>{r.why}</td>
+                {/*
+                  **「자동」 배지만 있고 점수 칸이 빗금이면 "자동인데 왜 안 채워지나" 로 읽힌다**
+                  (사용자 지적 2026-09-24). 빗금은 "값이 들어갈 자리" 라는 뜻일 뿐 상태를 말하지 않아
+                  아직 안 온 것인지 0점인지 구분이 안 된다. 「대기」 라고 적어 **모른다**는 것을 말한다.
+                */}
+                {r.score != null
+                  ? <td style={S.filled}>{r.score}</td>
+                  : <td style={S.blank}><span style={S.wait}>대기</span></td>}
+                <td style={S.tdWhy}>
+                  {r.why}
+                  {/* 갈 곳을 글로만 적으면 탭을 찾아 눌러야 한다 — 그 자리에서 바로 보낸다 */}
+                  {r.score == null && GOTO_TAB[r.id] && (
+                    <button style={S.go} onClick={() => onJump?.(GOTO_TAB[r.id])}>
+                      {GOTO_TAB[r.id]} 탭으로 →
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
             <tr>
@@ -355,7 +381,7 @@ export default function ManualView({ region, addr, data, facilities, manual, val
           <div style={S.grid}>
             <div style={S.field}>
               <span style={S.lab}>A 직접 입력 <span style={{ fontWeight: 400, color: T.muted }}>(선택)</span></span>
-              <input style={S.input} type="number" min="0" step="any" placeholder="자동"
+              <input style={S.input} type="number" min="0" step="any" placeholder="직접 입력"
                 value={v.exclOverride ?? ''} onChange={e => set({ exclOverride: e.target.value })} />
               <span style={S.sub}>내부망 평가표 값을 그대로 쓰고 싶을 때</span>
             </div>

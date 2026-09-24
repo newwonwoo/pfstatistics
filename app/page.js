@@ -977,7 +977,7 @@ export default function Home() {
               ? (
                 <ManualView
                   region={region} addr={addr} data={data} facilities={view} manual={manual}
-                  value={sheetInput} onChange={setSheetInput}
+                  value={sheetInput} onChange={setSheetInput} onJump={setTab}
                 />
               )
               : s.kind === 'review'
