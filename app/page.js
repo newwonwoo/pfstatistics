@@ -189,6 +189,12 @@ export default function Home() {
   const [basisMode, setBasisMode] = useState('polygon');   // null=미정(관문) · 'polygon' · 'point'
   const [pending, setPending] = useState(undefined);  // 기준을 정하면 수집할 시트 (null=전체)
   const [drawNow, setDrawNow] = useState(false);      // 지도를 그리기 모드로 열기
+  /*
+    **경계 그리기를 끝맺는 상태**(사용자 요청 2026-09-24).
+    점을 다 찍어도 "이제 뭘 하지" 가 없었다 — [경계 확정] 으로 흐름을 끝내고
+    그 자리에서 다음 단계([통계 수집])를 말해준다. [다시 그리기] 로 되돌린다.
+  */
+  const [polyDone, setPolyDone] = useState(false);
   const [geo, setGeo] = useState(null);             // 주소 매칭 결과 (후보 포함)
   const [pick, setPick] = useState(0);              // 고른 후보
   const [manual, setManual] = useState({});         // 위성 육안 판정(6차선 등)
@@ -281,6 +287,8 @@ export default function Home() {
       setCoord(j.coord);
       setFixed(true);
       setPanelOpenManual(null);   // [사업지 바꾸기] 로 펴 둔 상태를 자동 판단으로 되돌린다
+      /* 주소 다음은 경계다 — 지도를 그리기 모드로 열어 바로 찍게 한다 */
+      if (basisMode === 'polygon') { setDrawNow(true); setPolyDone(false); setMapOpenManual(null); }
 
       /*
        * 확정된 주소에서 시군구를 되짚어 채운다.
@@ -362,7 +370,7 @@ export default function Home() {
   function resetSite() {
     setFixed(false); setGeo(null); setPick(0);
     setCoord(null); setPolygon(null); setFacilities(null); setData(null);
-    setBasisMode('polygon'); setPending(undefined); setDrawNow(false);   // 기본값은 경계
+    setBasisMode('polygon'); setPolyDone(false); setPending(undefined); setDrawNow(false);   // 기본값은 경계
     setMsg({ kind: 'warn', text: '사업지를 초기화했습니다. 시도·시군구부터 다시 지정하세요.' });
   }
 
@@ -389,6 +397,8 @@ export default function Home() {
     setGeo(rec.facilities?.geo ?? null); setPick(0);
     setFixed(Boolean(rec.facilities?.coord));
     setBasisMode(rec.facilities?.basis ?? null); setPending(undefined); setDrawNow(false);
+    /* 보관본의 경계는 이미 확정된 것이다 — 다시 그리라고 지도를 펴지 않는다 */
+    setPolyDone((rec.facilities?.polygon?.length ?? 0) >= 3);
     setManual(rec.manual ?? {});
     setForm(f => ({
       ...f,
@@ -542,10 +552,16 @@ export default function Home() {
     기본값이 경계가 된 뒤(2026-09-17) `basisMode === 'polygon'` 은 주소 확정 직후부터 참이라
     그것만으로 펴면 위에 적은 함정으로 그대로 되돌아간다 — **수집을 시작했을 때**(pending) 편다.
   */
+  /*
+    **경계는 주소 확정 다음 단계다**(CLAUDE.md 의 흐름: 주소 확정 → 사업지 경계 → 통계 → 반경시설).
+    전에는 [반경시설 수집] 을 눌러야 지도가 열려, 경계가 통계보다 **뒤**에 오는 것처럼 보였다.
+    이제 주소를 확정하면 바로 그리기 모드로 열리고, [경계 확정] 을 누르면 접힌다.
+    확정했거나 중심 기준을 고르면 더는 자리를 먹지 않는다.
+  */
   const mapWanted = Boolean(SHEETS.find(x => x.id === tab)?.map)
-    && !(polygon?.length >= 3)
     && basisMode === 'polygon'
-    && pending !== undefined;
+    && !polyDone
+    && (pending !== undefined || (fixed && !(polygon?.length >= 3)));
   /* [사업지 경계 기준] 을 고르면 접혀 있어도 펴야 한다 — 안 그리면 그릴 곳이 안 보인다 */
   const mapOpen = drawNow ? true : (mapOpenManual ?? mapWanted);
   const setMapOpen = (fn) => setMapOpenManual(typeof fn === 'function' ? fn(mapOpen) : fn);
@@ -859,7 +875,7 @@ export default function Home() {
             <div style={S.askRow}>
               <button
                 style={S.askBtn(true)}
-                onClick={() => { setBasisMode('polygon'); setDrawNow(true);
+                onClick={() => { setBasisMode('polygon'); setDrawNow(true); setPolyDone(false);
                   setMsg({ kind: 'warn', text: '아래 지도에서 사업지 경계를 3점 이상 찍은 뒤 [이 경계로 수집] 을 누르세요.' }); }}
               >
                 <span style={S.askBtnT}>사업지 경계 기준</span>
@@ -905,7 +921,8 @@ export default function Home() {
               다음에 할 일이 "버튼을 또 누르는 것" 으로 읽힌다 — 실제로 할 일은 지도를 찍는 것이다.
               1~2점만 찍은 중간 상태도 말해준다(3점이 있어야 경계가 된다).
             */}
-            {polygon?.length >= 3 ? `경계 ${polygon.length}점 지정됨 — 경계 기준으로 잽니다`
+            {polyDone && polygon?.length >= 3 ? `✓ 경계 ${polygon.length}점 확정됨 — 경계 기준으로 잽니다`
+              : polygon?.length >= 3 ? `경계 ${polygon.length}점 지정됨 — [경계 확정] 을 누르세요`
               : basisMode !== 'polygon' ? '중심 기준 — 대표지번 한 점에서 잽니다'
               : drawNow ? `지도를 클릭해 경계를 찍으세요 — ${polygon?.length ?? 0}점 (3점부터 경계가 됩니다)`
               : '경계 미지정 — [반경시설 수집] 을 누르면 여기서 그립니다'}
@@ -925,6 +942,14 @@ export default function Home() {
           onCollect={pending !== undefined && basisMode === 'polygon'
             ? () => runPoi(pending ?? null, polygon)
             : null}
+          done={polyDone}
+          onConfirm={() => {
+            setPolyDone(true); setDrawNow(false); setMapOpenManual(false);
+            setMsg({ kind: 'ok', text: `경계 ${polygon?.length ?? 0}점 확정 — 이제 [통계 수집] 을 누르세요.` });
+          }}
+          onRedraw={() => {
+            setPolyDone(false); setDrawNow(true); setMapOpenManual(true); setMsg(null);
+          }}
           confirmed={!!facilities}
           busy={busy === 'poi' || POI_SHEETS.includes(busy)}
         />

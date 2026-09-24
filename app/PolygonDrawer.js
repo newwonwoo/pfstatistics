@@ -42,7 +42,8 @@ const S = {
   }),
 };
 
-export default function PolygonDrawer({ center, polygon, onChange, busy, autoDraw = false, pendingSheet, onCollect = null }) {
+export default function PolygonDrawer({ center, polygon, onChange, busy, autoDraw = false, pendingSheet,
+  onCollect = null, onConfirm = null, onRedraw = null, done = false }) {
   const el = useRef(null);
   const state = useRef({ map: null, poly: null, dots: [] });
   const [pts, setPts] = useState(polygon ?? []);
@@ -150,6 +151,16 @@ export default function PolygonDrawer({ center, polygon, onChange, busy, autoDra
           이 버튼은 경계 기준을 고른 **그 순간에만** 있고, 수집이 끝나면 사라진다.
           단계 줄 버튼은 이 흐름을 *시작한* 버튼이고, 이건 그 흐름을 *끝내는* 버튼이다.
         */}
+        {/*
+          **경계 그리기를 끝맺는 버튼이 없었다**(사용자 요청 2026-09-24).
+          점을 다 찍어도 "이제 뭘 하지" 가 화면에 없었다 — 다음 할 일([통계 수집])은
+          674px 위 단계 줄에 있는데 그리로 시선을 보내는 것이 아무것도 없었다.
+          **[경계 확정]** 으로 이 흐름을 끝내고, 끝나면 다음 단계를 말해준다.
+          확정한 뒤에도 고칠 수 있어야 하므로 **[다시 그리기]** 를 같은 자리에 둔다.
+
+          수집 흐름에서 들어온 경우([반경시설 수집] → 경계)는 그 흐름을 끝내는 버튼이
+          [이 경계로 … 수집] 이다 — 그때는 그쪽이 우선이다(버튼을 두 개 세우지 않는다).
+        */}
         {onCollect ? (
           <button style={S.go(pts.length >= 3 && !busy)}
             disabled={pts.length < 3 || !!busy}
@@ -158,6 +169,20 @@ export default function PolygonDrawer({ center, polygon, onChange, busy, autoDra
             {busy ? '수집 중…'
               : pts.length >= 3 ? `이 경계로 ${pendingSheet ?? '반경시설'} 수집`
               : `경계를 ${3 - pts.length}점 더 찍으세요`}
+          </button>
+        ) : done ? (
+          <>
+            <span style={S.ready(true)}>✓ 경계 {pts.length}점 확정됨</span>
+            {onRedraw && (
+              <button style={S.btn(false)} onClick={onRedraw}>다시 그리기</button>
+            )}
+          </>
+        ) : onConfirm ? (
+          <button style={S.go(pts.length >= 3)}
+            disabled={pts.length < 3}
+            title={pts.length < 3 ? `경계를 ${3 - pts.length}점 더 찍어야 누를 수 있습니다` : ''}
+            onClick={onConfirm}>
+            {pts.length >= 3 ? `경계 ${pts.length}점 확정` : `경계를 ${3 - pts.length}점 더 찍으세요`}
           </button>
         ) : (
           <span style={S.ready(pts.length >= 3)}>
