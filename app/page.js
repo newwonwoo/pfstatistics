@@ -468,8 +468,46 @@ export default function Home() {
   const rateRes = useMemo(() => expectedRateOf(compare, rate, mSum.excl, sheetInput), [compare, rate, mSum.excl, sheetInput]);
   const cmpSum = rateRes.cmp;
   const ratePct = rateRes.res && !rateRes.res.pending ? rateRes.res.rate : null;
+  /*
+    **판정 전 기본점수가 섞인 채로 보증료율까지 흘러갔다**(사용자 지적 2026-09-24).
+    6차선 차선 수나 인구유입요인을 **안 넣으면 비는 게 아니라 기본 1점이 들어간다** —
+    그래서 A 가 「나와버리고」, 종합평가 → 초기예상분양률 → 초기분양률(22) → 종합평점 →
+    심사등급 → 보증료율까지 아무 말 없이 간다. `provisional` 은 수기입력 탭에서만 적혀 있었다.
+    실측: 시나리오 A 에서 차선 미입력 종합 **75** / 입력 후 **77** — 75 는 급간 경계 바로 위다.
+    (기록된 실측으로는 교통환경 3점이 1점이 되어 **분양률이 두 급간** 내려간 적도 있다)
+
+    **비어 있는 것은 이미 막힌다**(A 가 null 이면 합계도 등급도 안 난다).
+    막아야 하는 것은 **판정을 안 했는데 값이 나와버리는 쪽**이다 —
+    섞였으면 초기예상분양률을 심사평점표로 **넘기지 않는다.** 한 지점에서 끊는다.
+  */
+  const tainted = (mSum.provisional?.length ?? 0) > 0;
   const reviewRes = useMemo(
-    () => reviewScore({ manual: review ?? {}, rate: ratePct ?? NaN }), [review, ratePct]);
+    () => reviewScore({ manual: review ?? {}, rate: (tainted ? null : ratePct) ?? NaN }),
+    [review, ratePct, tainted]);
+
+  /*
+    심사평점표에서 **무엇이 비었는지 한자리에 안 보였다** — 「초기예상분양률 탭으로 →」 하나뿐이라
+    거기 가면 「비교사업장 탭으로 →」, 거기서 또 「수기입력 탭에서 완성하세요」 로 **세 번 튕겼다**.
+    관문을 한 장으로 모으고 각 줄에서 그 탭으로 바로 간다. **탭 자체는 막지 않는다** —
+    사업수익률·자기자금·신용등급은 이 앱이 수집하지 않는 값이라 손에 든 실무자가 먼저 넣을 수 있어야 한다.
+  */
+  const gate = useMemo(() => {
+    const need = [], done = [];
+    const put = (ok, label, toTab, why) => (ok ? done : need).push({ label, tab: toTab, why });
+    put(!!data && data.okCount === data.total, `통계 수집 (${data?.okCount ?? 0}/${data?.total ?? 7})`,
+      '교통환경', 'A 의 자동 항목(지역미분양·소비심리·지역경쟁력·브랜드경쟁력·주택담보대출금리)이 여기서 찬다');
+    put(allPoi, '반경시설 수집 (3종)', '교통환경', '교통환경·주거편의·교육환경 점수가 A 에 들어간다');
+    for (const pv of (mSum.provisional ?? [])) {
+      need.push({ label: `${pv.id} — 판정 전 기본점수`, why: pv.text,
+        tab: pv.id === '지역수요' ? '수기입력' : pv.id });
+    }
+    put(mSum.excl != null, `수기입력 — 제외 항목 점수(A)${mSum.missing?.length ? ` · ${mSum.missing.length}개 남음` : ''}`,
+      '수기입력', '규모및배치 · 평형구성 · 인근아파트 초기분양률 · 인구유입요인');
+    put(!!compare?.data, '비교사업장 수집', '비교사업장', '반경 안 분양단지를 받아야 평균이 난다');
+    put(cmpSum?.avg != null, '비교사업장 선택 (평균)', '비교사업장', '고른 단지의 평균이 분양가격지수의 분모다');
+    put(Number(compare?.site?.unitPrice) > 0, '본건 예정분양가', '비교사업장', '분양가격지수의 분자다');
+    return { need, done, blocked: need.length > 0 };
+  }, [data, allPoi, mSum.provisional, mSum.excl, mSum.missing, compare, cmpSum]);
 
   const done = [
     ...(fixed ? ['input'] : []),
@@ -939,6 +977,7 @@ export default function Home() {
                 <ReviewView
                   region={region} addr={addr} data={data} facilities={view}
                   compare={compare} rate={rate} excl={mSum.excl} sheetInput={sheetInput}
+                  gate={gate}
                   value={review} onChange={setReview} onJump={setTab}
                 />
               )

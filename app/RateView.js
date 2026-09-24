@@ -37,6 +37,8 @@ const S = {
   num: { padding: '7px 8px', textAlign: 'right', fontWeight: 700, width: 120, ...mono },
   unit: { padding: '7px 4px', color: T.muted, fontSize: 11.5, width: 40 },
   memo: { padding: '7px 16px', color: T.muted, fontSize: 11.5 },
+  prov: { marginTop: 5, padding: '6px 10px', background: T.warnSoft, border: `1px solid ${T.warn}44`,
+          borderRadius: 5, fontSize: 11.5, color: T.ink2, lineHeight: 1.7 },
   final: { borderTop: `2px solid ${T.lineStrong}`, background: '#fffdf0', paddingTop: 10, paddingBottom: 10 },
   why: { padding: '9px 16px 12px', fontSize: 12, color: T.ink2, lineHeight: 1.7 },
 
@@ -165,6 +167,20 @@ export default function RateView({ region, addr, facilities, compare, excl: excl
                       A 를 완성해야 합니다{manualSum?.missing?.length ? ` — ${manualSum.missing.length}개 남음` : ''}
                       <button style={S.go} onClick={() => onJump?.('수기입력')}>수기입력 탭으로 →</button>
                     </>)}
+                {/*
+                  **판정 전 기본점수가 섞이면 A 는 「나오긴 나온다」.** 6차선 차선 수나 인구유입요인을
+                  안 넣으면 비는 게 아니라 기본 1점이 들어가기 때문이다 — 그래서 여기까지는 숫자가 오고,
+                  심사평점표까지 조용히 흘러갔다. 이 줄에서 말하고, 심사평점표로는 넘기지 않는다.
+                */}
+                {hasExcl && manualSum?.provisional?.length > 0 && (
+                  <div style={S.prov}>
+                    <b>{manualSum.provisional.map(x => x.id).join(' · ')}</b> 에 판정 전 기본점수가 섞여 있습니다 —
+                    그 항목을 판정하면 A 가 바뀌므로 <b>심사평점표로 넘기지 않습니다.</b>
+                    <button style={S.go} onClick={() => onJump?.(manualSum.provisional[0].id === '지역수요' ? '수기입력' : manualSum.provisional[0].id)}>
+                      {manualSum.provisional[0].id === '지역수요' ? '수기입력' : manualSum.provisional[0].id} 탭으로 →
+                    </button>
+                  </div>
+                )}
               </td>
             </tr>
             <tr>

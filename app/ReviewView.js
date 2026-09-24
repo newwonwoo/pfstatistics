@@ -25,6 +25,20 @@ const S = {
   chain: { ...mono, fontSize: 11.5, color: T.ink },
 
   warn: { padding: '11px 15px', background: T.warnSoft, border: '1px solid #f0dcb4', borderRadius: 7, fontSize: 12, color: T.warn, lineHeight: 1.7, marginBottom: 14 },
+  gate: { margin: '0 0 14px', padding: '13px 16px 14px', background: T.warnSoft,
+          border: `1px solid ${T.warn}55`, borderRadius: 8 },
+  gateHead: { display: 'flex', alignItems: 'baseline', gap: 10, fontSize: 12.5, fontWeight: 700,
+              color: T.ink, marginBottom: 9 },
+  gateCount: { marginLeft: 'auto', fontSize: 11.5, fontWeight: 700, color: T.warn },
+  gateRow: { display: 'flex', alignItems: 'center', gap: 9, padding: '5px 0', fontSize: 12.5,
+             borderTop: `1px solid ${T.warn}22`, flexWrap: 'wrap' },
+  gateX: { color: T.warn, fontWeight: 800 },
+  gateLabel: { fontWeight: 700, color: T.ink2, minWidth: 250 },
+  gateWhy: { fontSize: 11.5, color: T.muted, flex: 1, minWidth: 180 },
+  gateGo: { padding: '4px 10px', fontSize: 11.5, fontWeight: 700, borderRadius: 5, cursor: 'pointer',
+            border: `1px solid ${T.accent}`, background: '#fff', color: T.accent, whiteSpace: 'nowrap' },
+  gateDone: { marginTop: 9, paddingTop: 8, borderTop: `1px solid ${T.warn}22`,
+              fontSize: 11.5, color: T.muted, lineHeight: 1.7 },
 
   tbl: { borderCollapse: 'collapse', width: '100%', fontSize: 12.5, minWidth: 720 },
   th: { border: `1px solid ${T.sheetLine}`, background: T.sheetHead, padding: '7px 12px', fontWeight: 600, whiteSpace: 'nowrap', color: T.ink },
@@ -64,7 +78,7 @@ const S = {
   dscrBar: { display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap', margin: '14px 0 4px', fontSize: 12, color: T.ink2 },
 };
 
-export default function ReviewView({ region, addr, data, facilities, compare, rate, excl = null, sheetInput = null, value, onChange, onJump }) {
+export default function ReviewView({ region, addr, data, facilities, compare, rate, excl = null, sheetInput = null, gate = null, value, onChange, onJump }) {
   const v = value ?? {};
   const set = (patch) => onChange?.({ ...v, ...patch });
   const put = (id, x) => set({ [id]: x });
@@ -118,6 +132,38 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
         />
       </div>
 
+      {/*
+        **관문** — 무엇이 비었는지 한자리에 모으고 그 탭으로 바로 보낸다.
+        전에는 「초기예상분양률 탭으로 →」 하나뿐이라 거기 가면 「비교사업장 탭으로 →」,
+        거기서 또 「수기입력 탭에서 완성하세요」 로 **세 번 튕겼다**.
+        탭 자체는 막지 않는다: 사업수익률·자기자금·신용등급은 이 앱이 수집하지 않는 값이라
+        사업수지표를 손에 든 실무자가 먼저 넣어둘 수 있어야 한다.
+        다만 **결론은 안 난다** — 초기분양률(22) 이 안 차므로 합계·종합평점·등급·요율이 잠긴다.
+      */}
+      {gate?.blocked && (
+        <div style={S.gate}>
+          <div style={S.gateHead}>
+            먼저 채워야 <b>초기분양률(22)</b> 이 차고 종합평점이 납니다
+            <span style={S.gateCount}>남은 것 {gate.need.length}개</span>
+          </div>
+          {gate.need.map((n, i) => (
+            <div key={i} style={S.gateRow}>
+              <span style={S.gateX}>✗</span>
+              <span style={S.gateLabel}>{n.label}</span>
+              <span style={S.gateWhy}>{n.why}</span>
+              {n.tab && (
+                <button style={S.gateGo} onClick={() => onJump?.(n.tab)}>{n.tab} 탭으로 →</button>
+              )}
+            </div>
+          ))}
+          {gate.done.length > 0 && (
+            <div style={S.gateDone}>
+              <b>✓ 끝난 것</b> — {gate.done.map(d => d.label).join(' · ')}
+            </div>
+          )}
+        </div>
+      )}
+
       {r.zero && (
         <div style={S.warn}>
           <b>0점 처리 규칙이 걸렸습니다</b> — {r.zero.text}<br />
@@ -138,7 +184,7 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
           </thead>
           <tbody>
             {r.groups.map(g => (
-              <FragmentRows key={g.label} g={g} v={v} put={put} pct={pct} presale={r.presale} known={known} onJump={onJump} />
+              <FragmentRows key={g.label} g={g} v={v} put={put} pct={pct} presale={r.presale} known={known} onJump={onJump} gate={gate} />
             ))}
             <tr>
               <td style={S.gh} colSpan={2}>합 계</td>
@@ -226,7 +272,7 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
 }
 
 /** 그룹 한 덩어리 — 첫 줄에 구분을 병합해 캡쳐의 모양을 그대로 낸다 */
-function FragmentRows({ g, v, put, pct, presale, known = {}, onJump }) {
+function FragmentRows({ g, v, put, pct, presale, known = {}, onJump, gate = null }) {
   return g.items.map((it, i) => (
     <tr key={it.id}>
       {i === 0 && (
@@ -276,8 +322,15 @@ function FragmentRows({ g, v, put, pct, presale, known = {}, onJump }) {
         {it.auto && pct != null && <><b style={{ color: T.ink2 }}>초기예상분양률 {pct}% · {presale?.label}</b><br /></>}
         {it.auto && pct == null && (
           <>
-            <span style={{ color: T.warn }}>초기예상분양률이 산정되면 자동으로 찹니다</span>
-            <button style={S.go} onClick={() => onJump?.('초기예상분양률')}>초기예상분양률 탭으로 →</button>
+            {/* 산정이 안 된 것과, 산정은 됐지만 판정 전 기본점수가 섞여 안 넘어온 것은 다르다 */}
+            <span style={{ color: T.warn }}>
+              {gate?.blocked
+                ? `위 관문의 남은 항목 ${gate.need.length}개를 채우면 찹니다`
+                : '초기예상분양률이 산정되면 자동으로 찹니다'}
+            </span>
+            {!gate?.blocked && (
+              <button style={S.go} onClick={() => onJump?.('초기예상분양률')}>초기예상분양률 탭으로 →</button>
+            )}
             <br />
           </>
         )}
