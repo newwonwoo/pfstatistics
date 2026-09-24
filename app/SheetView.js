@@ -5,7 +5,7 @@ import { scoreSheet, scoreGroup, scoreFacility, scorePoi, scoreAverage } from '.
 import { T, mono } from './theme';
 import EvidenceCard from './EvidenceCard';
 import RadiusMap from './RadiusMap';
-import RoadPicker, { roadShown } from './RoadPicker';
+import RoadPicker, { shownSet } from './RoadPicker';
 
 const S = {
   /* 시설 행 지우기 — 도로 후보 목록과 같은 모양이어야 같은 동작으로 읽힌다 */
@@ -139,7 +139,9 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
         이제 목록의 체크박스가 곧 지도다 — 같은 함수(`roadShown`)를 본다.
         엑셀 지도는 이 화면을 그대로 캡쳐하므로 같이 따라간다.
       */
-      const big = (roadList[f.label] ?? []).filter(r => roadShown(manual?.[f.label], r));
+      const rows = roadList[f.label] ?? [];
+      const on = shownSet(manual?.[f.label], rows);
+      const big = rows.filter(r => on.has(r.name));
       const sorted = picked
         ? [...big.filter(r => r.name === picked), ...big.filter(r => r.name !== picked)]
         : big;
@@ -174,8 +176,10 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
     const roadPaths = (f) => {
       if (roadSrc[f.label]?.method !== 'geometry') return [];
       const picked = manual?.[f.label]?.name;
-      return (roadList[f.label] ?? [])
-        .filter(r => roadShown(manual?.[f.label], r))
+      const rows = roadList[f.label] ?? [];
+      const on = shownSet(manual?.[f.label], rows);
+      return rows
+        .filter(r => on.has(r.name))
         .flatMap(r => (r.lines ?? []).map(path => ({
           name: r.name, strong: r.name === picked, path,
         })));

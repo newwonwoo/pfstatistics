@@ -72,17 +72,29 @@ export const roadScore = (m) => scoreFacility('6차선 왕복도로', m);
 /**
  * **목록에 없는 것이 지도에 있으면 안 된다**(사용자 지적 2026-09-24).
  * 전에는 지도가 「대로·로 전부」 를 제 규칙으로 찍어, 목록에서 지우거나 접은 것과 갈렸다.
- * 이제 **고른 것만** 지도(와 엑셀 지도)에 나간다 — 화면과 지도가 같은 함수를 본다.
+ * 이제 **체크한 것만** 지도(와 엑셀 지도)에 나간다 — 화면과 지도가 같은 함수를 본다.
  *
- * `shown` 이 없으면(아직 손대지 않았으면) 기본은 **대로·로**다 —
- * 6차선이 될 수 있는 것이 사실상 그것뿐이라 처음부터 길·번길을 찍으면 지도가 핀에 덮인다.
+ * **기본값을 「대로·로 전부」로 두었더니 그것대로 문제였다**(사용자 지적 2026-09-24, 두 번째).
+ * 도로를 점이 아니라 **선**으로 그리기 시작하면서 34곳이 지도를 뒤덮었다 —
+ * 핀 시절엔 점 34개라 견뎠지만 선 34줄은 사업지가 어디인지도 안 보인다.
+ * 그래서 손대지 않았을 때의 기본은 **가까운 대로·로 5곳**이다.
+ * 고를 만큼은 보이되 덮이지는 않는 수다. 더 보려면 체크하면 된다.
  */
-export const roadShown = (value, r) => {
-  const list = value?.shown;
+export const DEFAULT_SHOWN = 5;
+
+/** 지도에 나갈 도로명 집합 — 화면·지도·엑셀이 이 하나만 본다 */
+export function shownSet(value, rows) {
   const dismissed = value?.dismissed ?? [];
-  if (dismissed.includes(r.name)) return false;
-  return Array.isArray(list) ? list.includes(r.name) : r.rank <= 1;
-};
+  const list = value?.shown;
+  if (Array.isArray(list)) return new Set(list.filter(n => !dismissed.includes(n)));
+  return new Set((rows ?? [])
+    .filter(r => !dismissed.includes(r.name) && r.rank <= 1)
+    .slice(0, DEFAULT_SHOWN)
+    .map(r => r.name));
+}
+
+/** 한 줄만 볼 때 — 목록이 크면 `shownSet` 을 한 번 만들어 쓸 것 */
+export const roadShown = (value, r, rows = null) => shownSet(value, rows).has(r.name);
 
 export default function RoadPicker({ coord, radius = 300, polygon = null, value, onChange, onRoads, onPreview }) {
   const [rows, setRows] = useState(null);
@@ -129,7 +141,7 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
   const smallCount = kept.filter(r => r.rank > 1).length;
   const visible = showSmall ? kept : kept.filter(r => r.rank <= 1);
   // 지도에 찍히는 것은 큰 도로(대로·로)만 — 길·번길까지 찍으면 핀에 덮인다
-  const bigCount = visible.filter(r => r.rank <= 1).length;
+  const shown = shownSet(value, rows);
   const lanes = value?.lanes ?? 0;
   const verdict = scoreFacility('6차선 왕복도로', value);
 
@@ -137,8 +149,12 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
     <div style={S.box}>
       <div style={S.head}>
         반경 {Math.round(radius * 1.2)}m 도로 후보 — 판정 대상을 고르세요
-        {bigCount > 0 && (
-          <span style={S.mapTag}>큰 도로 {bigCount}곳을 아래 지도에 표시 중</span>
+        {shown.size > 0 && (
+          <span style={S.mapTag}>
+            아래 지도에 {shown.size}곳 표시 중
+            {!Array.isArray(value?.shown) && kept.filter(r => r.rank <= 1).length > shown.size
+              ? ` (기본 — 가까운 대로·로 ${DEFAULT_SHOWN}곳)` : ''}
+          </span>
         )}
         <span style={S.note}>
           법정 도로 유형 기준 (도로명주소법 시행령 §3) — 대로 = 폭 40m↑ <b>또는</b> 왕복 8차로↑ ·
@@ -171,10 +187,12 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
 
       <div style={S.bulk}>
         <span style={S.bulkNote}>
-          지도·엑셀에 <b>{(rows ?? []).filter(r => roadShown(value, r)).length}곳</b> 표시 중
+          지도·엑셀에 <b>{shown.size}곳</b> 표시 중
         </span>
         <button style={S.bulkBtn}
-          onClick={() => set({ shown: kept.filter(r => r.rank <= 1).map(r => r.name) })}>대로·로 전체</button>
+          onClick={() => set({ shown: kept.filter(r => r.rank <= 1).map(r => r.name) })}>
+          대로·로 전체 ({kept.filter(r => r.rank <= 1).length})
+        </button>
         <button style={S.bulkBtn} onClick={() => set({ shown: [] })}>모두 해제</button>
         {smallCount > 0 && (
           <button style={{ ...S.more, margin: 0 }} onClick={() => setShowSmall(v => !v)}>
@@ -195,8 +213,8 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
               label 로 감싸 체크박스 + 그 둘레 패딩까지 클릭 영역이 된다.
               행의 나머지(도로 이름·거리)는 기존대로 로드뷰를 옮기는 자리다 — 둘을 겹치지 않는다.
             */}
-            <label style={S.check} title={`지도·엑셀에 ${roadShown(value, r) ? '표시 중' : '표시하지 않음'}`}>
-              <input type="checkbox" style={S.checkBox} checked={roadShown(value, r)}
+            <label style={S.check} title={`지도·엑셀에 ${shown.has(r.name) ? '표시 중' : '표시하지 않음'}`}>
+              <input type="checkbox" style={S.checkBox} checked={shown.has(r.name)}
                 onChange={() => {
                   const cur = (rows ?? []).filter(x => roadShown(value, x)).map(x => x.name);
                   const next = cur.includes(r.name) ? cur.filter(n => n !== r.name) : [...cur, r.name];
@@ -245,8 +263,13 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
           <button
             style={S.applyBtn}
             onClick={() => {
-              /* 적용한 도로가 지도에 없으면 판정 근거가 안 보인다 — 체크를 같이 켠다 */
-              const cur = (rows ?? []).filter(x => roadShown(value, x)).map(x => x.name);
+              /*
+                적용한 도로가 지도에 없으면 판정 근거가 안 보인다 — 체크를 같이 켠다.
+                **아직 체크를 손대지 않았으면 적용한 도로만 남긴다** — 판정 근거가 그 한 줄이라
+                증빙 지도에 다른 후보가 같이 그려져 있을 이유가 없다.
+                이미 골라둔 것이 있으면 **지우지 않는다**(조용히 비우면 고른 것이 날아간다).
+              */
+              const cur = Array.isArray(value?.shown) ? [...shown] : [];
               set({
                 name: sel.name, distance: sel.distance, x: sel.x, y: sel.y,
                 /*
