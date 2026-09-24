@@ -927,8 +927,8 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
                 (실측 2026-09-24 · 부천 — 9곳 전부 비었는데 원인은 이름이 아니라 색인 코드였다).
                 한두 줄이 비는 것과 통째로 비는 것은 원인이 다르다.
               */}
-              {data.knownApts.items.every(a => !a.kapt && !a.trade)
-                ? '세대수·시공사·사용승인일·실거래 단가가 모두 비었습니다 — 이 시군구의 K-apt·실거래 색인을 받지 못했습니다(원천 점검이 필요합니다).'
+              {data.knownApts.kaptIndexed === 0
+                ? '세대수·시공사·사용승인일이 모두 비었습니다 — K-apt 단지목록을 받지 못했습니다(원천이 일시적으로 응답하지 않은 것으로, 다시 수집하면 채워질 수 있습니다).'
                 : '세대수·시공사·사용승인일이 빈 줄은 K-apt 에서 이름이 맞지 않은 것입니다(관리비 의무단지만 있습니다).'}
             </p>
           </div>

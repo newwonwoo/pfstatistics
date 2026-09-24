@@ -994,6 +994,7 @@ export async function collectKnownApts({ site, radius = 2000, polygon = null, ex
     bySgg.get(k).push(v);
   }
 
+  let indexed = 0;   // K-apt 색인을 실제로 몇 건 받았는가
   await mapLimit([...bySgg.entries()], 3, async ([name, members]) => {
     let code = null;
     try { code = await toSggCode(name, { kakaoKey: requireKey('KAKAO_REST_KEY') }); } catch { /* 못 구하면 보강만 건너뛴다 */ }
@@ -1002,6 +1003,13 @@ export async function collectKnownApts({ site, radius = 2000, polygon = null, ex
     /* K-apt — 세대수·시공사·사용승인일 (관리비 의무단지, 즉 준공 단지만 있다) */
     try {
       const index = await loadSggIndex(code);
+      /*
+        **색인을 못 받은 것과 이름이 안 맞은 것은 다르다.** 화면은 빈 칸을 보고
+        "이름이 맞지 않았다" 고 설명하는데, 원천이 잠깐 죽어 색인이 0건이면 그건 틀린 설명이다
+        (실측 2026-09-24 — 같은 조회를 반복하니 K-apt 목록이 들쭉날쭉했다).
+        받은 색인 크기를 그대로 들고 나가 화면이 사유를 가릴 수 있게 한다.
+      */
+      indexed += index?.size ?? 0;
       await mapLimit(members, 5, async (v) => {
         const b = await matchByName(v.name.replace(/\s*\([^)]*\)\s*$/, ''), index);
         if (b) v.kapt = b;
@@ -1030,6 +1038,7 @@ export async function collectKnownApts({ site, radius = 2000, polygon = null, ex
     truncated: total != null && total > docs.length,
     items: uniq.filter(v => v.distance <= radius),
     sggs: [...bySgg.keys()],
+    kaptIndexed: indexed,
     source: {
       name: '카카오맵 장소검색 (분류: 부동산 > 주거시설 > 아파트)',
       detail: 'K-apt 공동주택 기본정보(세대수·시공사·사용승인일) · 국토교통부 아파트 매매 실거래가(최근 12개월) 보강',
