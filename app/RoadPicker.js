@@ -36,7 +36,12 @@ const S = {
   mapTag: { marginLeft: 8, fontSize: 11, fontWeight: 700, color: T.accent, background: T.accentSoft, border: `1px solid #c8d5fb`, padding: '2px 8px', borderRadius: 4 },
   applied: { fontSize: 10.5, fontWeight: 700, color: T.ok, background: T.okSoft, border: `1px solid #c7e9d5`, padding: '2px 7px', borderRadius: 4, whiteSpace: 'nowrap' },
   applyBar: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 8, padding: '10px 12px', borderRadius: 6, background: T.accentSoft, border: `1px solid ${T.accent}` },
-  applyTxt: { flex: 1, minWidth: 200, fontSize: 12, color: T.ink2 },
+  /*
+    **버튼을 막대 오른쪽 끝에 두면 세로는 붙어도 가로로 멀어진다**(실측 2026-09-24: 886px).
+    심사평점표에서 겪은 것과 같다 — `flex:1` 로 글자를 늘려 버튼을 끝으로 밀지 말 것.
+    글자 바로 뒤에 버튼이 오게 둔다.
+  */
+  applyTxt: { fontSize: 12, color: T.ink2 },
   applyBtn: { padding: '8px 16px', borderRadius: 6, border: 0, background: T.accent, color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' },
   undo: { border: 0, background: 'none', color: T.accent, cursor: 'pointer', fontSize: 11.5, textDecoration: 'underline', padding: 0 },
   more: { border: '1px solid #e2e5ea', background: '#fff', color: T.ink2, cursor: 'pointer', fontSize: 11.5,
