@@ -52,6 +52,13 @@ const S = {
     background: on ? T.accentSoft : '#fff', color: on ? T.accent : T.ink2,
     boxShadow: on ? `inset 0 -2px 0 ${T.accent}` : 'none',
   }),
+  check: { display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '0 12px', alignSelf: 'stretch', cursor: 'pointer' },
+  checkBox: { width: 16, height: 16, cursor: 'pointer', accentColor: T.accent },
+  bulk: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '4px 0 8px' },
+  bulkNote: { fontSize: 11.5, color: T.ink2 },
+  bulkBtn: { padding: '4px 10px', fontSize: 11.5, fontWeight: 700, borderRadius: 5, cursor: 'pointer',
+             border: `1px solid ${T.line}`, background: '#fff', color: T.ink2 },
   verdict: (ok) => ({
     marginLeft: 'auto', fontSize: 12, fontWeight: 800, padding: '4px 12px', borderRadius: 5,
     background: ok ? T.okSoft : T.warnSoft, color: ok ? T.ok : T.warn,
@@ -61,6 +68,21 @@ const S = {
 
 /** 구간표(config/scoring.json)로 점수를 낸다 */
 export const roadScore = (m) => scoreFacility('6차선 왕복도로', m);
+
+/**
+ * **목록에 없는 것이 지도에 있으면 안 된다**(사용자 지적 2026-09-24).
+ * 전에는 지도가 「대로·로 전부」 를 제 규칙으로 찍어, 목록에서 지우거나 접은 것과 갈렸다.
+ * 이제 **고른 것만** 지도(와 엑셀 지도)에 나간다 — 화면과 지도가 같은 함수를 본다.
+ *
+ * `shown` 이 없으면(아직 손대지 않았으면) 기본은 **대로·로**다 —
+ * 6차선이 될 수 있는 것이 사실상 그것뿐이라 처음부터 길·번길을 찍으면 지도가 핀에 덮인다.
+ */
+export const roadShown = (value, r) => {
+  const list = value?.shown;
+  const dismissed = value?.dismissed ?? [];
+  if (dismissed.includes(r.name)) return false;
+  return Array.isArray(list) ? list.includes(r.name) : r.rank <= 1;
+};
 
 export default function RoadPicker({ coord, radius = 300, polygon = null, value, onChange, onRoads, onPreview }) {
   const [rows, setRows] = useState(null);
@@ -133,11 +155,19 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
       {!rows && !err && <div style={S.msg}>주변 도로를 훑는 중…</div>}
       {rows?.length === 0 && <div style={S.msg}>주변에서 도로명을 찾지 못했습니다.</div>}
 
-      {smallCount > 0 && (
-        <button style={S.more} onClick={() => setShowSmall(v => !v)}>
-          {showSmall ? `길·번길 ${smallCount}곳 접기` : `길·번길 ${smallCount}곳 더 보기`}
-        </button>
-      )}
+      <div style={S.bulk}>
+        <span style={S.bulkNote}>
+          지도·엑셀에 <b>{(rows ?? []).filter(r => roadShown(value, r)).length}곳</b> 표시 중
+        </span>
+        <button style={S.bulkBtn}
+          onClick={() => set({ shown: kept.filter(r => r.rank <= 1).map(r => r.name) })}>대로·로 전체</button>
+        <button style={S.bulkBtn} onClick={() => set({ shown: [] })}>모두 해제</button>
+        {smallCount > 0 && (
+          <button style={{ ...S.more, margin: 0 }} onClick={() => setShowSmall(v => !v)}>
+            {showSmall ? `길·번길 ${smallCount}곳 접기` : `길·번길 ${smallCount}곳 더 보기`}
+          </button>
+        )}
+      </div>
 
       {visible.map(r => {
         const applied = value?.name === r.name;
@@ -146,6 +176,19 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
         const band = scoreFacility('6차선 왕복도로', { distance: r.distance, lanes: 6 });
         return (
           <div key={r.name} style={S.row(on)}>
+            {/*
+              **체크 영역은 넓게**(사용자 요청) — 작은 네모만 누를 수 있으면 잘 안 눌린다.
+              label 로 감싸 체크박스 + 그 둘레 패딩까지 클릭 영역이 된다.
+              행의 나머지(도로 이름·거리)는 기존대로 로드뷰를 옮기는 자리다 — 둘을 겹치지 않는다.
+            */}
+            <label style={S.check} title={`지도·엑셀에 ${roadShown(value, r) ? '표시 중' : '표시하지 않음'}`}>
+              <input type="checkbox" style={S.checkBox} checked={roadShown(value, r)}
+                onChange={() => {
+                  const cur = (rows ?? []).filter(x => roadShown(value, x)).map(x => x.name);
+                  const next = cur.includes(r.name) ? cur.filter(n => n !== r.name) : [...cur, r.name];
+                  set({ shown: next });
+                }} />
+            </label>
             <button
               style={S.pick}
               onClick={() => { setSel(r); onPreview?.(r); }}
@@ -188,8 +231,11 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
           <button
             style={S.applyBtn}
             onClick={() => {
+              /* 적용한 도로가 지도에 없으면 판정 근거가 안 보인다 — 체크를 같이 켠다 */
+              const cur = (rows ?? []).filter(x => roadShown(value, x)).map(x => x.name);
               set({
                 name: sel.name, distance: sel.distance, x: sel.x, y: sel.y,
+                shown: cur.includes(sel.name) ? cur : [...cur, sel.name],
                 // 도로가 바뀌면 차선 수는 다시 센다 — 앞 도로 값을 물려받으면 판정이 틀린다
                 lanes: 0,
               });

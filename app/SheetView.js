@@ -5,7 +5,7 @@ import { scoreSheet, scoreGroup, scoreFacility, scorePoi, scoreAverage } from '.
 import { T, mono } from './theme';
 import EvidenceCard from './EvidenceCard';
 import RadiusMap from './RadiusMap';
-import RoadPicker from './RoadPicker';
+import RoadPicker, { roadShown } from './RoadPicker';
 
 const S = {
   /* 시설 행 지우기 — 도로 후보 목록과 같은 모양이어야 같은 동작으로 읽힌다 */
@@ -130,10 +130,14 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
      * 고른 도로가 있으면 맨 앞에 둬서 파란 핀으로 눈에 띄게 한다.
      */
     const roadMarkers = (f) => {
-      const dismissed = manual?.[f.label]?.dismissed ?? [];
       const picked = manual?.[f.label]?.name;
-      const big = (roadList[f.label] ?? [])
-        .filter(r => r.rank <= 1 && !dismissed.includes(r.name));
+      /*
+        **지도가 제 규칙으로 「대로·로 전부」 를 찍고 있었다** — 목록에서 고른 것과 갈렸다
+        (사용자 지적 2026-09-24: 「목록에 없는 것이 지도에 있으면 일관성을 해친다」).
+        이제 목록의 체크박스가 곧 지도다 — 같은 함수(`roadShown`)를 본다.
+        엑셀 지도는 이 화면을 그대로 캡쳐하므로 같이 따라간다.
+      */
+      const big = (roadList[f.label] ?? []).filter(r => roadShown(manual?.[f.label], r));
       const sorted = picked
         ? [...big.filter(r => r.name === picked), ...big.filter(r => r.name !== picked)]
         : big;
