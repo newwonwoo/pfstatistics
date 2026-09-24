@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { latestPeriod } from '../../../src/lib/latestPeriod.js';
 import cat from '../../../config/indicators.json' with { type: 'json' };
 import * as molit from '../../../src/collectors/molit.js';
 import * as kb from '../../../src/collectors/kb.js';
@@ -28,11 +29,25 @@ function sameGolden(goldenRegion, region, company) {
 export async function GET(req) {
   const q = req.nextUrl.searchParams;
   const region = q.get('sgg');
-  const period = q.get('ym');
+  /*
+    **조회월은 화면이 안 보내도 된다**(사용자 지적 2026-09-24).
+    `periodPolicy` 를 넣은 뒤 `latest` 지표는 시점을 안 넘기면 제 최신을 찾고,
+    남은 것은 `anchor` 두 지표(미분양·주민등록세대수)뿐이다 — 그 둘은 **같은 달**이어야
+    미분양비율이 성립하므로 값 자체는 여전히 필요하다. 사람이 칠 값이 아니니 **서버가 구한다.**
+    진단·재현용으로 `?ym=` 을 넘기면 그것을 그대로 쓴다.
+  */
+  let period = q.get('ym');
   const company = q.get('company');
   // 평가연도는 화면에서 받지 않는다 — 적재된 공시 중 최신을 쓴다
   const rankYear = q.get('year') || null;
 
+  if (region && !period) {
+    const l = await latestPeriod();
+    period = l.ym;
+    if (!period) {
+      return NextResponse.json({ error: '원천이 가진 최신 조회월을 판정하지 못했습니다 — 잠시 뒤 다시 시도하세요' }, { status: 502 });
+    }
+  }
   if (!region || !period) {
     // 무엇이 비었는지 말해줘야 화면에서 바로 고친다
     const miss = [!region && 'sgg(시도·시군구)', !period && 'ym(조회월 YYYYMM)'].filter(Boolean);

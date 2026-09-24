@@ -176,7 +176,6 @@ export default function Home() {
   const [coord, setCoord] = useState(null);         // 대표지번 좌표 — 지도 중심
   const [fixed, setFixed] = useState(false);        // 주소 확정 — 확정 후엔 입력을 잠근다
   const [latest, setLatest] = useState(null);       // 원천이 가진 최신 조회월
-  const [ymManual, setYmManual] = useState(false);  // 조회월 직접 지정
   const [rankMeta, setRankMeta] = useState(null);   // 시공능력평가 공시 연도·출처
   /*
    * 거리를 어디서부터 잴지는 **수집 전에** 정해야 한다.
@@ -231,7 +230,7 @@ export default function Home() {
     fetch('/api/latest').then(r => r.json()).then(j => {
       if (dead || !j.ym) return;
       setLatest(j);
-      setForm(f => (ymManual ? f : { ...f, ym: j.ym }));
+      setForm(f => ({ ...f, ym: j.ym }));
     }).catch(() => {});
     return () => { dead = true; };
   }, []);   // eslint-disable-line react-hooks/exhaustive-deps
@@ -250,18 +249,17 @@ export default function Home() {
     if (!form.sgg && form.sido !== '세종특별자치시') {
       return setMsg({ kind: 'warn', text: `시군구를 골라야 합니다 — 미분양·세대수·매매지수는 시군구 단위 통계입니다 (지금: ${form.sido})` });
     }
-    // [직접] 로 바꾼 뒤 칸을 비우면 빈 값이 그대로 나갔다 — 여기서 막는다
-    if (!/^\d{6}$/.test(String(form.ym).trim())) {
-      return setMsg({
-        kind: 'warn',
-        text: `조회월이 비었거나 형식이 맞지 않습니다 (지금: "${form.ym}"). YYYYMM 6자리로 넣거나 [자동] 을 누르세요.`,
-      });
-    }
     setBusy('collect'); setMsg(null);
     try {
-      const qs = new URLSearchParams({ sgg: region, ym: String(form.ym).trim(), company: form.company });
+      /*
+        조회월은 **안 넘긴다** — 서버가 원천 최신월을 스스로 구한다(`src/lib/latestPeriod.js`).
+        화면이 아직 못 받아온 값을 넘기면 그 사이에 원천이 새 달을 내도 낡은 달로 굳는다.
+      */
+      const qs = new URLSearchParams({ sgg: region, company: form.company });
       const j = await fetchJson(`/api/collect?${qs}`);
       setData(j);
+      /* 서버가 고른 달을 화면이 그대로 받는다 — 요약 줄·카드가 그 달을 적는다 */
+      if (j.period) setForm(f => ({ ...f, ym: j.period }));
       /*
         시공사를 안 넣으면 시공능력평가순위만 조용히 빠져 6/7 이 된다.
         초기 폼을 비우고 나서는 실제로 그렇게 되기 쉬우므로 무엇이 빠졌는지 말한다.
@@ -663,28 +661,15 @@ export default function Home() {
             <input style={S.input} value={form.detail} onChange={set('detail')} placeholder="지번 또는 도로명"
               disabled={fixed} />
           </div>
-          <div style={S.field}>
-            <label style={S.label}>
-              조회월
-              {!ymManual && latest && <span style={{ color: T.accent }}> · 자동 (원천 최신)</span>}
-              {!ymManual && !latest && <span style={S.dim}> · 확인 중…</span>}
-            </label>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <input
-                style={{ ...S.input, ...(ymManual ? null : { background: T.accentSoft, borderColor: T.accent }) }}
-                value={form.ym} onChange={set('ym')} placeholder="YYYYMM"
-                readOnly={!ymManual} disabled={fixed}
-              />
-              <button
-                style={{ ...S.btn({}), padding: '8px 10px', fontSize: 11.5, whiteSpace: 'nowrap' }}
-                onClick={() => {
-                  if (ymManual && latest) setForm(f => ({ ...f, ym: latest.ym }));
-                  setYmManual(m => !m);
-                }}
-                disabled={fixed}
-              >{ymManual ? '자동' : '직접'}</button>
-            </div>
-          </div>
+          {/*
+            **조회월 입력칸을 없앴다**(사용자 지적 2026-09-24 — "이제 안 들어가도 되지 않나").
+            `periodPolicy` 를 넣은 뒤 `latest` 지표는 시점을 안 넘기면 제 최신을 찾고,
+            남은 `anchor` 두 지표(미분양·주민등록세대수)의 달은 **서버가 스스로 구한다**
+            (`src/lib/latestPeriod.js` — 두 지표가 같은 달이어야 미분양비율이 성립한다).
+            사람이 칠 값이 아니었고, 칸과 [자동/직접] 버튼이 입력폼 한 칸을 먹고 있었다.
+            **어느 달 값인지는 사라지지 않는다** — 요약 줄·통계 카드 머리·시트의 「기준시점」 열이 말한다.
+            진단·재현이 필요하면 `/api/collect?ym=` 로 여전히 넘길 수 있다.
+          */}
           {/* 시공사는 사업지 주소와 무관하다 — 확정 후에도 바꿀 수 있어야 한다 */}
           <CompanyPicker
             value={form.company}
@@ -717,8 +702,8 @@ export default function Home() {
         */}
         <div style={{ marginTop: 9, fontSize: 12, color: T.muted }}>
           조회 주소 : <b style={{ color: T.ink2 }}>{addr || '(시도·시군구를 고르세요)'}</b>
-          {latest && !ymManual && (
-            <span> · 조회월 {latest.ym} 는 {latest.source} 기준 최신입니다</span>
+          {latest && (
+            <span> · 조회월 <b style={{ color: T.ink2 }}>{latest.ym}</b> (자동 — {latest.source} 기준 최신)</span>
           )}
           {rankMeta && (
             <span> · 시공능력평가는 {rankMeta.year}년 공시({rankMeta.count.toLocaleString()}건) 기준</span>
