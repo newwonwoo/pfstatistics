@@ -86,6 +86,7 @@ export const roadShown = (value, r) => {
 
 export default function RoadPicker({ coord, radius = 300, polygon = null, value, onChange, onRoads, onPreview }) {
   const [rows, setRows] = useState(null);
+  const [src, setSrc] = useState(null);
   const [err, setErr] = useState(null);
   const dismissed = value?.dismissed ?? [];
   // 고르는 것과 적용하는 것을 나눈다 — 눌러보며 로드뷰로 확인한 뒤 [적용] 해야
@@ -98,7 +99,7 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
   useEffect(() => {
     if (!coord?.x || !coord?.y) return;
     let dead = false;
-    setRows(null); setErr(null);
+    setRows(null); setSrc(null); setErr(null);
     // 구간표의 가장 먼 구간(1km)까지 훑는다. 조금 더 봐야 경계 밖도 눈에 들어온다
     /* 경계가 있으면 경계 최단거리로 잰다 — 중심점 기준이면 도로가 붙어 있어도 멀게 나온다 */
     const poly = (polygon?.length >= 3)
@@ -109,7 +110,9 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
         if (dead) return;
         if (j.error) { setErr(j.error); return; }
         setRows(j.roads ?? []);
-        onRoads?.(j.roads ?? []);   // 지도에 찍을 수 있게 위로 올린다
+        setSrc(j.source ?? null);
+        /* 지도에 그릴 수 있게 위로 올린다 — 원천(선형/격자)도 같이 올려야 문구가 갈린다 */
+        onRoads?.(j.roads ?? [], j.source ?? null);
       })
       .catch(e => !dead && setErr(e.message));
     return () => { dead = true; };
@@ -143,11 +146,22 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
           다만 같은 영 §8②1 단서가 <b>대로↔로, 로↔길을 바꿔 쓸 수 있게</b> 열어두었고
           도로명은 구간 설정 시점 기준이라, <b>이름으로 차로수를 단정할 수 없습니다.</b>
           아래 로드뷰로 세어 차선 수만 넣으면 판정됩니다.
-          <br /><b>거리는 {rows?.[0]?.basis === 'polygon' ? '사업지 경계' : '대표지번 중심'}에서 격자로 훑은
-          표본점까지</b>입니다 — 도로 중심선이 아니라 그 도로에 접한 지점입니다.
-          <b>가까울수록 촘촘하게</b> 훑습니다(150m 안 25m · 350m 안 50m · 700m 안 100m · 그 밖 150m) —
-          뒤에 붙는 ± 가 그 간격, 곧 거리의 오차 한계입니다.
-          고른 도로가 <b>지나는 자리는 지도에 전부 표시</b>됩니다.
+          <br />{src?.method === 'geometry' ? (
+            <>
+              <b>거리는 {rows?.[0]?.basis === 'polygon' ? '사업지 경계' : '대표지번 중심'}에서
+              도로 선까지의 최단거리</b>입니다 — 도로의 실제 선형 좌표를 받아 잽니다(±5m).
+              지도에 <b>도로가 선으로</b> 그려지므로 배지 거리와 그림이 어긋나지 않습니다.
+              <br />출처 : {src.name}
+            </>
+          ) : (
+            <>
+              <b>거리는 {rows?.[0]?.basis === 'polygon' ? '사업지 경계' : '대표지번 중심'}에서 격자로 훑은
+              표본점까지</b>입니다 — 도로 중심선이 아니라 <b>그 도로에 접한 필지</b>입니다.
+              큰 필지(골프장·공장·학교)에서는 도로와 크게 어긋날 수 있습니다.
+              ± 가 격자 간격, 곧 거리의 오차 한계입니다.
+              {src?.fellBack ? <><br /><b style={{ color: T.warn }}>{src.fellBack}</b></> : null}
+            </>
+          )}
         </span>
       </div>
 
@@ -235,6 +249,14 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
               const cur = (rows ?? []).filter(x => roadShown(value, x)).map(x => x.name);
               set({
                 name: sel.name, distance: sel.distance, x: sel.x, y: sel.y,
+                /*
+                  **거리를 무엇으로 쟀는지 값과 같이 들고 간다.**
+                  엑셀 증빙은 화면 상태만 받으므로, 여기서 안 실으면
+                  출처 줄이 「카카오 좌표→주소 역산」으로 박힌 채 나간다(실제로 그랬다).
+                */
+                source: src?.name ?? null,
+                method: src?.method ?? null,
+                precision: sel.precision ?? null,
                 shown: cur.includes(sel.name) ? cur : [...cur, sel.name],
                 // 도로가 바뀌면 차선 수는 다시 센다 — 앞 도로 값을 물려받으면 판정이 틀린다
                 lanes: 0,

@@ -64,7 +64,7 @@ const LABEL_MAX = 999;
 
 const levelCapFor = (r) => MAX_LEVEL[r] ?? (r <= 300 ? 3 : r <= 500 ? 4 : r <= 1000 ? 5 : 6);
 
-export default function RadiusMap({ title, center, radius, markers = [], polygon = null, caption, defaultMapType = 'ROADMAP', roadview = false, roadviewOpen = false, roadviewAt = null, radiusBasis }) {
+export default function RadiusMap({ title, center, radius, markers = [], lines = [], polygon = null, caption, defaultMapType = 'ROADMAP', roadview = false, roadviewOpen = false, roadviewAt = null, radiusBasis }) {
   const el = useRef(null);
   const mapRef = useRef(null);
   const [err, setErr] = useState(null);
@@ -110,6 +110,7 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
   const [rvMsg, setRvMsg] = useState(null);
 
   const mkey = JSON.stringify(markers);
+  const lkey = JSON.stringify(lines);
   const pkey = JSON.stringify(polygon);
   const hasPoly = (polygon?.length ?? 0) >= 3;
 
@@ -162,6 +163,25 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
         });
       }
       /*
+       * **도로는 점이 아니라 선이다.**
+       * 전에는 도로를 핀 하나로 찍었는데, 그 좌표가 도로가 아니라 그 도로명을 주소로 쓰는
+       * **필지**라 골프장 한가운데 서곤 했다(사용자 지적 2026-09-24).
+       * 브이월드 WFS 가 도로 선형을 주므로 **선을 그대로 그린다** — 핀과 배지가 어긋날 여지가 없다.
+       * 고른 도로는 굵고 진하게, 나머지 후보는 가늘고 옅게.
+       */
+      lines.forEach((ln) => {
+        const path = (ln.path ?? []).map(p => new kakao.maps.LatLng(p.lat, p.lng));
+        if (path.length < 2) return;
+        new kakao.maps.Polyline({
+          map, path,
+          strokeWeight: ln.strong ? 6 : 4,
+          strokeColor: ln.strong ? '#1b4fd8' : '#ff6f00',
+          strokeOpacity: ln.strong ? 0.95 : 0.7,
+          strokeStyle: 'solid',
+        });
+      });
+
+      /*
        * 표에 있는 시설은 지도에도 전부 찍는다. 번호는 표의 # 와 같게 맞춘다.
        * 다만 라벨을 전부 띄우면 서로 겹쳐 아무것도 못 읽는다 —
        * 가까운 것부터 LABEL_MAX 개만 이름을 달고, 나머지는 번호로 표에서 찾게 한다.
@@ -213,6 +233,7 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
           const bounds = new kakao.maps.LatLngBounds();
           bounds.extend(c);
           for (const m of markers) bounds.extend(new kakao.maps.LatLng(m.lat, m.lng));
+          for (const ln of lines) for (const p of (ln.path ?? [])) bounds.extend(new kakao.maps.LatLng(p.lat, p.lng));
           /*
            * **반경원도 함께 담는다.** 시설만 담으면 판정선(반경)이 화면 밖으로 나가
            * "이 원 안에 있는 것들" 이라는 그림이 깨진다 — 확인이 목적인 지도다.
@@ -286,14 +307,14 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
     return () => { dead = true; };
   // markers/polygon 은 렌더마다 새 배열이라 그대로 넣으면 지도가 매번 다시 만들어진다.
   // 내용이 같으면 다시 만들지 않도록 문자열로 비교한다.
-  }, [center.lat, center.lng, radius, mkey, pkey, rkey, defaultMapType]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [center.lat, center.lng, radius, mkey, lkey, pkey, rkey, defaultMapType]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   /* [이름표 끄기] — 지도를 다시 그리지 않고 라벨 오버레이만 켜고 끈다 */
   useEffect(() => {
     const m = mapRef.current?.map;
     if (!m) return;
     labelOverlays.current.forEach(o => o.setMap(labels ? m : null));
-  }, [labels, ready, mkey, pkey, rkey]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [labels, ready, mkey, lkey, pkey, rkey]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   /*
    * 캡쳐 등록.
@@ -306,13 +327,13 @@ export default function RadiusMap({ title, center, radius, markers = [], polygon
     node.__capture = (opts) => composeMap(node, {
       map: mapRef.current.map,
       kakao: mapRef.current.kakao,
-      center, radius, markers, polygon, title, radiusRing: ring,
+      center, radius, markers, lines, polygon, title, radiusRing: ring,
       /* 화면에서 이름표를 껐으면 캡쳐도 끈다 — 증빙이 화면과 달라지면 안 된다 */
       labels,
       ...opts,
     });
     return () => { if (node) delete node.__capture; };
-  }, [ready, center.lat, center.lng, radius, mkey, pkey, rkey, title, mapType, labels, big]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, center.lat, center.lng, radius, mkey, lkey, pkey, rkey, title, mapType, labels, big]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * 클릭 지점에서 가장 가까운 로드뷰로 옮긴다.

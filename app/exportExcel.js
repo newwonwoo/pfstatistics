@@ -599,8 +599,18 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
           **출처를 "카카오맵" 으로 박아두고 있었다.** 의료시설은 심평원이라 증빙이 틀린 출처를 달고
           심사 파일에 들어갔다. 봉투가 들고 오는 `source` 를 그대로 쓴다.
         */
+        /*
+          **도로 원천이 둘이다** — 브이월드 WFS 도로 선형(핀이 도로 위·±5m)과
+          카카오 격자탐색(핀이 필지·±25~150m). 무엇으로 쟀는지 증빙에 적혀야 한다.
+          적용할 때 `manual[label].source/method` 에 실어 두었다.
+        */
+        const rm = manual?.[f.label];
         ws.getCell(row, 2).value = f.manual
-          ? `* 도로명 = 카카오 좌표→주소 역산 · 차선 수 = 로드뷰 육안 판정 · 기준 반경 ${f.radius}m`
+          ? (rm?.method === 'geometry'
+            ? `* 출처 : ${rm.source} — 도로 선형 좌표 · 거리는 도로 선까지 최단거리(±${rm.precision ?? 5}m)`
+              + ` · 차선 수 = 로드뷰 육안 판정 · 기준 반경 ${f.radius}m`
+            : `* 도로명 = 카카오 좌표→주소 역산 (도로 선형이 아니라 접한 필지 · ±${rm?.precision ?? '25~150'}m)`
+              + ` · 차선 수 = 로드뷰 육안 판정 · 기준 반경 ${f.radius}m`)
           : `* 출처 : ${hit?.source?.name ?? '카카오맵'}`
             + (hit?.source?.detail ? ` (${hit.source.detail})` : '')
             + ` · 반경 ${hit?.radius ?? ''}m · 반경 내 ${hit?.count ?? 0}건`

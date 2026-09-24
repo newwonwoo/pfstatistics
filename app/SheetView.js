@@ -102,6 +102,8 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
   const [roadSpot, setRoadSpot] = useState({});
   // 후보 목록 자체 — 큰 도로를 지도에 자동으로 찍기 위해 들고 있는다
   const [roadList, setRoadList] = useState({});
+  // 도로 원천(선형/격자) — 핀 이름·캡션이 갈린다
+  const [roadSrc, setRoadSrc] = useState({});
   const byId = Object.fromEntries((data?.results ?? []).map(r => [r.indicatorId, r]));
   const spec = buildSheet(sheetId, {
     byId, region: data?.region ?? '', period: data?.period ?? '', company: data?.company, sheetInput,
@@ -142,27 +144,22 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
         ? [...big.filter(r => r.name === picked), ...big.filter(r => r.name !== picked)]
         : big;
       /*
-        **핀 이름이 「부평대로 (대로)」 라 지도에서 그 자리가 도로인 것처럼 읽혔다**
-        (사용자 지적 2026-09-24 — 핀이 골프장 한가운데에 서 있었다).
-        카카오 `coord2address` 는 그 좌표가 속한 **필지**의 도로명주소를 준다 —
-        골프장처럼 큰 필지는 통째로 「부평대로 N」 이라 필지 안 아무 데나 찍어도 그 이름이 나온다.
-        **도로 중심선 좌표는 이 앱이 쓰는 어느 원천에도 없다.**
-        그러니 핀은 도로가 아니라 **그 도로명을 주소로 쓰는 가장 가까운 지점**이다 — 그렇게 적는다.
+        **핀이 도로가 아니라 벌판에 섰던 이유**(사용자 지적 2026-09-24 — 골프장 한가운데).
+        카카오 `coord2address` 는 그 좌표가 속한 **필지**의 도로명주소를 준다.
+        이제 브이월드 WFS 가 **도로 선형**을 주므로 핀은 도로 위 **가장 가까운 점**이다 —
+        배지에 적힌 거리가 바로 그 점까지의 거리라 그림과 숫자가 어긋날 수 없다.
+        선형을 못 받아 격자로 물러섰을 때만 예전처럼 「주소지」라고 적는다.
       */
+      const geo = roadSrc[f.label]?.method === 'geometry';
       const pins = sorted.map((r, i) => ({
         no: i + 1, lat: Number(r.y), lng: Number(r.x),
-        name: `${r.name} 주소지 (${r.grade})`, distance: r.distance,
+        name: geo ? `${r.name} (${r.grade})` : `${r.name} 주소지 (${r.grade})`,
+        distance: r.distance,
       }));
+      if (geo) return pins;
       /*
-       * **고른 도로가 지나는 자리를 다 찍는다**(사용자 지적 2026-09-17).
-       * 표본점 하나만 찍으면 "배지 거리와 지도 위치가 다르다" 로 보인다 —
-       * 그 점은 도로 중심선이 아니라 도로에 접한 필지이기 때문이다.
-       * 고른 도로에 한해 표본점을 전부 찍어 도로의 走向이 눈에 보이게 한다.
-       */
-      /*
-        **자취 점을 고른 도로에만 찍고 있었다** — 고르기 전에는 잘못 읽히는 핀 하나뿐이라
-        "도로가 저기 있다" 로 보인다. 큰 도로는 **고르기 전에도** 자취를 보여 走向이 눈에 들어오게 한다.
-        (고른 도로는 넉넉히, 나머지는 몇 점만 — 핀으로 지도를 덮으면 아무것도 안 읽힌다)
+        격자 방식일 때만 자취 점을 찍는다 — 점 하나로는 도로의 走向이 안 보이기 때문이다.
+        선형이 있으면 선을 그리므로 자취 점은 오히려 지도를 어지럽힌다.
       */
       const trail = sorted.flatMap(r => (r.points ?? [])
         .slice(1, r.name === picked ? 12 : 4)
@@ -171,6 +168,17 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
           name: `${r.name} 주소지`, distance: p.dist, faint: true,
         })));
       return [...pins, ...trail];
+    };
+
+    /** 지도에 그릴 도로 선 — 고른 도로는 굵고 진하게 */
+    const roadPaths = (f) => {
+      if (roadSrc[f.label]?.method !== 'geometry') return [];
+      const picked = manual?.[f.label]?.name;
+      return (roadList[f.label] ?? [])
+        .filter(r => roadShown(manual?.[f.label], r))
+        .flatMap(r => (r.lines ?? []).map(path => ({
+          name: r.name, strong: r.name === picked, path,
+        })));
     };
 
     /** 시설명 셀 — 수집 전이면 대기, 수집 후 없으면 '부재' */
@@ -420,7 +428,10 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                       /* 다른 시설과 같은 규칙 — 경계로 수집했으면 도로도 경계에서 잰다 */
                       polygon={facilities.basis === 'polygon' ? facilities.polygon : null}
                       value={manual?.[f.label]}
-                      onRoads={(rows) => setRoadList(prev => ({ ...prev, [f.label]: rows }))}
+                      onRoads={(rows, src) => {
+                        setRoadList(prev => ({ ...prev, [f.label]: rows }));
+                        setRoadSrc(prev => ({ ...prev, [f.label]: src }));
+                      }}
                       /* 누르기만 해도 로드뷰는 그쪽으로 — 보고 나서 적용한다 */
                       onPreview={(r) => setRoadSpot(prev => ({ ...prev,
                         [f.label]: { lat: Number(r.y), lng: Number(r.x), name: r.name, distance: r.distance } }))}
@@ -523,12 +534,15 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                       /* 고른 도로가 없으면 가장 큰·가까운 후보로 로드뷰를 열어둔다 */
                       roadviewAt={roadSpot[f.label] ?? roadMarkers(f)[0] ?? null}
                       /* 표에 있는 것은 지도에도 전부 있어야 한다 — 번호는 표의 # 와 같다 */
+                      lines={f.manual ? roadPaths(f) : []}
                       markers={f.manual ? roadMarkers(f) : items.map((it, i) => ({
                         no: i + 1, lat: Number(it.y), lng: Number(it.x),
                         name: it.name, distance: it.distance,
                       }))}
                       caption={f.manual
-                        ? `핀은 도로선이 아니라 그 도로명을 주소로 쓰는 가장 가까운 지점입니다 — 도로 중심선 좌표는 공개 원천에 없어 필지 주소로 근사합니다. 큰 필지(골프장·공장·학교)에서는 도로와 크게 어긋날 수 있으니 거리·차선은 로드뷰로 확인하세요 (기준 ${rLabel(h.radius)} 이내 · 왕복 6차선 = 편도 3차로)`
+                        ? (roadSrc[f.label]?.method === 'geometry'
+                          ? `주황 선이 도로의 실제 선형이고 파란 선이 적용한 도로입니다. 핀은 사업지에서 가장 가까운 도로 위 지점이라 배지 거리와 같은 자리입니다 (출처 : ${roadSrc[f.label].name} · 기준 ${rLabel(h.radius)} 이내 · 왕복 6차선 = 편도 3차로). 차선 수는 로드뷰로 세십시오`
+                          : `핀은 도로선이 아니라 그 도로명을 주소로 쓰는 가장 가까운 지점입니다 — 도로 선형을 받지 못해 필지 주소로 근사했습니다. 큰 필지(골프장·공장·학교)에서는 도로와 크게 어긋날 수 있으니 거리·차선은 로드뷰로 확인하세요 (기준 ${rLabel(h.radius)} 이내 · 왕복 6차선 = 편도 3차로)`)
                         : (n ? `최근접 ${n.name} · ${n.distance}m · 반경 ${rLabel(h.radius)} 내 ${h.count}건`
                              : `반경 ${rLabel(h.radius)} 이내 부재`)}
                     />

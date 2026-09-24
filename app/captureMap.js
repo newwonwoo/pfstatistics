@@ -170,7 +170,7 @@ const LABEL_MAX = 999;   /* 이름은 전부 단다 — 자리를 못 찾은 것
  * @returns {Promise<string>} PNG dataURL
  */
 export async function composeMap(el, spec = {}) {
-  const { map, kakao, center, radius, markers = [], polygon = null, radiusRing = null, title = '', labels = true,
+  const { map, kakao, center, radius, markers = [], lines = [], polygon = null, radiusRing = null, title = '', labels = true,
           mime = 'image/png', quality = 0.92 } = spec;
   /*
    * **확대해도 깨지지 않게 3배로 찍는다**(사용자 요청 2026-09-17).
@@ -263,6 +263,25 @@ export async function composeMap(el, spec = {}) {
      * 표에 있는 시설을 전부 찍는다. 번호는 표의 # 와 같다.
      * 핀을 먼저 다 그리고, 라벨은 가까운 것부터 겹치지 않는 자리에 놓는다.
      */
+    /*
+      **도로는 선으로 그린다** — 화면과 같아야 한다.
+      핀 하나로 찍던 시절엔 그 좌표가 도로가 아니라 필지라 증빙 그림이 거짓말을 했다.
+      (ctx 는 이미 ratio 로 scale 돼 있어 선 굵기는 화면과 같은 값을 쓴다)
+    */
+    lines.forEach((ln) => {
+      const path = (ln.path ?? []).map(p => pt(p.lat, p.lng));
+      if (path.length < 2) return;
+      ctx.beginPath();
+      path.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+      ctx.strokeStyle = ln.strong ? '#1b4fd8' : '#ff6f00';
+      ctx.globalAlpha = ln.strong ? 0.95 : 0.7;
+      ctx.lineWidth = ln.strong ? 6 : 4;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    });
+
     markers.forEach((m, i) => {
       const q = pt(m.lat, m.lng);
       /* `faint` 는 도로가 지나는 자리 — 시설이 아니라 자취라 번호를 달지 않는다 */
