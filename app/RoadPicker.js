@@ -46,6 +46,12 @@ const S = {
   lbl: { fontSize: 12, fontWeight: 700, color: T.ink2 },
   step: { width: 28, height: 28, borderRadius: 5, border: `1px solid ${T.lineStrong}`, background: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 700, color: T.ink2 },
   num: { width: 46, textAlign: 'center', fontSize: 15, fontWeight: 800, color: T.ink },
+  quick: { display: 'flex', gap: 0, border: `1px solid ${T.lineStrong}`, borderRadius: 6, overflow: 'hidden' },
+  quickBtn: (on) => ({
+    width: 34, padding: '5px 0', fontSize: 12.5, fontWeight: 800, cursor: 'pointer', border: 0,
+    background: on ? T.accentSoft : '#fff', color: on ? T.accent : T.ink2,
+    boxShadow: on ? `inset 0 -2px 0 ${T.accent}` : 'none',
+  }),
   verdict: (ok) => ({
     marginLeft: 'auto', fontSize: 12, fontWeight: 800, padding: '4px 12px', borderRadius: 5,
     background: ok ? T.okSoft : T.warnSoft, color: ok ? T.ok : T.warn,
@@ -202,9 +208,23 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
       {value?.name && (
         <div style={S.lanes}>
           <span style={S.lbl}>{value.name} · 왕복</span>
-          <button style={S.step} onClick={() => set({ lanes: Math.max(0, lanes - 1) })}>−</button>
+          {/*
+            **＋ 를 여섯 번 눌러야 6차선이 됐다.** 게다가 같은 화면(교통환경 시트)의 지도 바에도
+            글자가 똑같은 [＋][－] 가 있어(확대·축소) 어느 쪽이 차선인지 헷갈렸다 —
+            실측 점검에서 확대만 여섯 번 되고 차선은 0 인 채로 넘어갔다.
+            왕복 차선은 실무상 2·4·6·8 로 떨어지므로 **한 번에 고르게** 하고,
+            스테퍼는 그 사이 값(3·5·10)을 위해 남기되 글자를 지도 버튼과 다르게 한다.
+          */}
+          <span style={S.quick}>
+            {[2, 4, 6, 8].map(n => (
+              <button key={n} style={S.quickBtn(lanes === n)} onClick={() => set({ lanes: n })}>{n}</button>
+            ))}
+          </span>
+          <button style={S.step} title="한 차선 줄이기"
+            onClick={() => set({ lanes: Math.max(0, lanes - 1) })}>▼</button>
           <span style={S.num}>{lanes || '?'}</span>
-          <button style={S.step} onClick={() => set({ lanes: lanes + 1 })}>＋</button>
+          <button style={S.step} title="한 차선 늘리기"
+            onClick={() => set({ lanes: lanes + 1 })}>▲</button>
           <span style={S.lbl}>차선</span>
           <span style={{ fontSize: 11, color: T.muted }}>로드뷰로 세어 넣으세요</span>
           <span style={S.verdict(verdict.score > 1)}>

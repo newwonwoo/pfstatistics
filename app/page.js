@@ -3,6 +3,7 @@ import { useState, useMemo, useEffect } from 'react';
 import './globals.css';
 import { SHEETS, buildSheet } from './sheets';
 import { T, mono } from './theme';
+import { fetchJson } from './fetchJson';
 import Steps from './Steps';
 import SheetTabs from './SheetTabs';
 import { expectedRateOf } from '../src/lib/compare';
@@ -259,9 +260,7 @@ export default function Home() {
     setBusy('collect'); setMsg(null);
     try {
       const qs = new URLSearchParams({ sgg: region, ym: String(form.ym).trim(), company: form.company });
-      const res = await fetch(`/api/collect?${qs}`);
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error ?? '수집 실패');
+      const j = await fetchJson(`/api/collect?${qs}`);
       setData(j);
       /*
         시공사를 안 넣으면 시공능력평가순위만 조용히 빠져 6/7 이 된다.
@@ -279,9 +278,7 @@ export default function Home() {
     if (!region) return setMsg({ kind: 'warn', text: '시도·시군구를 먼저 고르세요.' });
     setBusy('geo'); setMsg(null);
     try {
-      const res = await fetch(`/api/facilities?addr=${encodeURIComponent(addr)}&region=${encodeURIComponent(region)}&only=none`);
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error ?? '주소 조회 실패');
+      const j = await fetchJson(`/api/facilities?addr=${encodeURIComponent(addr)}&region=${encodeURIComponent(region)}&only=none`);
       setGeo(j.geo); setPick(0);
       setCoord(j.coord);
       setFixed(true);
@@ -340,10 +337,8 @@ export default function Home() {
         if (coord.roadAddress) qs.set('road', coord.roadAddress);
         if (coord.jibunAddress) qs.set('jibun', coord.jibunAddress);
       }
-      const res = await fetch(`/api/facilities?${qs}`);
-      const j = await res.json();
-      if (res.status === 428) throw new Error(`${j.needKey} 미설정 — 베르셀 환경변수를 확인하세요.`);
-      if (!res.ok) throw new Error(j.error ?? '시설 수집 실패');
+      const j = await fetchJson(`/api/facilities?${qs}`, null, (r, body) => (
+        r.status === 428 ? `${body?.needKey} 미설정 — 베르셀 환경변수를 확인하세요.` : null));
       // 시트별로 받으므로 이전 결과 위에 덮어쓴다 (좌표·기준은 최신 응답을 따른다)
       setFacilities(prev => (prev
         ? { ...prev, ...j, facilities: { ...prev.facilities, ...j.facilities } }
@@ -471,6 +466,7 @@ export default function Home() {
   const mSum = useMemo(() => manualSummary({ sheetInput: sheetInput ?? {}, data, facilities: view, manual }),
     [sheetInput, data, view, manual]);
   const rateRes = useMemo(() => expectedRateOf(compare, rate, mSum.excl, sheetInput), [compare, rate, mSum.excl, sheetInput]);
+  const cmpSum = rateRes.cmp;
   const ratePct = rateRes.res && !rateRes.res.pending ? rateRes.res.rate : null;
   const reviewRes = useMemo(
     () => reviewScore({ manual: review ?? {}, rate: ratePct ?? NaN }), [review, ratePct]);
@@ -524,14 +520,33 @@ export default function Home() {
   */
   const panelOpen = panelOpenManual ?? !fixed;
 
+  /*
+    탭 옆 점 = "이 시트는 다 됐는가".
+    **앞 8개 탭에만 붙어 있었다**(실측 2026-09-24) — 정작 실무자가 값을 넣는
+    비교사업장·수기입력·초기예상분양률·심사평점표에는 아무 표시가 없었다.
+    그 넷은 탭 줄 오른쪽 끝이라 스크롤 밖에 있을 때가 많아 더 안 보인다.
+    「어디까지 했더라」 를 탭 줄만 보고 알 수 있어야 한다.
+      ok = 다 됐다 · partial = 손을 댔지만 아직 결론이 없다 · 없음 = 시작 전
+  */
   const status = useMemo(() => {
     const m = {};
     if (data) for (const r of data.results) m[r.sheet] = r.ok ? 'ok' : (m[r.sheet] ?? 'none');
     for (const sh of POI_SHEETS) {
       if (Object.values(facilities?.facilities ?? {}).some(v => v.sheet === sh)) m[sh] = 'ok';
     }
+    /* 비교사업장 — 수집만 했으면 절반, 단지를 골라 평균이 나와야 다 된 것이다 */
+    if (compare?.data) m['비교사업장'] = cmpSum?.avg != null ? 'ok' : 'partial';
+    /* 수기입력 — A 가 나와야 끝난다 */
+    if (sheetInput && Object.keys(sheetInput).length) m['수기입력'] = mSum.excl != null ? 'ok' : 'partial';
+    else if (mSum.excl != null) m['수기입력'] = 'ok';
+    /* 초기예상분양률 — 이 앱의 결론 */
+    if (ratePct != null) m['초기예상분양률'] = 'ok';
+    else if (mSum.excl != null || compare?.data) m['초기예상분양률'] = 'partial';
+    /* 심사평점표 — 전 항목이 들어와 종합평점이 나야 끝이다 */
+    if (reviewRes?.net != null) m['심사평점표'] = 'ok';
+    else if (review && Object.keys(review).length) m['심사평점표'] = 'partial';
     return m;
-  }, [data, facilities]);
+  }, [data, facilities, compare, cmpSum, sheetInput, mSum.excl, ratePct, review, reviewRes]);
 
   return (
     <main style={S.shell}>
@@ -772,8 +787,12 @@ export default function Home() {
               )}
 
               {/* 반경·종류를 고른 뒤 수집해야 해서 버튼은 탭 안에 있다 — 여기서는 그 탭으로 보낸다 */}
+              {/*
+                **이미 그 탭에 있는데도 「→」 파란 버튼이 화면 맨 위에서 다음이라 주장했다**
+                (실측 2026-09-24). 가라는 곳에 이미 와 있으면 그 버튼은 더 이상 다음이 아니다.
+              */}
               <button
-                style={S.btn({ primary: !!data && allPoi && !compDone, done: compDone })}
+                style={S.btn({ primary: !!data && allPoi && !compDone && tab !== '비교사업장', done: compDone })}
                 onClick={() => setTab('비교사업장')} disabled={!!busy}
               >
                 {compDone && <span style={S.check}>✓</span>}

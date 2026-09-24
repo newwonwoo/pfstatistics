@@ -1,6 +1,7 @@
 'use client';
 import { useMemo, useState, useEffect } from 'react';
 import { T, mono } from './theme';
+import { fetchJson } from './fetchJson';
 import RadiusMap from './RadiusMap';
 import { scoreMatrix } from '../src/lib/scoring';
 
@@ -59,15 +60,30 @@ const S = {
   subject: { fontSize: 12.5, color: T.ink2, margin: '0 0 16px' },
   bar: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 },
   seg: { display: 'inline-flex', border: `1px solid ${T.lineStrong}`, borderRadius: 6, overflow: 'hidden' },
+  /*
+    **파란색이 세 가지 뜻으로 쓰이고 있었다**(실측 2026-09-24) — 한 화면에서
+    [1km]·[공급면적]·[세대수 가중](=고른 상태)과 [반경 1km 분양단지 수집](=실행)이
+    **똑같은 진한 파랑**이라, 주버튼이 넷으로 보여 "지금 뭘 눌러야 하나" 가 안 보였다.
+    **고른 상태는 옅게, 실행은 진하게.** 진한 파랑은 화면에 하나만 둔다.
+  */
   segBtn: (on) => ({
     padding: '6px 13px', fontSize: 12, fontWeight: 700, border: 0, cursor: 'pointer',
-    background: on ? T.accent : '#fff', color: on ? '#fff' : T.ink2,
+    background: on ? T.accentSoft : '#fff', color: on ? T.accent : T.ink2,
+    boxShadow: on ? `inset 0 -2px 0 ${T.accent}` : 'none',
   }),
-  go: (busy) => ({
+  /*
+    수집이 끝나도 버튼이 진한 파랑 그대로라 **또 눌러야 하는 줄 알았다**.
+    단계 줄의 다른 버튼은 끝나면 ✓ 초록으로 바뀌는데 이것만 안 바뀐다 — 문법을 맞춘다.
+  */
+  go: (busy, done) => ({
     padding: '7px 16px', fontSize: 12.5, fontWeight: 700, borderRadius: 6, cursor: busy ? 'progress' : 'pointer',
-    border: `1px solid ${T.accent}`, background: busy ? '#dfe6ef' : T.accent, color: busy ? T.muted : '#fff',
+    border: `1px solid ${busy ? T.line : done ? T.ok : T.accent}`,
+    background: busy ? '#dfe6ef' : done ? T.okSoft : T.accent,
+    color: busy ? T.muted : done ? T.ok : '#fff',
   }),
   ghost: { padding: '6px 13px', fontSize: 11.5, fontWeight: 700, borderRadius: 6, cursor: 'pointer', border: `1px solid ${T.accent}`, background: '#fff', color: T.accent },
+  empty: { margin: '12px 0 0', padding: '12px 16px', background: T.warnSoft, border: `1px solid ${T.warn}33`,
+           borderRadius: 7, fontSize: 12.5, color: T.ink2, lineHeight: 1.85 },
   take: {
     whiteSpace: 'nowrap', padding: '3px 8px', fontSize: 10.5, fontWeight: 700, cursor: 'pointer',
     border: `1px solid ${T.accent}`, borderRadius: 4, background: T.accentSoft, color: T.accent,
@@ -215,14 +231,14 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
       if (addr) qs.set('site', `${region} ${addr}`.trim());
       // 그린 선이 곧 판정선이어야 한다 — 지도에 경계 기준으로 그릴 때만 경계로 잰다
       if (usePoly) qs.set('polygon', JSON.stringify(polygon));
-      const res = await fetch(`/api/apts?${qs}`);
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error ?? `수집 실패 (${res.status})`);
+      const j = await fetchJson(`/api/apts?${qs}`);
       set({ radius, data: j, picked: [] });
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
   const all = data?.items ?? [];
+  /* 지금 고른 반경으로 이미 받아왔는가 — 버튼이 "또 눌러야 하는 것" 처럼 보이지 않게 */
+  const collected = Boolean(data) && data.radius === radius;
   const kindCounts = useMemo(() => {
     const m = new Map();
     for (const a of all) m.set(a.kind ?? '아파트', (m.get(a.kind ?? '아파트') ?? 0) + 1);
@@ -257,6 +273,8 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
 
   /* 본건은 보관본에서 복원돼도 평균에 들어가지 않는다 */
   const chosen = useMemo(() => items.filter(a => picked.includes(a.manageNo) && !a.isSite), [items, picked]);
+  /* 고를 수 있는 것 — 본건(심사대상)과 분양가가 없는 임대는 뺀다 */
+  const selectable = useMemo(() => items.filter(a => !a.isSite && isSale(a)), [items]);
 
   const toggleKind = (k) => {
     const next = kinds.includes(k) ? kinds.filter(x => x !== k) : [...kinds, k];
@@ -402,8 +420,10 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
           ))}
         </span>
         <span style={S.label}>규정 기본 {rLabel(baseRadius(region))}</span>
-        <button style={S.go(busy)} onClick={collect} disabled={busy || !coord}>
-          {busy ? '수집 중…' : `반경 ${rLabel(radius)} 분양단지 수집`}
+        <button style={S.go(busy, collected)} onClick={collect} disabled={busy || !coord}>
+          {busy ? '수집 중…'
+            : collected ? `✓ 반경 ${rLabel(radius)} 수집됨 — 다시 수집`
+            : `반경 ${rLabel(radius)} 분양단지 수집`}
         </button>
       </div>
 
@@ -546,6 +566,29 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
           )}
           {autoMsg && (
             <div style={S.autoMsg}>{autoMsg}</div>
+          )}
+        </div>
+      )}
+
+      {/*
+        **0건일 때 다음에 뭘 할지가 화면에 없었다**(실측 2026-09-24 · 부천 상동 1km).
+        표는 「본건 1건」만 남고 평균은 「0곳」인데, 화면은 "아래 표에서 고르세요" 라고만 했다.
+        고를 것이 없는데 고르라고 하는 셈이다.
+        규정 비고1 이 **0건일 때** 매 1km 확장을 적어두었으므로 그 문구를 그대로 쓰고
+        넓혀서 다시 받는 버튼을 그 자리에 둔다 — 반경 줄은 이 자리에서 674px 위다.
+        (0건이 아닐 때는 권유하지 않는다 — 몇 곳으로 평균을 낼지는 실무자가 판단한다)
+      */}
+      {collected && selectable.length === 0 && (
+        <div style={S.empty}>
+          <b>반경 {rLabel(radius)} 안에 비교할 분양단지가 없습니다.</b>
+          {all.length > 0 && <> (조회된 {all.length}건은 본건이거나 분양가가 없는 임대입니다)</>}
+          <br />
+          심사지침 제16조 비고1 — <b>인근에 유사사업장이 없는 경우 반경을 매 1km 확대하여 적용</b>합니다.
+          {radius < 5000 && (
+            <button style={{ ...S.ghost, marginLeft: 10 }}
+              onClick={() => { set({ radius: radius + 1000 }); setErr(null); }}>
+              반경 {rLabel(radius + 1000)} 로 넓히기
+            </button>
           )}
         </div>
       )}
@@ -879,7 +922,14 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
               Σ거래금액 ÷ Σ전용면적(면적 가중)으로 냈습니다.<br />
               카카오 장소검색은 한 번에 45곳까지만 줍니다 — <b>가까운 곳부터</b> 받습니다
               {data.knownApts.scanned != null && ` (반경 안 아파트 분류 ${data.knownApts.scanned}곳 중)`}.
-              세대수·시공사·사용승인일이 빈 줄은 K-apt 에서 이름이 맞지 않은 것입니다(관리비 의무단지만 있습니다).
+              {/*
+                **전부 빈 채로 두고 "이름이 안 맞았다" 고 적으면 틀린 이유를 대는 것이다**
+                (실측 2026-09-24 · 부천 — 9곳 전부 비었는데 원인은 이름이 아니라 색인 코드였다).
+                한두 줄이 비는 것과 통째로 비는 것은 원인이 다르다.
+              */}
+              {data.knownApts.items.every(a => !a.kapt && !a.trade)
+                ? '세대수·시공사·사용승인일·실거래 단가가 모두 비었습니다 — 이 시군구의 K-apt·실거래 색인을 받지 못했습니다(원천 점검이 필요합니다).'
+                : '세대수·시공사·사용승인일이 빈 줄은 K-apt 에서 이름이 맞지 않은 것입니다(관리비 의무단지만 있습니다).'}
             </p>
           </div>
         )}

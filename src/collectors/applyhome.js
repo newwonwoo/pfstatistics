@@ -968,7 +968,24 @@ export async function collectKnownApts({ site, radius = 2000, polygon = null, ex
    * 사업지 시군구 색인 하나만 받으면 그 8곳은 실거래도 세대수도 못 채운다 —
    * 단지 **주소에 적힌 시군구별로** 색인을 받는다.
    */
-  const sggOfAddr = (addr) => String(addr ?? '').split(/\s+/).slice(0, 2).join(' ');
+  /*
+    **일반구가 있는 시에서 보강이 통째로 죽었다**(실측 2026-09-24, 부천).
+    K-apt 도 실거래가도 색인이 **구 단위**다 —
+      경기 부천시 41190 → 0건 · 원미구 41192 → 135건 · 소사구 41194 → 83 · 오정구 41196 → 47
+    주소 앞 **두 토막**만 떼어 "경기 부천시" 로 물으니 41190 이 나와 세대수·시공사·사용승인일·
+    실거래 단가가 **전부 빈 채**로 표가 그려졌다. 화면은 그것을 "K-apt 에서 이름이 맞지 않은 것"
+    이라고 설명하고 있었다 — **틀린 이유를 댄 것**이다.
+    수원·성남·안양·안산·고양·용인·창원 등 일반구가 있는 시가 전부 같은 증상이다.
+
+    구가 있으면 **세 토막**을 쓴다. 다만 「지구」도 「구」로 끝나므로 막는다(기록된 함정).
+  */
+  const sggOfAddr = (addr) => {
+    const w = String(addr ?? '').split(/\s+/).filter(Boolean);
+    if (w.length < 2) return w.join(' ');
+    const third = w[2] ?? '';
+    const isGu = /구$/.test(third) && !/(지구|신도시|국제도시)$/.test(third);
+    return w.slice(0, isGu ? 3 : 2).join(' ');
+  };
   const bySgg = new Map();
   for (const v of uniq) {
     const k = sggOfAddr(v.address);

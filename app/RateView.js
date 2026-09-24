@@ -42,6 +42,8 @@ const S = {
 
   read: { display: 'flex', alignItems: 'baseline', gap: 7, fontSize: 14, fontWeight: 700, ...mono },
   readNote: { fontSize: 10.5, fontWeight: 400, color: T.muted, fontFamily: 'inherit' },
+  capOn: { fontSize: 12, fontWeight: 700, color: T.warn, background: T.warnSoft,
+           border: `1px solid ${T.warn}44`, borderRadius: 5, padding: '4px 10px' },
   input: { width: 110, padding: '5px 8px', fontSize: 12.5, textAlign: 'right', border: `1px solid ${T.line}`, borderRadius: 4, background: '#fffdf0', color: T.ink, fontFamily: 'inherit', ...mono },
 
   rate: { display: 'flex', alignItems: 'baseline', gap: 12, padding: '18px 20px', flexWrap: 'wrap' },
@@ -124,7 +126,21 @@ export default function RateView({ region, addr, facilities, compare, excl: excl
             {households ? '수기입력 탭 [규모 및 배치] 값' : '수기입력 탭 [규모 및 배치] 에서 받습니다'}
           </span>
         </span>
-        <span style={{ ...S.label, fontWeight: 400 }}>100세대 미만이면 60% 상한이 걸립니다</span>
+        {/*
+          **상시 안내문과 실제 발동을 구분하지 않았다**(실측 2026-09-24).
+          1,859세대에도 99세대에도 똑같이 「100세대 미만이면 60% 상한이 걸립니다」 만 떴다 —
+          조건에 걸린 사업장이 그 사실을 화면에서 알 길이 없었다.
+          조건에 해당하면 **걸렸다고 말한다.** (`capped` 는 상한이 실제로 값을 내렸을 때만 서므로
+          "해당하지만 값은 그대로" 인 경우까지 세대수로 함께 본다)
+        */}
+        {Number(households) > 0 && Number(households) < 100 ? (
+          <span style={S.capOn}>
+            100세대 미만 — <b>60% 상한 적용 대상</b>
+            {res?.capped ? ` (${res.capped.from}% → ${res.capped.to}%)` : ' (급간 값이 이미 60% 이하라 변동 없음)'}
+          </span>
+        ) : (
+          <span style={{ ...S.label, fontWeight: 400 }}>100세대 미만이면 60% 상한이 걸립니다</span>
+        )}
       </div>
 
       <div style={S.box}>

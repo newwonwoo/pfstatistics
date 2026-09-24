@@ -257,6 +257,17 @@ function FragmentRows({ g, v, put, pct, presale, known = {}, onJump }) {
                 placeholder={it.unit || '값'}
                 value={v[it.id] ?? ''} onChange={e => put(it.id, e.target.value)} />
             )}
+        {/*
+          **값을 넣는 버튼이 값 칸에서 280px 떨어진 근거 칸에 있었다**(실측 2026-09-24).
+          같은 성격의 버튼이 비교사업장 탭에서는 입력칸 바로 옆에 있어 문법도 갈렸다.
+          넣는 버튼은 넣는 칸 옆에 둔다 — 설명은 근거 칸에 그대로 남긴다.
+        */}
+        {known[it.id] && String(v[it.id] ?? '') !== known[it.id].value && (
+          <button type="button" style={{ ...S.take, marginLeft: 0, marginTop: 5, display: 'block' }}
+            onClick={() => put(it.id, known[it.id].value)}>
+            {known[it.id].label}
+          </button>
+        )}
       </td>
       <td style={it.score != null ? S.auto : S.td}>
         {it.score == null ? <span style={S.pend}>—</span> : it.score}
@@ -276,17 +287,7 @@ function FragmentRows({ g, v, put, pct, presale, known = {}, onJump }) {
           && <><b style={{ color: T.ok }}>{it.band} → {it.score}점</b><br /></>}
         {!it.auto && it.score == null && typeof it.band === 'string' && it.band
           && <><b style={{ color: T.warn }}>{it.band}</b><br /></>}
-        {known[it.id] && (
-          <>
-            {known[it.id].text}
-            {String(v[it.id] ?? '') !== known[it.id].value && (
-              <button type="button" style={S.take} onClick={() => put(it.id, known[it.id].value)}>
-                {known[it.id].label}
-              </button>
-            )}
-            <br />
-          </>
-        )}
+        {known[it.id] && <>{known[it.id].text}<br /></>}
         {it.known && <>확인된 구간 : <b style={{ color: T.ink2 }}>{it.known}</b><br /></>}
         {it.note}
         {it.over && <><br /><b style={{ color: T.warn }}>배점 {it.max}점을 넘습니다</b></>}
