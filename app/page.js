@@ -501,8 +501,10 @@ export default function Home() {
       need.push({ label: `${pv.id} — 판정 전 기본점수`, why: pv.text,
         tab: pv.id === '지역수요' ? '수기입력' : pv.id });
     }
+    /* 「1개 남음」 이라고 해놓고 사유 줄에 네 항목을 다 적으면 어느 것이 남았는지 모른다 */
     put(mSum.excl != null, `수기입력 — 제외 항목 점수(A)${mSum.missing?.length ? ` · ${mSum.missing.length}개 남음` : ''}`,
-      '수기입력', '규모및배치 · 평형구성 · 인근아파트 초기분양률 · 인구유입요인');
+      '수기입력', mSum.missing?.length ? `남은 항목 : ${mSum.missing.join(' · ')}`
+        : '규모및배치 · 평형구성 · 인근아파트 초기분양률 · 인구유입요인');
     put(!!compare?.data, '비교사업장 수집', '비교사업장', '반경 안 분양단지를 받아야 평균이 난다');
     put(cmpSum?.avg != null, '비교사업장 선택 (평균)', '비교사업장', '고른 단지의 평균이 분양가격지수의 분모다');
     put(Number(compare?.site?.unitPrice) > 0, '본건 예정분양가', '비교사업장', '분양가격지수의 분자다');
