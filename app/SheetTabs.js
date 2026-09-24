@@ -33,6 +33,21 @@ const groupStatus = (items, status) => {
   return undefined;
 };
 
+/**
+ * **「다음은 여기」 를 탭 줄에서 말한다**(사용자 요청 2026-09-24).
+ * 초기예상분양률이 나오면 그 다음 할 일은 심사평점표 하나뿐인데,
+ * 지금까지는 그 탭이 다른 탭과 똑같이 생겨 「끝났으니 넘어가라」 는 신호가 없었다.
+ * 값이 나온 것(초록 점)과 **다음 차례인 것**은 다른 말이므로 배지를 따로 둔다.
+ */
+const NextBadge = ({ note }) => (
+  <span data-next-badge title={note ?? undefined} style={{
+    marginLeft: 7, padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap',
+    fontSize: 10.5, fontWeight: 800, letterSpacing: '.02em',
+    background: T.accent, color: '#fff',
+    animation: 'sheetNextPulse 1.8s ease-in-out infinite',
+  }}>다음 →</span>
+);
+
 const Dot = ({ st, size = 6 }) => (st ? (
   <span aria-hidden style={{
     display: 'inline-block', marginLeft: 6, width: size, height: size, borderRadius: size,
@@ -40,7 +55,7 @@ const Dot = ({ st, size = 6 }) => (st ? (
   }} />
 ) : null);
 
-export default function SheetTabs({ sheets, active, onSelect, status }) {
+export default function SheetTabs({ sheets, active, onSelect, status, next = null, nextNote = null }) {
   /* 단계별로 묶는다 — 등장 순서를 그대로 쓴다(그것이 심사 진행 순서다) */
   const groups = useMemo(() => {
     const out = [];
@@ -111,9 +126,19 @@ export default function SheetTabs({ sheets, active, onSelect, status }) {
 
   return (
     <div>
+      {/* 인라인 스타일로는 @keyframes 를 못 쓴다. 움직임을 꺼둔 사용자는 그대로 둔다 */}
+      <style>{`
+        @keyframes sheetNextPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(27,79,216,.45); }
+          50%      { box-shadow: 0 0 0 5px rgba(27,79,216,0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          [data-next-badge] { animation: none !important; }
+        }
+      `}</style>
       {/* ── 윗줄 : 단계 ── */}
       <div role="tablist" aria-label="심사 단계" style={S.top}>
-        {groups.map((g, i) => {
+        {groups.map((g) => {
           const on = g.key === activeGroup.key;
           const solo = g.items.length === 1 ? g.items[0] : null;
           const st = groupStatus(g.items, status);
@@ -124,18 +149,19 @@ export default function SheetTabs({ sheets, active, onSelect, status }) {
               data-step={g.key}
               onClick={() => onSelect(lastSeen.current[g.key] ?? g.items[0].id)}
               style={S.topBtn(on, tone)}>
-              <span style={S.no(on, tone)}>{i + 1}</span>
               {solo ? solo.label : g.key}
               {!solo && <span style={S.count}>{g.items.length}</span>}
               <Dot st={st} size={7} />
+              {g.items.some(x => x.id === next) && <NextBadge note={nextNote} />}
             </button>
           );
         })}
       </div>
 
       {/* ── 아랫줄 : 그 단계의 시트 (한 장뿐이면 아예 안 편다) ── */}
-      {showRow2 && (
-        <div style={S.wrap(open)}>
+      {/* 감싸개는 늘 둔다 — 자식이 하나뿐인 단계로 갈 때 아랫줄이 통째로 사라지며 화면이 튄다 */}
+      <div style={S.wrap(open && showRow2)}>
+        {showRow2 && (
           <div style={{ position: 'relative' }}>
             <div ref={ref} onWheel={onWheel} role="tablist" aria-label={`${activeGroup.key} 시트`} style={S.row}>
               {kids.map((s, i) => {
@@ -151,6 +177,7 @@ export default function SheetTabs({ sheets, active, onSelect, status }) {
                       onClick={() => onSelect(s.id)} style={S.tab(on, s.tone === 'cover' ? '#6b7280' : null)}>
                       {s.label}
                       <Dot st={status?.[s.id]} />
+                      {s.id === next && <NextBadge note={nextNote} />}
                     </button>
                   </Fragment>
                 );
@@ -161,8 +188,8 @@ export default function SheetTabs({ sheets, active, onSelect, status }) {
             <button type="button" aria-label="다음 시트" title="다음 시트"
               style={fade('right', edge.right)} onClick={() => nudge(1)}>›</button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -181,13 +208,11 @@ const S = {
     boxShadow: on ? `inset 0 -2px 0 ${tone ?? T.accent}, ${T.shadow}` : 'none',
     transition: 'background .15s ease, color .15s ease',
   }),
-  /* 단계 번호 — 「지금 몇 단계인가」 가 글자보다 먼저 읽힌다 */
-  no: (on, tone) => ({
-    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-    width: 17, height: 17, marginRight: 7, borderRadius: 17,
-    fontSize: 10.5, fontWeight: 800,
-    background: on ? (tone ?? T.accent) : '#cfd4dc', color: on ? '#fff' : '#fff',
-  }),
+  /*
+    **번호는 달지 않는다.** 바로 위 STEP 줄이 이미 1~5 로 순서를 말하는데
+    탭에 1~4 를 또 달면 번호가 두 벌이 되어 「지금 STEP 2 인데 탭은 1?」 이 된다.
+    순서는 STEP 줄이, 묶음은 이 줄이 맡는다.
+  */
   count: {
     marginLeft: 6, padding: '1px 6px', borderRadius: 9, fontSize: 10.5, fontWeight: 700,
     background: '#dfe3e9', color: T.ink2,

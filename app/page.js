@@ -609,6 +609,26 @@ export default function Home() {
     return m;
   }, [data, facilities, compare, cmpSum, sheetInput, mSum.excl, ratePct, review, reviewRes]);
 
+  /*
+    **「이제 어디로」 를 탭 줄이 말한다**(사용자 요청 2026-09-24).
+    초기예상분양률이 나오면 다음 할 일은 심사평점표 하나뿐인데,
+    그 탭이 다른 탭과 똑같이 생겨 「끝났으니 넘어가라」 는 신호가 없었다.
+
+    **판정 전 기본점수가 섞였으면(`tainted`) 띄우지 않는다** — 그때는 분양률이
+    심사평점표로 넘어가지 않으므로, 가라고 해놓고 막는 꼴이 된다.
+    이미 그 탭에 있을 때도 띄우지 않는다(「이미 그 탭에 있는데 계속 다음 버튼」 함정).
+  */
+  const nextTab = useMemo(() => {
+    if (tainted) return null;
+    if (status['초기예상분양률'] !== 'ok') return null;
+    if (status['심사평점표'] === 'ok') return null;
+    if (tab === '심사평점표') return null;
+    return '심사평점표';
+  }, [status, tainted, tab]);
+  const nextNote = ratePct != null
+    ? `초기예상분양률 ${ratePct}% 가 나왔습니다 — 심사평점표에서 배점으로 들어갑니다`
+    : null;
+
   return (
     <main style={S.shell}>
       <div style={S.head}>
@@ -973,7 +993,8 @@ export default function Home() {
 
       <div style={{ marginTop: 20 }}>
         <SheetTabs sheets={SHEETS} active={tab}
-          onSelect={(id) => { setTab(id); setMapOpenManual(null); setMsg(null); }} status={status} />
+          onSelect={(id) => { setTab(id); setMapOpenManual(null); setMsg(null); }}
+          status={status} next={nextTab} nextNote={nextNote} />
         {/*
           모든 시트를 항상 마운트해 둔다.
           엑셀 내보내기가 각 시트의 증빙 카드와 지도를 캡쳐하는데,
