@@ -76,23 +76,37 @@ async function probeKakaoRest(key) {
 /**
  * 브이월드 키 점검.
  *
- * 도메인 제한이 있어 **배포 도메인에서 부른 것**만 통과한다 —
- * 키를 발급할 때 등록한 URL 과 여기서 보내는 domain 이 같아야 한다.
+ * 거부 사유가 **셋인데 응답 코드는 하나**다(`INCORRECT_KEY`) — 실측 2026-09-24.
+ *   ① 키가 틀렸다  ② 도메인 제한에 걸렸다  ③ **그 키에 이 API 권한이 없다**
+ * 실제로 겪은 것은 ③ 이었다. 같은 키로 주소검색은 되는데 WFS·데이터API 만 거부됐다.
+ * 그래서 **주소검색(권한 기본 포함)을 같이 찔러** 둘을 가른다 —
+ * 주소검색이 되는데 WFS 가 안 되면 키가 아니라 **활용 API 선택**의 문제다.
+ * (카카오 403 이 "키 문제가 아니라 제품설정 OFF" 였던 것과 같은 구조다.)
  */
 async function probeVworld(key) {
   if (!key) return { status: 'missing', note: '브이월드 인증키 — www.vworld.kr/dev/v4api.do 에서 발급 (사용 URL 에 배포 도메인 등록 필수)' };
-  const url = 'https://api.vworld.kr/req/wfs?SERVICE=WFS&REQUEST=GetCapabilities&VERSION=1.1.0'
-    + `&key=${encodeURIComponent(key.trim())}&domain=${encodeURIComponent(VWORLD_DOMAIN)}`;
-  try {
-    const r = await fetch(url);
-    const t = await r.text();
-    if (r.ok && /WFS_Capabilities/i.test(t)) return { status: 'ok', sample: 'GetCapabilities 응답 수신' };
-    const hint = /도메인|domain/i.test(t)
+  const k = encodeURIComponent(key.trim());
+  const ask = async (url) => {
+    try { const r = await fetch(url); return { ok: r.ok, body: await r.text() }; }
+    catch (e) { return { ok: false, body: `ERR ${e.message}` }; }
+  };
+  const wfs = await ask('https://api.vworld.kr/req/wfs?SERVICE=WFS&REQUEST=GetCapabilities&VERSION=1.1.0'
+    + `&key=${k}&domain=${encodeURIComponent(VWORLD_DOMAIN)}`);
+  if (/WFS_Capabilities/i.test(wfs.body)) return { status: 'ok', sample: 'WFS GetCapabilities 응답 수신' };
+
+  /* WFS 가 막혔다 — 키가 죽은 것인지, 이 API 만 막힌 것인지 갈라본다 */
+  const addr = await ask('https://api.vworld.kr/req/address?service=address&request=getcoord&type=road'
+    + `&address=${encodeURIComponent('서울특별시 중구 세종대로 110')}&format=json&key=${k}`);
+  const addrOk = /"status"\s*:\s*"OK"/.test(addr.body);
+
+  const hint = addrOk
+    ? '키는 살아 있는데 **WFS·데이터 API 권한이 없습니다** — 브이월드 > 마이페이지 > 오픈API 인증키 관리 '
+      + '> 해당 키 수정 > 활용 API 에 「데이터 API」(WMS/WFS) 를 체크하고 저장하십시오'
+    : /도메인|domain/i.test(wfs.body)
       ? `사용 URL 이 맞지 않습니다 — 브이월드 키 설정의 사용 URL 에 ${VWORLD_DOMAIN} 를 등록하십시오`
-      : /인증키|key/i.test(t) ? '인증키가 거부되었습니다 — 오탈자·공백 혼입을 확인하십시오'
-      : '응답을 해석하지 못했습니다';
-    return { status: 'rejected', code: r.status, hint, body: t.slice(0, 300) };
-  } catch (e) { return { status: 'error', message: e.message }; }
+      : '인증키가 거부되었습니다 — 오탈자·공백 혼입을 확인하십시오';
+
+  return { status: 'rejected', hint, otherApiWorks: addrOk, body: wfs.body.slice(0, 300) };
 }
 
 export async function GET() {
