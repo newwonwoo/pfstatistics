@@ -59,6 +59,15 @@ const S = {
   go: { marginLeft: 8, padding: '2px 8px', fontSize: 11, fontWeight: 700, borderRadius: 4,
         cursor: 'pointer', border: `1px solid ${T.accent}`, background: '#fff', color: T.accent,
         whiteSpace: 'nowrap' },
+  running: { display: 'inline-flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.25 },
+  runNum: { fontSize: 16, fontWeight: 800, color: T.ink2, ...mono },
+  runNote: { fontSize: 10, fontWeight: 700, color: T.muted },
+  ovBanner: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+              padding: '9px 14px', background: T.warnSoft, borderBottom: `1px solid ${T.warn}44`,
+              fontSize: 12, color: T.ink2 },
+  ovUndo: { marginLeft: 'auto', padding: '4px 10px', fontSize: 11.5, fontWeight: 700, borderRadius: 5,
+            cursor: 'pointer', border: `1px solid ${T.accent}`, background: '#fff', color: T.accent },
+  dim: { opacity: 0.45 },
   final: { border: `2px solid ${T.lineStrong}`, padding: '10px 12px', textAlign: 'center', fontWeight: 800, background: '#fffdf0', fontSize: 16, ...mono },
   kind: (k) => ({
     display: 'inline-block', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 3, marginLeft: 6,
@@ -330,7 +339,18 @@ export default function ManualView({ region, addr, data, facilities, manual, val
           <span>분양가격지수 제외 항목 점수 (A)</span>
           <span style={S.headNote}>초기예상분양률 · 분양가경쟁력이 이 값을 씁니다</span>
         </div>
-        <table style={S.tbl}>
+        {/*
+          **직접 입력한 A 가 있으면 위 표는 통째로 무시된다**(`excl = override ?? 자동합계`).
+          그런데 표는 그대로 있어 「이 점수들이 쓰인다」 로 읽힌다(사용자 지적 2026-09-24) —
+          표를 흐리게 하고 무엇이 실제로 쓰이는지 표 머리에서 말한다.
+        */}
+        {sum.override != null && (
+          <div style={S.ovBanner}>
+            <b>직접 입력한 A = {sum.override} 을 씁니다</b> — 아래 표는 <b>참고</b>입니다(계산에 쓰이지 않습니다).
+            <button style={S.ovUndo} onClick={() => set({ exclOverride: '' })}>자동 합산으로 되돌리기</button>
+          </div>
+        )}
+        <table style={{ ...S.tbl, ...(sum.override != null ? S.dim : null) }}>
           <thead>
             <tr><th style={S.th}>평가항목</th><th style={S.th}>배점</th><th style={S.th}>점수</th><th style={S.th}>근거</th></tr>
           </thead>
@@ -361,8 +381,19 @@ export default function ManualView({ region, addr, data, facilities, manual, val
             <tr>
               <td style={{ ...S.tdL, ...S.final, textAlign: 'left' }}>합계 = A</td>
               <td style={S.final}>—</td>
+              {/*
+                **「자동 합산」 이라면서 다 차기 전에는 「—」 만 보였다**(사용자 지적 2026-09-24).
+                요소별 점수가 들어오는 대로 합이 보여야 「자동 합산」 이다.
+                다만 부분합을 확정 A 로 읽으면 분양률이 통째로 낮아지므로(기록된 함정)
+                **진행 중이라는 말을 숫자와 같은 칸에** 붙인다 — 「37 진행 5/12」.
+              */}
               <td style={S.final}>
-                {sum.excl != null ? sum.excl : <span style={S.pend}>—</span>}
+                {sum.excl != null ? sum.excl : (
+                  <span style={S.running}>
+                    <b style={S.runNum}>{sum.sum}</b>
+                    <span style={S.runNote}>진행 {sum.rows.length - sum.missing.length} / {sum.rows.length}</span>
+                  </span>
+                )}
               </td>
               <td style={S.tdWhy}>
                 {sum.override != null
