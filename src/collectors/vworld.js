@@ -125,18 +125,37 @@ export async function roadLines({ x, y }, radius = 1000, { polygon = null } = {}
     if (!lines.length) continue;
 
     let best = Infinity, at = null;
+    /*
+      **선을 반경 근처로 자른다.**
+      한 도로는 시 전체를 가로지른다 — 선을 통째로 주면 지도가 그 끝까지 담느라
+      3km 까지 줌아웃되고 반경원이 좁쌀만 해진다(실측 2026-09-24).
+      「반경원이 화면의 93%」로 맞춰둔 것이 통째로 무너진다.
+      거리는 원래 선 전체로 재고, **그리는 것만** 반경 근처 토막으로 남긴다.
+    */
+    const clipped = [];
     for (const line of lines) {
-      for (let i = 1; i < line.length; i++) {
-        /* 먼 구간까지 잘게 나눌 필요는 없다 — 꼭짓점으로 먼저 걸러낸다 */
-        const rough = Math.min(distOf(line[i - 1]), distOf(line[i]));
-        if (rough > span + 200) { if (rough < best) { best = rough; at = line[i]; } continue; }
-        for (const q of densify(line[i - 1], line[i])) {
-          const d = distOf(q);
-          if (d < best) { best = d; at = q; }
+      let run = [];
+      for (let i = 0; i < line.length; i++) {
+        if (i > 0) {
+          /* 먼 구간까지 잘게 나눌 필요는 없다 — 꼭짓점으로 먼저 걸러낸다 */
+          const rough = Math.min(distOf(line[i - 1]), distOf(line[i]));
+          if (rough <= span + 200) {
+            for (const q of densify(line[i - 1], line[i])) {
+              const d = distOf(q);
+              if (d < best) { best = d; at = q; }
+            }
+          } else if (rough < best) { best = rough; at = line[i]; }
         }
+        /* 화면 밖으로 한 점만 더 이어 그려야 선이 잘린 티가 안 난다 */
+        const near = distOf(line[i]) <= span;
+        if (near) { run.push(line[i]); continue; }
+        if (run.length) { run.push(line[i]); if (run.length >= 2) clipped.push(run); run = []; }
+        else if (i + 1 < line.length && distOf(line[i + 1]) <= span) run = [line[i]];
       }
+      if (run.length >= 2) clipped.push(run);
     }
     if (at == null) continue;
+    const drawLines = clipped.length ? clipped : [];
 
     const cur = found.get(name);
     if (!cur) {
@@ -144,7 +163,7 @@ export async function roadLines({ x, y }, radius = 1000, { polygon = null } = {}
         name, distance: Math.round(best),
         /* 핀은 **도로 위 가장 가까운 점**이다 — 필지 대표점이 아니다 */
         x: at.lng, y: at.lat,
-        lines, width: Number.isFinite(p.road_bt) ? p.road_bt : null,
+        lines: drawLines, width: Number.isFinite(p.road_bt) ? p.road_bt : null,
         length: Number.isFinite(p.road_lt) ? p.road_lt : null,
         sigCd: p.sig_cd ?? null, code: p.rn_cd ?? null,
         precision: STEP, basis: ring ? 'polygon' : 'point', geometry: true,
@@ -152,7 +171,7 @@ export async function roadLines({ x, y }, radius = 1000, { polygon = null } = {}
       });
       continue;
     }
-    cur.lines.push(...lines);
+    cur.lines.push(...drawLines);
     if (best < cur.distance) { cur.distance = Math.round(best); cur.x = at.lng; cur.y = at.lat; }
   }
 
