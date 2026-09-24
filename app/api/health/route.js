@@ -10,6 +10,10 @@ export const maxDuration = 30;
  * 값은 절대 그대로 노출하지 않고, 길이·앞뒤 4자·공백 혼입 여부만 보여준 뒤
  * 원천에 실제로 한 번 찔러서 살아있는 키인지 확인한다.
  */
+/* 브이월드 키는 도메인 제한이 걸린다 — 배포 도메인을 그대로 실어 보낸다 */
+const VWORLD_DOMAIN = process.env.VWORLD_DOMAIN
+  ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : 'https://pfstatistics.vercel.app');
+
 const mask = (v) => {
   if (!v) return null;
   const trimmed = v.trim();
@@ -69,6 +73,28 @@ async function probeKakaoRest(key) {
   } catch (e) { return { status: 'error', message: e.message }; }
 }
 
+/**
+ * 브이월드 키 점검.
+ *
+ * 도메인 제한이 있어 **배포 도메인에서 부른 것**만 통과한다 —
+ * 키를 발급할 때 등록한 URL 과 여기서 보내는 domain 이 같아야 한다.
+ */
+async function probeVworld(key) {
+  if (!key) return { status: 'missing', note: '브이월드 인증키 — www.vworld.kr/dev/v4api.do 에서 발급 (사용 URL 에 배포 도메인 등록 필수)' };
+  const url = 'https://api.vworld.kr/req/wfs?SERVICE=WFS&REQUEST=GetCapabilities&VERSION=1.1.0'
+    + `&key=${encodeURIComponent(key.trim())}&domain=${encodeURIComponent(VWORLD_DOMAIN)}`;
+  try {
+    const r = await fetch(url);
+    const t = await r.text();
+    if (r.ok && /WFS_Capabilities/i.test(t)) return { status: 'ok', sample: 'GetCapabilities 응답 수신' };
+    const hint = /도메인|domain/i.test(t)
+      ? `사용 URL 이 맞지 않습니다 — 브이월드 키 설정의 사용 URL 에 ${VWORLD_DOMAIN} 를 등록하십시오`
+      : /인증키|key/i.test(t) ? '인증키가 거부되었습니다 — 오탈자·공백 혼입을 확인하십시오'
+      : '응답을 해석하지 못했습니다';
+    return { status: 'rejected', code: r.status, hint, body: t.slice(0, 300) };
+  } catch (e) { return { status: 'error', message: e.message }; }
+}
+
 export async function GET() {
   const env = {
     KOSIS_API_KEY: process.env.KOSIS_API_KEY,
@@ -76,10 +102,12 @@ export async function GET() {
     DATA_GO_KR_KEY: process.env.DATA_GO_KR_KEY,
     NEXT_PUBLIC_KAKAO_JS_KEY: process.env.NEXT_PUBLIC_KAKAO_JS_KEY,
     ECOS_API_KEY: process.env.ECOS_API_KEY,
+    VWORLD_API_KEY: process.env.VWORLD_API_KEY,
   };
-  const [kosis, kakao] = await Promise.all([
+  const [kosis, kakao, vworld] = await Promise.all([
     probeKosis(env.KOSIS_API_KEY),
     probeKakaoRest(env.KAKAO_REST_KEY),
+    probeVworld(env.VWORLD_API_KEY),
   ]);
   return NextResponse.json({
     checkedAt: new Date().toISOString(),
@@ -90,6 +118,11 @@ export async function GET() {
       // JS 키는 브라우저 전용이라 서버에서 검증 불가 — 존재 여부만 본다
       KAKAO_JS: env.NEXT_PUBLIC_KAKAO_JS_KEY ? { status: 'present', note: '브라우저에서만 검증 가능 (지도 렌더시 확인)' } : { status: 'missing' },
       // KOSIS 가 계속 막히면 세대수는 이쪽으로 우회할 수 있다
+      /*
+        브이월드는 **도메인 제한**이 있다 — 키를 발급할 때 등록한 URL 에서 온 요청만 받는다.
+        그래서 "키가 있다" 와 "이 배포에서 쓸 수 있다" 가 다르다. 실제로 한 번 불러 확인한다.
+      */
+      VWORLD: vworld,
       DATA_GO_KR: env.DATA_GO_KR_KEY
         ? { status: 'present', note: '행정안전부 주민등록 세대현황 우회경로로 사용 가능' }
         : { status: 'missing', note: 'KOSIS 대안 — data.go.kr 활용신청 시 세대수 우회수집 가능' },
