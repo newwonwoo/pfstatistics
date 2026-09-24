@@ -137,9 +137,17 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
       const sorted = picked
         ? [...big.filter(r => r.name === picked), ...big.filter(r => r.name !== picked)]
         : big;
+      /*
+        **핀 이름이 「부평대로 (대로)」 라 지도에서 그 자리가 도로인 것처럼 읽혔다**
+        (사용자 지적 2026-09-24 — 핀이 골프장 한가운데에 서 있었다).
+        카카오 `coord2address` 는 그 좌표가 속한 **필지**의 도로명주소를 준다 —
+        골프장처럼 큰 필지는 통째로 「부평대로 N」 이라 필지 안 아무 데나 찍어도 그 이름이 나온다.
+        **도로 중심선 좌표는 이 앱이 쓰는 어느 원천에도 없다.**
+        그러니 핀은 도로가 아니라 **그 도로명을 주소로 쓰는 가장 가까운 지점**이다 — 그렇게 적는다.
+      */
       const pins = sorted.map((r, i) => ({
         no: i + 1, lat: Number(r.y), lng: Number(r.x),
-        name: `${r.name} (${r.grade})`, distance: r.distance,
+        name: `${r.name} 주소지 (${r.grade})`, distance: r.distance,
       }));
       /*
        * **고른 도로가 지나는 자리를 다 찍는다**(사용자 지적 2026-09-17).
@@ -147,10 +155,17 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
        * 그 점은 도로 중심선이 아니라 도로에 접한 필지이기 때문이다.
        * 고른 도로에 한해 표본점을 전부 찍어 도로의 走向이 눈에 보이게 한다.
        */
-      const cur = sorted.find(r => r.name === picked);
-      const trail = (cur?.points ?? []).slice(1, 12).map(p => ({
-        lat: Number(p.y), lng: Number(p.x), name: `${cur.name} 지나는 지점`, distance: p.dist, faint: true,
-      }));
+      /*
+        **자취 점을 고른 도로에만 찍고 있었다** — 고르기 전에는 잘못 읽히는 핀 하나뿐이라
+        "도로가 저기 있다" 로 보인다. 큰 도로는 **고르기 전에도** 자취를 보여 走向이 눈에 들어오게 한다.
+        (고른 도로는 넉넉히, 나머지는 몇 점만 — 핀으로 지도를 덮으면 아무것도 안 읽힌다)
+      */
+      const trail = sorted.flatMap(r => (r.points ?? [])
+        .slice(1, r.name === picked ? 12 : 4)
+        .map(p => ({
+          lat: Number(p.y), lng: Number(p.x),
+          name: `${r.name} 주소지`, distance: p.dist, faint: true,
+        })));
       return [...pins, ...trail];
     };
 
@@ -509,7 +524,7 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                         name: it.name, distance: it.distance,
                       }))}
                       caption={f.manual
-                        ? `로드뷰에서 차선을 세어 위 [왕복 __ 차선] 에 넣으면 판정됩니다 (기준 ${rLabel(h.radius)} 이내 · 왕복 6차선 = 편도 3차로)`
+                        ? `핀은 도로선이 아니라 그 도로명을 주소로 쓰는 가장 가까운 지점입니다 — 도로 중심선 좌표는 공개 원천에 없어 필지 주소로 근사합니다. 큰 필지(골프장·공장·학교)에서는 도로와 크게 어긋날 수 있으니 거리·차선은 로드뷰로 확인하세요 (기준 ${rLabel(h.radius)} 이내 · 왕복 6차선 = 편도 3차로)`
                         : (n ? `최근접 ${n.name} · ${n.distance}m · 반경 ${rLabel(h.radius)} 내 ${h.count}건`
                              : `반경 ${rLabel(h.radius)} 이내 부재`)}
                     />
