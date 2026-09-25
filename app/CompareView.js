@@ -92,7 +92,7 @@ const S = {
     flexBasis: '100%', marginTop: 8, padding: '8px 12px', borderRadius: 6,
     background: '#f7f9fb', border: `1px solid ${T.line}`, fontSize: 11.5, color: T.ink2, lineHeight: 1.6,
   },
-  label: { fontSize: 11.5, color: T.muted },
+  label: { fontSize: 11.5, color: T.muted, minHeight: 15, display: 'flex', alignItems: 'center', gap: 4 },
   regHead: {
     width: '100%', display: 'flex', alignItems: 'baseline', gap: 10, cursor: 'pointer',
     padding: '9px 14px', marginBottom: 12, textAlign: 'left',
@@ -103,7 +103,13 @@ const S = {
   reg: { padding: '11px 14px', marginBottom: 14, borderRadius: 7, background: '#f7f9fc', border: `1px solid ${T.line}`, fontSize: 11.5, color: T.ink2, lineHeight: 1.85 },
   regKey: { display: 'inline-block', minWidth: 52, fontWeight: 700, color: T.muted },
   card: { padding: '14px 16px', marginBottom: 14, borderRadius: 8, background: '#fffdf5', border: '1px solid #ecdfc0' },
-  grid: { display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-end' },
+  /*
+    **윗줄(라벨)로 단을 맞춘다**(사용자 지적 2026-09-25 — 「윗줄로 단을 맞춰라 좀」).
+    `flex-end` 로 두면 칸의 **아래**가 맞아, 「다. 시공능력평가순위」 처럼 밑에 한 줄
+    (「시공사 ○○ N위에서 자동」)이 붙는 칸만 통째로 위로 밀려 라벨 줄이 어긋난다.
+    라벨 높이를 고정해 두면 글자가 길어 줄바꿈이 나도 입력칸 줄까지 같이 맞는다.
+  */
+  grid: { display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-start' },
   field: { display: 'flex', flexDirection: 'column', gap: 4 },
   /* 안 채운 필수 칸은 **칸 자체가** 말한다 — 라벨 글자만으로는 안 읽힌다 */
   needs: (on) => (on ? { borderColor: '#d98324', borderWidth: 2, background: '#fffaf2' } : null),
