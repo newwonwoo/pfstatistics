@@ -6,7 +6,6 @@ import { T, mono } from './theme';
 import { fetchJson } from './fetchJson';
 import Steps from './Steps';
 import SheetTabs from './SheetTabs';
-import ToTop from './ToTop';
 import { expectedRateOf } from '../src/lib/compare';
 import { manualSummary } from '../src/lib/manual';
 import { reviewScore, applyHidden } from '../src/lib/scoring';
@@ -1195,8 +1194,6 @@ export default function Home() {
           </div>
         ))}
       </div>
-      {/* 긴 표 끝에서 [엑셀 다운로드] 로 한 번에 올라간다 */}
-      <ToTop />
     </main>
   );
 }

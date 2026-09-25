@@ -75,6 +75,16 @@ const S = {
     border: `1px solid ${T.accent}`, borderRadius: 4, background: T.accentSoft, color: T.accent,
   },
   scroll: { overflowX: 'auto' },
+  /* 표 바로 아래에 이어 붙는 마무리 줄 — 테두리를 맞물려 표의 일부로 읽히게 한다 */
+  upBar: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+           marginTop: -1, padding: '12px 16px',
+           border: `1px solid ${T.sheetLine}`, borderTop: `2px solid ${T.lineStrong}`,
+           borderRadius: `0 0 ${T.radius}px ${T.radius}px`, background: '#f7f9fb' },
+  upTxt: { fontSize: 12.5, color: T.ink2, lineHeight: 1.6 },
+  upWhere: { display: 'block', fontSize: 11, color: T.muted },
+  upBtn: { marginLeft: 'auto', padding: '10px 18px', borderRadius: 7, border: 0,
+           background: T.accent, color: '#fff', fontSize: 13, fontWeight: 800, cursor: 'pointer',
+           boxShadow: '0 2px 8px rgba(27,79,216,.25)', whiteSpace: 'nowrap' },
   note: { marginTop: 12, fontSize: 11.5, color: T.muted, lineHeight: 1.8 },
   dscrBar: { display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap', margin: '14px 0 4px', fontSize: 12, color: T.ink2 },
 };
@@ -263,6 +273,26 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
             </tr>
           </tbody>
         </table>
+
+        {/*
+          **표 끝에서 다음 할 일은 엑셀 다운로드다.** 그 버튼은 화면 맨 위 요약 줄에 있어
+          표가 길면 한참 올라가야 한다. 처음엔 화면 오른쪽 아래에 떠 있는 작은 버튼으로 뒀는데
+          **안 보였다**(사용자 지적 2026-09-25 — 「이 버튼이 보일 거라고 생각하냐」).
+          표 **바로 아래에 붙여** 표의 일부처럼 보이게 한다.
+        */}
+        <div style={S.upBar}>
+          <span style={S.upTxt}>
+            {r.gradeOf?.pending
+              ? '값을 다 넣으면 여기서 심사등급·보증료율이 납니다.'
+              : <>심사등급 <b>{r.gradeOf.grade}</b>{r.gradeOf.reject ? '' : <> · 보증료율 <b>{r.gradeOf.fee}%</b></>} —
+                  확인했으면 <b>엑셀로 내보냅니다.</b></>}
+            <span style={S.upWhere}>[엑셀 다운로드] 는 화면 맨 위 요약 줄에 있습니다</span>
+          </span>
+          <button type="button" style={S.upBtn}
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+            ↑ 맨 위로 — 엑셀 다운로드
+          </button>
+        </div>
       </div>
 
 
