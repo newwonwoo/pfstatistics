@@ -68,8 +68,28 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 .enemyBox .lbl{color:var(--e)}
 
 /* Pad */
-#pad{flex:none;height:172px;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 4px 10px;max-width:520px;width:100%;margin:0 auto}
+#pad{flex:none;height:162px;position:relative;max-width:520px;width:100%;margin:4px auto 10px}
 body.desk #pad{display:none}
+.grp{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);touch-action:none}
+body.editing .grp{outline:2px dashed #fbbf24;outline-offset:5px;border-radius:18px;cursor:grab;animation:wig 1.2s ease-in-out infinite}
+body.editing .grp.drag{cursor:grabbing;animation:none;outline-style:solid;z-index:2}
+body.editing .grp *{pointer-events:none}
+body.editing #pad{background:repeating-linear-gradient(45deg,rgba(251,191,36,.05) 0 10px,transparent 10px 20px);border-radius:14px}
+#editBar{position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 56px);z-index:9;display:none;
+  background:linear-gradient(180deg,#1a1d3a,#0f1126);border:1px solid rgba(251,191,36,.45);border-radius:18px;padding:14px;box-shadow:0 20px 60px rgba(0,0,0,.6);max-width:460px;margin:0 auto}
+body.editing #editBar{display:block}
+body.editing #arenaOuter,body.editing #items{opacity:.25}
+#editBar h3{font-size:16px;font-weight:900;color:var(--gold)}
+#editBar p{font-size:12px;color:var(--muted);margin:4px 0 10px;line-height:1.5}
+.presets{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.presets button{padding:9px 0;border-radius:10px;background:var(--panel);border:1px solid var(--line);font-weight:800;font-size:15px;letter-spacing:.12em}
+.presets button.sel{border-color:var(--gold);background:rgba(251,191,36,.14);color:var(--gold)}
+.edRow{display:flex;gap:6px;margin-top:10px}
+.edRow button{flex:1;padding:11px;border-radius:12px;font-weight:900;background:var(--panel);border:1px solid var(--line)}
+.edRow #edDone{background:linear-gradient(90deg,#fbbf24,#f97316);color:#1a0b00;border:0}
+#edMode{font-size:11px;color:var(--muted);margin-top:8px;text-align:center}
+body.desk .layoutBtn{display:none}
+@keyframes wig{0%,100%{transform:translate(-50%,-50%) rotate(-1.2deg)}50%{transform:translate(-50%,-50%) rotate(1.2deg)}}
 .dpad{display:grid;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(3,50px);gap:5px}
 .dpad .up{grid-area:1/2}.dpad .lf{grid-area:2/1}.dpad .rt{grid-area:2/3}.dpad .dn{grid-area:3/2}
 .dpad .hub{grid-area:2/2;border-radius:50%;margin:10px;background:rgba(255,255,255,.04)}
@@ -80,7 +100,7 @@ body.rev .dpad .lf,body.rev .dpad .rt{background:rgba(168,85,247,.35);border-col
   display:flex;align-items:center;justify-content:center;touch-action:none;transition:transform .06s,background .06s}
 .b.sm{font-size:12px;letter-spacing:.06em;border-radius:12px}
 .b.on{transform:scale(.92);background:rgba(34,211,238,.3)}
-.b.rot,.b.hard{border-radius:50%;width:86px;height:86px;font-size:34px;flex:none}
+.b.rot,.b.hard{border-radius:50%;width:86px;height:86px;font-size:34px;flex:none;display:flex}
 .b.rot{background:rgba(34,211,238,.18);border-color:rgba(34,211,238,.5)}
 .b.hard{background:rgba(244,63,94,.2);border-color:rgba(244,63,94,.5)}
 @media (max-width:389px){.dpad{grid-template-columns:repeat(3,50px);grid-template-rows:repeat(3,48px)}.b.rot,.b.hard{width:74px;height:74px;font-size:30px}}
@@ -185,15 +205,22 @@ body.desk .slot{width:100%}
     <button class="slot" data-i="0"></button><button class="slot" data-i="1"></button><button class="slot" data-i="2"></button>
   </div>
   <div id="pad">
-    <button class="b rot" data-k="cw" aria-label="회전">↻<small>회전</small></button>
-    <div class="dpad">
+    <div class="grp" data-g="rot"><button class="b rot" data-k="cw" aria-label="회전">↻<small>회전</small></button></div>
+    <div class="grp" data-g="dpad"><div class="dpad">
       <button class="b up" data-k="hold" aria-label="홀드">▲<small>홀드</small></button>
       <button class="b lf" data-k="left" aria-label="왼쪽">◀</button>
       <span class="hub"></span>
       <button class="b rt" data-k="right" aria-label="오른쪽">▶</button>
       <button class="b dn" data-k="down" aria-label="아래">▼</button>
-    </div>
-    <button class="b hard" data-k="hard" aria-label="드롭">⤓<small>드롭</small></button>
+    </div></div>
+    <div class="grp" data-g="hard"><button class="b hard" data-k="hard" aria-label="드롭">⤓<small>드롭</small></button></div>
+  </div>
+  <div id="editBar">
+    <h3>🎮 버튼 배치</h3>
+    <p>순서를 고르거나, 아래 버튼 묶음(회전 · 방향키 · 드롭)을 직접 끌어서 원하는 곳에 두세요. 자동 저장됩니다.</p>
+    <div class="presets" id="presets"></div>
+    <div id="edMode"></div>
+    <div class="edRow"><button id="edReset">기본값</button><button id="edDone">완료</button></div>
   </div>
 </div>
 <canvas id="fx"></canvas>
@@ -215,6 +242,7 @@ body.desk .slot{width:100%}
     <button data-t="bgm">배경음</button><button data-t="sfx">효과음</button><button data-t="vib">진동</button>
   </div>
   <button class="go" id="btnStart">⚔ 전투 시작</button>
+  <button class="alt layoutBtn" data-layout="menu">🎮 버튼 배치 설정</button>
   <div class="record" id="record"></div>
   <div class="help">
     <b>공격</b> 2줄→1 · 3줄→2 · 테트리스→4 · T스핀 2배 · 콤보·연속(B2B) 보너스 · 올클리어 +10<br>
@@ -234,6 +262,7 @@ body.desk .slot{width:100%}
     <button data-t="bgm">배경음</button><button data-t="sfx">효과음</button><button data-t="vib">진동</button>
   </div>
   <button class="go" id="btnResume">계속하기</button>
+  <button class="alt layoutBtn" data-layout="pause">🎮 버튼 배치 설정</button>
   <button class="alt" id="btnRestart">다시 시작</button>
   <button class="alt" id="btnQuit">메뉴로</button>
 </div></div>
@@ -314,7 +343,7 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem('btetris.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('btetris.' + k, JSON.stringify(v)); } catch {} }
 };
-const settings = Object.assign({ bgm:true, sfx:true, vib:true, diff:'normal' }, store.get('settings', {}));
+const settings = Object.assign({ bgm:true, sfx:true, vib:true, diff:'normal', pad:{ mode:'order', order:['rot', 'dpad', 'hard'] } }, store.get('settings', {}));
 
 /* ============================== 사운드 (WebAudio 합성) ============================== */
 const Snd = {
@@ -1054,7 +1083,7 @@ function layout() {
     arena.appendChild(eb); arena.style.gap = '16px'; $('#leftCol').appendChild($('#items'));
   } else {
     side = Math.max(62, Math.min(90, Math.floor(W * .19)));
-    const availH = H - 52 - 172 - 54 - 16;
+    const availH = H - 52 - 176 - 54 - 16;
     G.cs = Math.max(12, Math.floor(Math.min(availH / VIS, (W - 16 - side * 2 - 12 - 16) / COLS)));
     G.ecs = Math.max(4, Math.floor((side - 10) / COLS)); G.nextN = 3;
     $('#rightCol').appendChild(eb); arena.style.gap = '6px'; $('#app').insertBefore($('#items'), $('#pad'));
@@ -1066,6 +1095,7 @@ function layout() {
   G.ctx.hold = sizeCanvas($('#holdC'), G.hw, G.mcs * 2.4);
   G.ctx.next = sizeCanvas($('#nextC'), G.hw, G.mcs * (2.6 + (G.nextN - 1) * 2.2));
   fx = sizeCanvas(fxC, W, H);
+  applyPad();
   if (G.P) G.hud();
 }
 addEventListener('resize', layout);
@@ -1100,6 +1130,7 @@ function handleInput(dt) {
 const KEYMAP = { ArrowLeft:'left', ArrowRight:'right', ArrowDown:'down', ArrowUp:'cw', KeyX:'cw', KeyZ:'ccw', ControlLeft:'ccw', Space:'hard', KeyC:'hold', ShiftLeft:'hold', ShiftRight:'hold' };
 addEventListener('keydown', e => {
   Snd.init();
+  if (document.body.classList.contains('editing')) return;
   if (e.code === 'KeyP' || e.code === 'Escape') { e.preventDefault(); return togglePause(); }
   if (G.state === 'menu' && (e.code === 'Enter' || e.code === 'Space')) { e.preventDefault(); return startGame(); }
   const di = { Digit1:0, Digit2:1, Digit3:2, Numpad1:0, Numpad2:1, Numpad3:2 }[e.code];
@@ -1114,6 +1145,7 @@ addEventListener('blur', () => { held.left = held.right = held.down = false; });
 document.querySelectorAll('#pad .b').forEach(b => {
   const k = b.dataset.k;
   b.addEventListener('pointerdown', e => {
+    if (document.body.classList.contains('editing')) return;
     e.preventDefault(); Snd.init(); b.classList.add('on'); vib(8);
     try { b.setPointerCapture(e.pointerId); } catch {}
     if (k in held) held[k] = true;
@@ -1145,6 +1177,78 @@ document.querySelectorAll('.slot').forEach(el => el.addEventListener('pointerdow
   });
   w.addEventListener('pointercancel', () => { s = null; });
 })();
+
+/* ============================== 버튼 배치 커스텀 ============================== */
+const PAD_ICON = { rot:'↻', dpad:'✚', hard:'⤓' };
+const PRESETS = [['rot','dpad','hard'], ['hard','dpad','rot'], ['dpad','rot','hard'], ['dpad','hard','rot'], ['rot','hard','dpad'], ['hard','rot','dpad']];
+const grp = g => document.querySelector(`.grp[data-g="${g}"]`);
+// 순서 모드: 세 묶음을 양 끝 붙이고 사이 간격을 균등하게 (space-between)
+function orderPositions(order) {
+  const pad = $('#pad'), W = pad.clientWidth, H = pad.clientHeight, ws = order.map(g => grp(g).offsetWidth);
+  const gap = Math.max(0, (W - ws.reduce((a, b) => a + b, 0)) / (order.length - 1));
+  const pos = {}; let x = 0;
+  order.forEach((g, i) => { pos[g] = { x: (x + ws[i] / 2) / W, y: .5 }; x += ws[i] + gap; });
+  return pos;
+}
+function applyPad() {
+  const pad = $('#pad'), W = pad.clientWidth, H = pad.clientHeight; if (!W) return;
+  const cfg = settings.pad;
+  const pos = cfg.mode === 'free' && cfg.pos ? cfg.pos : orderPositions(cfg.order || PRESETS[0]);
+  for (const g of ['rot', 'dpad', 'hard']) {
+    const el = grp(g), p = pos[g] || { x: .5, y: .5 }, w = el.offsetWidth, h = el.offsetHeight;
+    el.style.left = Math.min(W - w / 2, Math.max(w / 2, p.x * W)) + 'px';
+    el.style.top = Math.min(H - h / 2, Math.max(h / 2, p.y * H)) + 'px';
+  }
+  document.querySelectorAll('#presets button').forEach((b, i) =>
+    b.classList.toggle('sel', cfg.mode === 'order' && (cfg.order || []).join() === PRESETS[i].join()));
+  $('#edMode').textContent = cfg.mode === 'free' ? '직접 배치 중 (끌어서 옮김)' : '순서 배치';
+}
+function savePad() { store.set('settings', settings); applyPad(); }
+$('#presets').innerHTML = PRESETS.map(o => `<button>${o.map(g => PAD_ICON[g]).join(' ')}</button>`).join('');
+document.querySelectorAll('#presets button').forEach((b, i) => b.addEventListener('click', () => { settings.pad = { mode:'order', order: PRESETS[i].slice() }; savePad(); vib(10); }));
+$('#edReset').onclick = () => { settings.pad = { mode:'order', order: PRESETS[0].slice() }; savePad(); };
+let editFrom = null;
+function openEditor(from) {
+  editFrom = from; document.querySelectorAll('.ov').forEach(o => o.classList.remove('show'));
+  document.body.classList.add('editing'); applyPad();
+}
+$('#edDone').onclick = () => {
+  document.body.classList.remove('editing');
+  $(editFrom === 'pause' ? '#ovPause' : '#ovMenu').classList.add('show');
+};
+document.querySelectorAll('.layoutBtn').forEach(b => b.addEventListener('click', () => openEditor(b.dataset.layout)));
+// 편집 모드에서 묶음을 끌어서 자유 배치
+document.querySelectorAll('.grp').forEach(el => {
+  let d = null;
+  el.addEventListener('pointerdown', e => {
+    if (!document.body.classList.contains('editing')) return;
+    e.preventDefault(); e.stopPropagation();
+    const r = el.getBoundingClientRect();
+    d = { from: settings.pad.mode === 'free' ? { ...settings.pad.pos[el.dataset.g] } : null, dx: e.clientX - (r.left + r.width / 2), dy: e.clientY - (r.top + r.height / 2) };
+    el.classList.add('drag'); try { el.setPointerCapture(e.pointerId); } catch {}
+    if (settings.pad.mode !== 'free') {   // 현재 위치를 자유 배치 시작점으로 고정
+      const pr = $('#pad').getBoundingClientRect(), pos = {};
+      document.querySelectorAll('.grp').forEach(g => { const q = g.getBoundingClientRect(); pos[g.dataset.g] = { x: (q.left + q.width / 2 - pr.left) / pr.width, y: (q.top + q.height / 2 - pr.top) / pr.height }; });
+      settings.pad = { mode:'free', pos }; d.from = { ...pos[el.dataset.g] };
+    }
+  });
+  el.addEventListener('pointermove', e => {
+    if (!d) return;
+    const pr = $('#pad').getBoundingClientRect();
+    settings.pad.pos[el.dataset.g] = { x: (e.clientX - d.dx - pr.left) / pr.width, y: (e.clientY - d.dy - pr.top) / pr.height };
+    applyPad();
+  });
+  // 다른 묶음과 겹치면 원래 자리로 되돌린다 (겹친 버튼은 누르기 어려움)
+  const box = g => { const e = grp(g), x = parseFloat(e.style.left), y = parseFloat(e.style.top); return [x - e.offsetWidth / 2, y - e.offsetHeight / 2, x + e.offsetWidth / 2, y + e.offsetHeight / 2]; };
+  const end = () => {
+    if (!d) return;
+    const me = box(el.dataset.g);
+    const hit = ['rot', 'dpad', 'hard'].some(g => { if (g === el.dataset.g) return false; const o = box(g); return me[0] < o[2] - 2 && o[0] < me[2] - 2 && me[1] < o[3] - 2 && o[1] < me[3] - 2; });
+    if (hit && d.from) { settings.pad.pos[el.dataset.g] = d.from; applyPad(); $('#edMode').textContent = '⚠ 다른 버튼과 겹쳐서 원래 자리로 되돌렸어요'; vib([30, 30, 30]); }
+    d = null; el.classList.remove('drag'); store.set('settings', settings); if (!hit) applyPad();
+  };
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+});
 
 /* ============================== 메뉴 / 설정 ============================== */
 function syncToggles() {
