@@ -75,6 +75,8 @@ const S = {
     display: 'inline-block', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 3, marginLeft: 6,
     background: k === 'auto' ? T.okSoft : k === 'form' ? '#e8eefc' : '#f1f3f5',
     color: k === 'auto' ? T.ok : k === 'form' ? '#2d5bd7' : T.muted,
+    /* 다른 탭에서 채우는 항목 — 여기서 넣는 칸(파랑)과 눈으로 갈린다 */
+    ...(k === 'other' ? { background: '#f3eefb', color: '#6b4ea8' } : null),
   }),
   chip: (on) => ({
     padding: '5px 11px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', borderRadius: 5,
@@ -309,7 +311,7 @@ export default function ManualView({ region, addr, data, facilities, manual, val
           <tbody>
             {sum.rows.map(r => (
               <tr key={r.id}>
-                <td style={S.tdL}>{r.id}<span style={S.kind(r.kind)}>{KIND_LABEL[r.kind]}</span></td>
+                <td style={S.tdL}>{r.id}<span style={S.kind(r.kindText ? 'other' : r.kind)}>{r.kindText ?? KIND_LABEL[r.kind]}</span></td>
                 <td style={S.td}>{r.max ?? <span style={S.pend}>미상</span>}</td>
                 {/*
                   **「자동」 배지만 있고 점수 칸이 빗금이면 "자동인데 왜 안 채워지나" 로 읽힌다**

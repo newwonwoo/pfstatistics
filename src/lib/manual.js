@@ -121,9 +121,18 @@ export function manualSummary({ sheetInput = {}, data = null, facilities = null,
   const formed = [
     { id: '규모 및 배치', max: 5, kind: 'form', sc: scale, score: num(scale), why: scale?.pending ? scale.text : `가중평균 ${scale?.avg} · ${scale?.label}` },
     { id: '평형구성', max: 5, kind: 'form', sc: mix, score: num(mix), why: mix?.pending ? mix.text : `가중평균 ${mix?.value} · ${mix?.label}` },
-    /* 이 항목만 [초기예상분양률] 탭에서 조사한다 — 관문·A 표의 「가는 곳」 이 갈린다 */
-    { id: '인근아파트 초기 분양률', max: 10, kind: 'form', tab: '초기예상분양률',
-      sc: nearby, score: num(nearby), why: nearby?.pending ? nearby.text : `${nearby?.text} · ${nearby?.label}` },
+    /*
+      **이 항목만 [초기예상분양률] 탭에서 조사한다.**
+      그런데 A 표에 「값→점수」 배지를 달고 「초기분양률(%)을 입력하세요」 라고 적혀 있었다 —
+      칸이 없는 탭에서 넣으라고 말한 셈이다(사용자 지적 2026-09-25 「이거 왜 아직도 여기있냐」).
+      행 자체는 남긴다(A 의 구성요소라 빼면 합계를 설명할 수 없다) — 대신
+      **여기서 넣는 항목이 아니라는 것**을 배지와 사유가 말한다.
+    */
+    { id: '인근아파트 초기 분양률', max: 10, kind: 'form', tab: '초기예상분양률', kindText: '조사',
+      sc: nearby, score: num(nearby),
+      why: nearby?.pending
+        ? '[초기예상분양률] 탭에서 인근 단지를 찾아 고르고 그 단지의 초기분양률을 넣으면 여기에 점수가 찹니다'
+        : `${nearby?.text} · ${nearby?.label}` },
   ];
 
   /* ③ 구간표를 못 받아 점수를 직접 받는 것 */

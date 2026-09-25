@@ -363,7 +363,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
       subtitle: `▶ 사업지 : ${facilities?.address ?? data.region}`,
       columns: ['평가항목', '구분', '배점', '점수', '근거'],
       rows: [
-        ...ms.rows.map(x => [x.id, KIND[x.kind], x.max ?? '', x.score ?? '', x.why ?? '']),
+        ...ms.rows.map(x => [x.id, x.kindText ?? KIND[x.kind], x.max ?? '', x.score ?? '', x.why ?? '']),
         ['합계 = A', '', '', ms.excl ?? '',
           ms.override != null
             ? `직접 입력한 ${ms.override} 적용 (자동 합계 ${ms.missing.length ? '산출 불가' : ms.sum})`
