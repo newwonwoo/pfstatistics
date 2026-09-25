@@ -170,7 +170,7 @@ const LABEL_MAX = 999;   /* 이름은 전부 단다 — 자리를 못 찾은 것
  * @returns {Promise<string>} PNG dataURL
  */
 export async function composeMap(el, spec = {}) {
-  const { map, kakao, center, radius, markers = [], lines = [], polygon = null, radiusRing = null, title = '', labels = true, labelMax = null,
+  const { map, kakao, center, radius, markers = [], lines = [], polygon = null, radiusRing = null, title = '', labels = true, labelMax = null, labelPlacement = null,
           mime = 'image/png', quality = 0.92 } = spec;
   /*
    * **확대해도 깨지지 않게 3배로 찍는다**(사용자 요청 2026-09-17).
@@ -302,12 +302,26 @@ export async function composeMap(el, spec = {}) {
     const pinBox = (q) => ({ x1: q.x - 12, y1: q.y - 33, x2: q.x + 12, y2: q.y + 3 });
     const placed = [pinBox(c), ...markers.filter(m => !m.faint).map(m => pinBox(pt(m.lat, m.lng)))];
 
-    (labels ? markers.filter(m => !m.faint) : []).slice(0, labelMax ?? LABEL_MAX).forEach((m, i) => {
-      const q = pt(m.lat, m.lng);
-      const no = m.no ?? i + 1;
-      placeLabel(ctx, placed, q.x, q.y - 36,
-        `${no}. ${m.name}${m.distance != null ? ` · ${m.distance}m` : ''}`, { w, h });
-    });
+    /*
+      **화면이 잡은 자리를 그대로 쓴다.**
+      전에는 여기서 따로 자리를 찾아, 같은 지도인데 화면과 증빙의 이름표가 다른 자리에 붙었다.
+      증빙이 화면과 달라지면 안 된다 — 화면이 준 배치가 있으면 그것만 그린다.
+    */
+    if (labels && labelPlacement?.length) {
+      for (const L of labelPlacement) {
+        const q = pt(L.lat, L.lng);
+        const box = { x1: q.x + L.dx - L.w / 2, y1: q.y + L.dy - L.h / 2,
+                      x2: q.x + L.dx + L.w / 2, y2: q.y + L.dy + L.h / 2 };
+        paintLabel(ctx, box, L.text);
+      }
+    } else {
+      (labels ? markers.filter(m => !m.faint) : []).slice(0, labelMax ?? LABEL_MAX).forEach((m, i) => {
+        const q = pt(m.lat, m.lng);
+        const no = m.no ?? i + 1;
+        placeLabel(ctx, placed, q.x, q.y - 36,
+          `${no}. ${m.name}${m.distance != null ? ` · ${m.distance}m` : ''}`, { w, h });
+      });
+    }
   }
 
   // 3) 증빙용 각주 — 캡쳐만 떼어놔도 무엇을 찍은 것인지 알 수 있게

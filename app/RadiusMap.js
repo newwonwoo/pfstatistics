@@ -86,6 +86,8 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
     **라벨 오버레이만 들고 있다가 `setMap` 으로 켜고 끈다.**
   */
   const labelOverlays = useRef([]);
+  /* 화면이 잡은 이름표 자리 — 캡쳐가 이것을 그대로 쓴다(증빙이 화면과 같아야 한다) */
+  const labelPlace = useRef([]);
   const labelsOnRef = useRef(labels);
   labelsOnRef.current = labels;   // 렌더마다 최신값. effect 실행 순서와 무관하게 읽힌다
   /*
@@ -187,6 +189,7 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
        * 가까운 것부터 LABEL_MAX 개만 이름을 달고, 나머지는 번호로 표에서 찾게 한다.
        */
       const made = [];
+      const labelItems = [];
       markers.forEach((m, i) => {
         const p = new kakao.maps.LatLng(m.lat, m.lng);
         const no = m.no ?? i + 1;
@@ -209,19 +212,85 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
             font:700 12px 'Malgun Gothic',sans-serif;display:flex;align-items:center;justify-content:center">${no}</div>`,
         });
         if (i < (labelMax ?? LABEL_MAX)) {
-          // 같은 높이에 다 걸면 서로 덮는다. 높이를 엇갈려 겹침을 줄인다.
+          /*
+            **이름표가 핀에서 멀찍이 떠 있었다**(사용자 지적 2026-09-25 — 「창천지구대는 너무 멀리」).
+            `yAnchor: 2.4 + (i%3)*0.95` 라는 **고정 사다리**로 핀 위 2~4칸을 무조건 띄웠기 때문이다.
+            겹침은 줄었지만 어느 핀의 이름인지 알 수 없게 됐다.
+
+            게다가 **캡쳐(`composeMap`)는 충돌검사로 제자리에 놓고 있었다** —
+            화면과 증빙이 서로 다른 그림이었다는 뜻이다(그러면 안 된다).
+
+            이제 화면이 **핀 바로 옆부터** 자리를 찾고(오른쪽 → 왼쪽 → 위 → 아래 …),
+            그 결과를 캡쳐에 그대로 넘긴다. 자리를 못 찾으면 이름표만 포기한다(핀은 남는다).
+            위치는 픽셀이라 `transform` 으로 옮긴다 — 앵커로는 이만큼 세밀하게 못 잡는다.
+          */
+          const el = document.createElement('div');
+          el.style.cssText = 'background:#fff;border:2px solid #111;padding:2px 8px;border-radius:4px;'
+            + "font:700 12px 'Malgun Gothic',sans-serif;white-space:nowrap;"
+            + 'box-shadow:0 1px 4px rgba(0,0,0,.35);will-change:transform';
+          el.textContent = `${no}. ${m.name}${m.distance != null ? ` · ${m.distance}m` : ''}`;
           const lo = new kakao.maps.CustomOverlay({
-            position: p, yAnchor: 2.4 + (i % 3) * 0.95, zIndex: 4,
-            content: `<div style="background:#fff;border:2px solid #111;padding:2px 8px;border-radius:4px;
-              font:700 12px 'Malgun Gothic',sans-serif;white-space:nowrap;
-              box-shadow:0 1px 4px rgba(0,0,0,.35)">${no}. ${m.name}${m.distance != null ? ` · ${m.distance}m` : ''}</div>`,
+            position: p, xAnchor: 0.5, yAnchor: 0.5, zIndex: 4, content: el,
           });
           /* 만들어만 두고 보이기는 현재 상태에 맞춘다 — 끈 채로 지도가 다시 그려질 수 있다 */
           lo.setMap(labelsOnRef.current ? map : null);
           made.push(lo);
+          labelItems.push({ el, lat: m.lat, lng: m.lng, text: el.textContent });
         }
       });
       labelOverlays.current = made;
+
+      /*
+        **자리잡기** — 핀에 가까운 후보부터 훑어 겹치지 않는 첫 자리에 놓는다.
+        확대·이동하면 겹침이 달라지므로 `idle` 마다 다시 잡는다(지도를 다시 그리지는 않는다).
+      */
+      const layoutLabels = () => {
+        const proj = map.getProjection();
+        if (!proj) return;
+        const W = el.current?.offsetWidth ?? 0, H = el.current?.offsetHeight ?? 0;
+        if (!W || !H) return;
+        const px = (lat, lng) => proj.containerPointFromCoords(new kakao.maps.LatLng(lat, lng));
+        const hit = (a, b) => !(a.x2 < b.x1 || a.x1 > b.x2 || a.y2 < b.y1 || a.y1 > b.y2);
+        /* 핀 자리를 먼저 막는다 — 이름표가 핀을 가리면 어느 것의 이름인지 모른다 */
+        const boxes = [];
+        const pin = (q) => ({ x1: q.x - 14, y1: q.y - 28, x2: q.x + 14, y2: q.y + 4 });
+        boxes.push(pin(px(center.lat, center.lng)));
+        for (const m of markers) if (!m.faint) boxes.push(pin(px(m.lat, m.lng)));
+
+        const out = [];
+        for (const it of labelItems) {
+          const q = px(it.lat, it.lng);
+          const lw = it.el.offsetWidth || 110, lh = it.el.offsetHeight || 22;
+          /* 오른쪽·왼쪽이 가장 가깝다 — 위아래는 그 다음, 먼 자리는 마지막 */
+          const cands = [
+            [17 + lw / 2, -13], [-(17 + lw / 2), -13],
+            [17 + lw / 2, 13], [-(17 + lw / 2), 13],
+            [0, -30 - lh / 2], [0, 18 + lh / 2],
+            [17 + lw / 2, -40], [-(17 + lw / 2), -40],
+            [17 + lw / 2, 40], [-(17 + lw / 2), 40],
+            [0, -56 - lh / 2], [0, 44 + lh / 2],
+          ];
+          let put = null;
+          for (const [dx, dy] of cands) {
+            const b = { x1: q.x + dx - lw / 2, y1: q.y + dy - lh / 2, x2: q.x + dx + lw / 2, y2: q.y + dy + lh / 2 };
+            if (b.x1 < 3 || b.y1 < 3 || b.x2 > W - 3 || b.y2 > H - 26) continue;   // 각주 띠도 피한다
+            if (boxes.some(o => hit(b, o))) continue;
+            put = { dx, dy, b }; break;
+          }
+          if (put) {
+            it.el.style.display = '';
+            it.el.style.transform = `translate(${Math.round(put.dx)}px, ${Math.round(put.dy)}px)`;
+            boxes.push(put.b);
+            out.push({ lat: it.lat, lng: it.lng, text: it.text, dx: put.dx, dy: put.dy, w: lw, h: lh });
+          } else {
+            it.el.style.display = 'none';   // 자리가 없으면 이름표만 포기한다 (핀은 남는다)
+          }
+        }
+        labelPlace.current = out;
+      };
+      mapRef.current.layoutLabels = layoutLabels;
+      kakao.maps.event.addListener(map, 'idle', layoutLabels);
+      setTimeout(layoutLabels, 0);
       /*
        * 확대 결정.
        * 판정 대상(사업지 + 최근접 시설)이 들어오게 맞추되,
@@ -314,6 +383,7 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
     const m = mapRef.current?.map;
     if (!m) return;
     labelOverlays.current.forEach(o => o.setMap(labels ? m : null));
+    if (labels) mapRef.current?.layoutLabels?.();
   }, [labels, ready, mkey, lkey, pkey, rkey]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   /*
@@ -328,6 +398,7 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
       map: mapRef.current.map,
       kakao: mapRef.current.kakao,
       center, radius, markers, lines, polygon, title, radiusRing: ring, labelMax,
+      labelPlacement: labelPlace.current,
       /* 화면에서 이름표를 껐으면 캡쳐도 끈다 — 증빙이 화면과 달라지면 안 된다 */
       labels,
       ...opts,
