@@ -816,7 +816,7 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
         </div>
       )}
       {data && all.length > 0 && items.length === 0 && (
-        <div style={S.warn}>반경 안에 {all.length}건이 있지만 고른 종류에 해당하는 것이 없습니다 — 위에서 종류를 켜세요.</div>
+        <div style={S.warn}>반경 안에 {all.length}건이 있지만 그 종류가 모두 꺼져 있습니다 — 위에서 종류를 켜세요.</div>
       )}
 
       {items.length > 0 && (<>
@@ -825,23 +825,32 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
           어느 단계에서 몇 건이 빠졌는지 한 줄로 보여준다 —
           "옆에 단지가 있는데 왜 표에 없나" 가 이 줄에서 답이 된다.
         */}
+        {noSupply && (
+          <div style={{ ...S.warn, marginBottom: 10 }}>
+            일부 단지는 원천이 <b>공급면적을 주지 않습니다</b>(오피스텔·도시형생활주택 계열).
+            그 줄은 심사기준 단가가 비어 있으니 [전용면적] 으로 바꿔 보거나 선택에서 빼세요.
+          </div>
+        )}
+        {/*
+          **화살표는 「반경 안」에서 끊는다**(사용자 지적 2026-09-25).
+          그 뒤의 「표 N → 고른 종류 N」 은 화면에 이미 보이는 것(표의 줄 수)을 되풀이할 뿐이라
+          줄만 길어지고 어디까지가 조회 범위인지가 흐려졌다.
+          다만 **임대 제외 건수는 지워선 안 된다** — 「옆에 단지가 있는데 왜 표에 없나」 에
+          답하려고 남겨 둔 것이다(사용자 확정). 화살표가 아니라 꼬리말로 옮긴다.
+          자리도 **표 바로 위**로 내렸다 — 조회 범위는 표를 읽기 직전에 보는 것이다.
+        */}
         {data.funnel && (
           <div style={S.funnel}>
             {data.sido} 공고 <b>{data.funnel.scanned}</b>
             <span style={S.arrow}>→</span> 인근 시군구 <b>{data.funnel.shortlisted}</b>
             <span style={S.arrow}>→</span> 좌표 확보 <b>{data.funnel.located}</b>
             <span style={S.arrow}>→</span> 반경 {rLabel(data.radius)} 안 <b>{data.funnel.within}</b>
-            {data.funnel.rental > 0 && <><span style={S.arrow}>→</span> 임대 제외 <b>-{data.funnel.rental}</b></>}
-            <span style={S.arrow}>→</span> 표 <b>{all.length}</b>
-            {items.length !== all.length && <><span style={S.arrow}>→</span> 고른 종류 <b>{items.length}</b></>}
-            {data.funnel.approx > 0 &&
-              <span style={{ color: T.muted, marginLeft: 8 }}>· 이 중 {data.funnel.approx}건은 근사 좌표</span>}
-          </div>
-        )}
-        {noSupply && (
-          <div style={{ ...S.warn, marginBottom: 10 }}>
-            일부 단지는 원천이 <b>공급면적을 주지 않습니다</b>(오피스텔·도시형생활주택 계열).
-            그 줄은 심사기준 단가가 비어 있으니 [전용면적] 으로 바꿔 보거나 선택에서 빼세요.
+            {(data.funnel.rental > 0 || data.funnel.approx > 0) && (
+              <span style={{ color: T.muted, marginLeft: 10 }}>
+                {data.funnel.rental > 0 && `· 분양가가 없는 임대 ${data.funnel.rental}건은 표에서 뺐습니다`}
+                {data.funnel.approx > 0 && `${data.funnel.rental > 0 ? ' ' : '· '}· 근사 좌표 ${data.funnel.approx}건`}
+              </span>
+            )}
           </div>
         )}
         <div style={S.scroll}>
