@@ -595,7 +595,24 @@ export function scoreWeighted(key, values = {}) {
  * **작을수록 좋다** (작은 평형이 많을수록 팔린다).
  * 원문 산식 끝의 ×100 은 급간과 맞지 않아 빼고 쓴다 — config `_note` 참조.
  */
-export function scoreUnitMix(counts = {}) {
+/**
+ * **오피스텔·도시형생활주택은 1세대를 0.5세대로 환산한다**(규모및배치 원문 주석).
+ * 그래서 평형별 세대수의 단순 합이 총세대수를 넘어도 틀린 것이 아닐 수 있다 —
+ * 아파트 1,000 + 오피스텔 200 이면 총세대수는 1,100 인데 평형 합은 1,200 이다.
+ * 넘었는지 가르려면 **같은 환산 기준**으로 재야 한다.
+ */
+const HALF_UNIT = '오피스텔·도시형생활주택';
+export const convertedUnits = (counts = {}) =>
+  (TABLE['평형구성']?.weights ?? []).reduce((s, w) => {
+    const n = Number(counts?.[w.id]);
+    return s + (Number.isFinite(n) && n > 0 ? n * (w.id === HALF_UNIT ? 0.5 : 1) : 0);
+  }, 0);
+
+/**
+ * @param {object} counts    평형별 세대수
+ * @param {number} capacity  규모및배치의 총세대수 — 넘으면 **점수를 내지 않는다**
+ */
+export function scoreUnitMix(counts = {}, capacity = null) {
   const t = TABLE['평형구성'];
   if (!t) return null;
   const rows = t.weights.map(w => {
@@ -606,10 +623,28 @@ export function scoreUnitMix(counts = {}) {
   const total = rows.reduce((s, r) => s + r.n, 0);
   if (!total) return { pending: true, rows, total: 0, text: '평형별 세대수를 입력하세요' };
 
+  /*
+    **총세대수를 넘으면 점수를 내지 않는다**(사용자 요청 2026-09-25 — 「못 넘게 해야겠다」).
+    조용히 깎지 않는 이유는 어느 칸이 잘못됐는지 사람만 알기 때문이다 —
+    깎으면 가중평균이 그럴듯하게 나와 틀린 채로 분양률까지 흘러간다.
+  */
+  const cap = Number(capacity);
+  const conv = convertedUnits(counts);
+  if (Number.isFinite(cap) && cap > 0 && conv > cap) {
+    const half = rows.find(r => r.id === HALF_UNIT)?.n ?? 0;
+    return {
+      pending: true, rows, total, capacity: cap, converted: conv, over: Number((conv - cap).toFixed(1)),
+      text: `평형별 합 ${half ? `${conv.toLocaleString()}세대(환산)` : `${total.toLocaleString()}세대`}`
+        + ` 가 규모 및 배치의 총세대수 ${cap.toLocaleString()}세대를 ${(conv - cap).toLocaleString()}세대 넘습니다`
+        + (half ? ` — 오피스텔·도시형생활주택 ${half.toLocaleString()}세대는 0.5세대로 환산했습니다` : ''),
+    };
+  }
+
   const value = rows.reduce((s, r) => s + r.n * r.weight, 0) / total;
   const b = t.bands.find(x => inBand(x, value));
   return {
     rows, total, value: Number(value.toFixed(3)),
+    capacity: Number.isFinite(cap) && cap > 0 ? cap : null, converted: conv,
     score: b?.score ?? null, label: b?.label ?? '', max: t.max, formula: t.formula,
     text: rows.filter(r => r.n).map(r => `${r.id} ${r.n}×${r.weight}`).join(' + ') + ` ÷ ${total}`,
   };

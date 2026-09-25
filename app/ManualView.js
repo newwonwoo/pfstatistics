@@ -3,6 +3,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { T, mono } from './theme';
 import { INFLOW_CHOICES, inflowOn } from './inflow';
 import { manualSummary, PENDING_ITEMS, scaleTable, unitMixTable, nearbyTable } from '../src/lib/manual';
+import { convertedUnits } from '../src/lib/scoring';
 import PresaleChain from './PresaleChain';
 
 /**
@@ -80,6 +81,15 @@ const S = {
     border: `1px solid ${on ? T.accent : T.line}`, background: on ? T.accentSoft : '#fff',
     color: on ? T.accent : T.ink2,
   }),
+  /* 평형별 세대수 예산 줄 — 총세대수를 넘었는지 한 줄로 말한다 */
+  budget: (over) => ({
+    display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+    margin: '0 0 10px', padding: '7px 12px', borderRadius: 6, fontSize: 12,
+    background: over ? T.warnSoft : '#f7f9fb',
+    border: `1px solid ${over ? '#f0dcb4' : T.line}`,
+    color: over ? T.warn : T.ink2,
+  }),
+  budgetNum: { ...mono, fontWeight: 800, fontSize: 13.5 },
   /* 인구유입요인 — 점수가 읽히는 그 줄에서 바로 고른다 */
   inflow: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 7 },
   inflowLab: { fontSize: 11, fontWeight: 700, color: T.ink2 },
@@ -142,6 +152,16 @@ export default function ManualView({ region, addr, data, facilities, manual, val
   const qLabel = (p) => (p ? `${String(p).slice(0, 4)}년 ${Number(String(p).slice(4))}분기` : '');
   const scaleSc = sum.formed[0].sc;
   const mixSc = sum.formed[1].sc;
+  /*
+    **평형별 세대수는 총세대수를 넘을 수 없다**(사용자 지적 2026-09-25).
+    넘으면 `scoreUnitMix` 가 점수를 내지 않는다 — 여기서는 그 사실을 **입력칸 옆에서** 말한다.
+    오피스텔·도시형생활주택은 0.5세대로 환산해 센다(규모및배치 원문 주석과 같은 기준).
+  */
+  const capRaw = Number(v.규모및배치?.총세대수);
+  const cap = Number.isFinite(capRaw) && capRaw > 0 ? capRaw : null;
+  const used = convertedUnits(v.평형구성 ?? {});
+  const half = Number(v.평형구성?.['오피스텔·도시형생활주택']) > 0;
+  const over = cap != null && used > cap;
   const nearbySc = sum.formed[2].sc;
 
   return (
@@ -198,18 +218,42 @@ export default function ManualView({ region, addr, data, facilities, manual, val
         <div style={S.head}><span>평형구성</span><span style={S.headNote}>배점 5 · 작을수록 좋다</span></div>
         <div style={S.body}>
           <div style={S.formula}>{mixT?.formula}</div>
+          {/*
+            예산 줄 — 넣을 수 있는 남은 세대수를 먼저 보여준다.
+            총세대수를 아직 안 넣었으면 어디에 넣는 값인지 알려준다(그 칸은 바로 위 상자다).
+          */}
+          <div style={S.budget(over)}>
+            {cap == null
+              ? <>위 <b>규모 및 배치</b> 의 <b>총세대수</b> 를 넣으면 평형별 합이 그 안에 드는지 함께 봐 드립니다.</>
+              : (<>
+                  <span>총세대수</span><span style={S.budgetNum}>{cap.toLocaleString()}</span><span>세대</span>
+                  <span style={{ color: T.muted }}>·</span>
+                  <span>입력</span><span style={S.budgetNum}>{used.toLocaleString()}</span><span>세대</span>
+                  <span style={{ color: T.muted }}>·</span>
+                  {over
+                    ? <b>{(used - cap).toLocaleString()}세대 초과 — 총세대수를 넘을 수 없습니다</b>
+                    : <span>남은 <b style={S.budgetNum}>{(cap - used).toLocaleString()}</b>세대</span>}
+                  {half && <span style={{ fontSize: 11, color: T.muted }}>
+                    (오피스텔·도시형생활주택은 1세대를 0.5세대로 환산)
+                  </span>}
+                </>)}
+          </div>
           <div style={S.grid}>
             {mixT?.weights?.map(w => (
               <div key={w.id} style={S.field}>
                 <span style={S.lab}>{w.id} <span style={{ fontWeight: 400, color: T.muted }}>가중치 {w.weight}</span></span>
-                <input style={S.input} type="number" min="0" placeholder="세대"
+                <input
+                  style={over && Number(v.평형구성?.[w.id]) > 0
+                    ? { ...S.input, border: `2px solid ${T.warn}`, background: '#fffaf2' }
+                    : S.input}
+                  type="number" min="0" placeholder="세대"
                   value={v.평형구성?.[w.id] ?? ''} onChange={e => setMix(w.id, e.target.value)} />
                 <span style={S.sub}>{w.note ?? ''}</span>
               </div>
             ))}
           <div style={S.out}>
               {mixSc?.pending
-                ? <span style={S.pend}>{mixSc.text}</span>
+                ? <span style={mixSc.over ? { color: T.warn, fontWeight: 700 } : S.pend}>{mixSc.text}</span>
                 : (<>
                     <span style={{ color: T.muted }}>총 {mixSc.total}세대 · 가중평균</span>
                     <span style={{ ...S.outNum, fontSize: 17 }}>{mixSc.value}</span>

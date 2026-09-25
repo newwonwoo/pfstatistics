@@ -106,7 +106,8 @@ export function manualSummary({ sheetInput = {}, data = null, facilities = null,
 
   /* ② 값을 넣으면 구간표가 점수를 내는 것 */
   const scale = scoreWeighted('규모및배치', sheetInput.규모및배치 ?? {});
-  const mix = scoreUnitMix(sheetInput.평형구성 ?? {});
+  /* 평형별 세대수는 규모및배치의 총세대수를 넘을 수 없다 — 넘으면 점수를 내지 않는다 */
+  const mix = scoreUnitMix(sheetInput.평형구성 ?? {}, sheetInput.규모및배치?.총세대수);
   const nearby = scoreNearbyPresale(sheetInput.인근초기분양률?.rate, sheetInput.인근초기분양률?.special || null);
   const formed = [
     { id: '규모 및 배치', max: 5, kind: 'form', sc: scale, score: num(scale), why: scale?.pending ? scale.text : `가중평균 ${scale?.avg} · ${scale?.label}` },

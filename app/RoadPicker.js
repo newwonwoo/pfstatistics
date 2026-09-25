@@ -47,7 +47,16 @@ const S = {
   more: { border: '1px solid #e2e5ea', background: '#fff', color: T.ink2, cursor: 'pointer', fontSize: 11.5,
           borderRadius: 5, padding: '4px 10px', alignSelf: 'flex-start' },
 
-  lanes: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, padding: '10px 12px', borderRadius: 6, background: '#f7f9fb', border: `1px solid ${T.line}`, flexWrap: 'wrap' },
+  /*
+    **차선 바가 목록 맨 아래에 있었다** — 34줄짜리 후보 목록에서 길주로를 적용하고 나면
+    「이제 몇 차선인지 넣어라」 가 화면 밖이다(사용자 지적 2026-09-25).
+    [이 도로로 적용] 을 고른 행 밑으로 옮긴 것과 같은 이유로 **적용한 행 바로 밑**에 붙인다.
+    적용 직후에는 차선이 0 으로 초기화되므로 그때는 노란 테두리로 「아직 안 넣었다」 를 말한다.
+  */
+  lanes: (ask) => ({ display: 'flex', alignItems: 'center', gap: 8, margin: '6px 0 4px', padding: '10px 12px',
+    borderRadius: 6, background: ask ? T.warnSoft : '#f7f9fb',
+    border: `${ask ? 2 : 1}px solid ${ask ? T.warn : T.line}`, flexWrap: 'wrap' }),
+  laneAsk: { fontSize: 12, fontWeight: 800, color: T.warn },
   lbl: { fontSize: 12, fontWeight: 700, color: T.ink2 },
   step: { width: 28, height: 28, borderRadius: 5, border: `1px solid ${T.lineStrong}`, background: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 700, color: T.ink2 },
   num: { width: 46, textAlign: 'center', fontSize: 15, fontWeight: 800, color: T.ink },
@@ -157,6 +166,38 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
     「넣는 버튼은 넣는 칸에 둔다」 를 어긴 것이다(심사평점표에서 같은 것을 이미 고쳤다).
     이제 **고른 행 바로 밑**에 붙어 나타난다. 0px 이다.
   */
+  /** 차선 입력 — 적용한 도로 **바로 밑**에 붙는다 */
+  const LaneBar = () => (
+    <div style={S.lanes(!lanes)}>
+      <span style={S.lbl}>{value.name} · 왕복</span>
+      {/*
+        **＋ 를 여섯 번 눌러야 6차선이 됐다.** 게다가 같은 화면(교통환경 시트)의 지도 바에도
+        글자가 똑같은 [＋][－] 가 있어(확대·축소) 어느 쪽이 차선인지 헷갈렸다 —
+        실측 점검에서 확대만 여섯 번 되고 차선은 0 인 채로 넘어갔다.
+        왕복 차선은 실무상 2·4·6·8 로 떨어지므로 **한 번에 고르게** 하고,
+        스테퍼는 그 사이 값(3·5·10)을 위해 남기되 글자를 지도 버튼과 다르게 한다.
+      */}
+      <span style={S.quick}>
+        {[2, 4, 6, 8].map(n => (
+          <button key={n} style={S.quickBtn(lanes === n)} onClick={() => set({ lanes: n })}>{n}</button>
+        ))}
+      </span>
+      <button style={S.step} title="한 차선 줄이기"
+        onClick={() => set({ lanes: Math.max(0, lanes - 1) })}>▼</button>
+      <span style={S.num}>{lanes || '?'}</span>
+      <button style={S.step} title="한 차선 늘리기"
+        onClick={() => set({ lanes: lanes + 1 })}>▲</button>
+      <span style={S.lbl}>차선</span>
+      {lanes
+        ? <span style={{ fontSize: 11, color: T.muted }}>로드뷰로 세어 넣으세요</span>
+        : <span style={S.laneAsk}>왕복 몇 차선입니까? — 로드뷰로 세어 고르세요</span>}
+      <span style={S.verdict(verdict.score > 1)}>
+        {verdict.score}점 · {verdict.label}
+        <span style={{ fontWeight: 400, marginLeft: 6, opacity: 0.85 }}>({verdict.reason})</span>
+      </span>
+    </div>
+  );
+
   const ApplyBar = () => (
         <div style={S.applyBar}>
         <span style={S.applyTxt}>
@@ -309,6 +350,7 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
             >×</button>
           </div>
           {showApply && <ApplyBar />}
+          {applied && <LaneBar />}
           </div>
         );
       })}
@@ -319,34 +361,12 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
         </button>
       )}
 
-      {value?.name && (
-        <div style={S.lanes}>
-          <span style={S.lbl}>{value.name} · 왕복</span>
-          {/*
-            **＋ 를 여섯 번 눌러야 6차선이 됐다.** 게다가 같은 화면(교통환경 시트)의 지도 바에도
-            글자가 똑같은 [＋][－] 가 있어(확대·축소) 어느 쪽이 차선인지 헷갈렸다 —
-            실측 점검에서 확대만 여섯 번 되고 차선은 0 인 채로 넘어갔다.
-            왕복 차선은 실무상 2·4·6·8 로 떨어지므로 **한 번에 고르게** 하고,
-            스테퍼는 그 사이 값(3·5·10)을 위해 남기되 글자를 지도 버튼과 다르게 한다.
-          */}
-          <span style={S.quick}>
-            {[2, 4, 6, 8].map(n => (
-              <button key={n} style={S.quickBtn(lanes === n)} onClick={() => set({ lanes: n })}>{n}</button>
-            ))}
-          </span>
-          <button style={S.step} title="한 차선 줄이기"
-            onClick={() => set({ lanes: Math.max(0, lanes - 1) })}>▼</button>
-          <span style={S.num}>{lanes || '?'}</span>
-          <button style={S.step} title="한 차선 늘리기"
-            onClick={() => set({ lanes: lanes + 1 })}>▲</button>
-          <span style={S.lbl}>차선</span>
-          <span style={{ fontSize: 11, color: T.muted }}>로드뷰로 세어 넣으세요</span>
-          <span style={S.verdict(verdict.score > 1)}>
-            {verdict.score}점 · {verdict.label}
-            <span style={{ fontWeight: 400, marginLeft: 6, opacity: 0.85 }}>({verdict.reason})</span>
-          </span>
-        </div>
-      )}
+      {/*
+        적용한 도로가 **목록에 안 보일 때**(길·번길을 접어두었거나 나중에 숨겼을 때)만
+        아래에 한 벌 남긴다 — 그때 차선 칸까지 사라지면 6차선 판정을 손댈 방법이 없다.
+      */}
+      {value?.name && !visible.some(r => r.name === value.name) && <LaneBar />}
+
     </div>
   );
 }
