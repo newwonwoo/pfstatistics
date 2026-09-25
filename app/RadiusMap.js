@@ -155,7 +155,13 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
         for (const p of ring) b.extend(new kakao.maps.LatLng(p.lat, p.lng));
         return b;
       };
-      new kakao.maps.Marker({ position: c, map });   // 사업지
+      /*
+        **사업지 핀을 경계가 있을 때는 그리지 않는다**(사용자 지적 2026-09-25).
+        파란 경계 다각형이 이미 「여기가 사업지」 를 말하는데 핀까지 겹쳐 찍으면
+        시설 핀과 뒤섞여 무엇이 사업지인지 오히려 흐려진다.
+        경계가 없으면(중심 기준) 사업지를 가리키는 것이 이 핀뿐이므로 그대로 둔다.
+      */
+      if (!(polygon?.length >= 3)) new kakao.maps.Marker({ position: c, map });
       if (polygon?.length >= 3) {
         // 판정 기준이 경계면 화면에도 경계를 보여야 한다 (캡쳐와 화면을 같게)
         new kakao.maps.Polygon({
@@ -254,7 +260,7 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
         /* 핀 자리를 먼저 막는다 — 이름표가 핀을 가리면 어느 것의 이름인지 모른다 */
         const boxes = [];
         const pin = (q) => ({ x1: q.x - 14, y1: q.y - 28, x2: q.x + 14, y2: q.y + 4 });
-        boxes.push(pin(px(center.lat, center.lng)));
+        if (!(polygon?.length >= 3)) boxes.push(pin(px(center.lat, center.lng)));
         for (const m of markers) if (!m.faint) boxes.push(pin(px(m.lat, m.lng)));
 
         const out = [];

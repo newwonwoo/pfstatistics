@@ -293,14 +293,16 @@ export async function composeMap(el, spec = {}) {
       }
       drawPin(ctx, q.x, q.y, i === 0 ? '#1b4fd8' : '#EA4335', m.no ?? i + 1);
     });
-    drawPin(ctx, c.x, c.y, '#111111');       // 사업지
+    /* 경계가 그려져 있으면 사업지 핀은 그리지 않는다 — 화면과 같은 규칙 */
+    const siteHasPoly = polygon?.length >= 3;
+    if (!siteHasPoly) drawPin(ctx, c.x, c.y, '#111111');       // 사업지
 
     /*
      * 라벨은 핀도 가리면 안 된다 — 어느 핀의 이름인지 알 수 없게 된다.
      * 사업지와 모든 시설 핀의 자리를 먼저 막아두고 라벨 자리를 찾는다.
      */
     const pinBox = (q) => ({ x1: q.x - 12, y1: q.y - 33, x2: q.x + 12, y2: q.y + 3 });
-    const placed = [pinBox(c), ...markers.filter(m => !m.faint).map(m => pinBox(pt(m.lat, m.lng)))];
+    const placed = [...(siteHasPoly ? [] : [pinBox(c)]), ...markers.filter(m => !m.faint).map(m => pinBox(pt(m.lat, m.lng)))];
 
     /*
       **화면이 잡은 자리를 그대로 쓴다.**
