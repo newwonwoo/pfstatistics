@@ -912,6 +912,53 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
         </div>
 
         {/*
+          **면적별 상세를 고르는 표 바로 아래로 붙였다**(사용자 지적 2026-09-25).
+          전에는 기축단지 표·제외 안내·출처·지도를 다 지나 맨 아래에 있었다 —
+          체크를 눌러놓고 그 결과를 보려면 화면을 한참 내려야 했다.
+          **고른 것의 내역은 고르는 자리에 붙어 있어야 한다.**
+        */}
+        <div style={S.secTitle}>선택 단지 상세 (면적별)</div>
+        {chosen.length === 0
+          ? <div style={S.empty}>위 표에서 단지를 선택하면 면적별 세대수와 분양가가 여기 표시됩니다.</div>
+          : (
+            <div style={S.scroll}>
+              <table style={S.table}>
+                <thead><tr>
+                  {['단지명', '주소', '주택형', '전용면적(㎡)', '공급면적(㎡)', '세대수', '세대당분양가(원)', '원/㎡'].map(c =>
+                    <th key={c} style={S.th}>{c}</th>)}
+                </tr></thead>
+                <tbody>
+                  {chosen.flatMap(a => {
+                    const rows = a.types.length ? a.types : [null];
+                    return rows.map((t, i) => (
+                      <tr key={`${a.manageNo}-${i}`}>
+                        {i === 0 && <td style={S.tdL} rowSpan={rows.length}>{a.name}</td>}
+                        {i === 0 && <td style={S.tdL} rowSpan={rows.length}>{a.address}</td>}
+                        <td style={S.td}>{t?.type ?? '-'}</td>
+                        <td style={S.td}>{m2(t?.area)}</td>
+                        <td style={S.td}>{m2(t?.supplyArea)}</td>
+                        <td style={S.td}>{t ? t.households.toLocaleString('ko-KR') : '-'}</td>
+                        <td style={S.td}>{won(t?.amount)}</td>
+                        <td style={S.tdVal}>{won(areaBasis === 'supply' ? t?.unitPriceSupply : t?.unitPrice)}</td>
+                      </tr>
+                    ));
+                  })}
+                  {chosen.map(a => (
+                    <tr key={`sum-${a.manageNo}`}>
+                      <td style={S.tdL} colSpan={5}>
+                        <b>{a.name}</b> 계 · {mode === 'weighted' ? '세대수 가중' : '단순'}평균 ({basisNote})
+                      </td>
+                      <td style={S.td}>{a.households?.toLocaleString('ko-KR') ?? '-'}</td>
+                      <td style={S.td}>-</td>
+                      <td style={S.tdVal}>{won(priceOf(a))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+        {/*
           **기축 단지** — 청약홈 적재가 2020-02 부터라 그 앞 단지는 원천에 아예 없다.
           실측(용답동 1km): 청약홈 4건 vs 카카오 아파트 16곳.
           **분양가는 어느 원천에도 없다.** 그래서 평균에 넣지 못하고, 그 사실을 적어 둔다 —
@@ -1016,46 +1063,6 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
           caption="핀 번호 = 위 표의 #"
         />
 
-        <div style={S.secTitle}>선택 단지 상세 (면적별)</div>
-        {chosen.length === 0
-          ? <div style={S.empty}>위 표에서 단지를 선택하면 면적별 세대수와 분양가가 여기 표시됩니다.</div>
-          : (
-            <div style={S.scroll}>
-              <table style={S.table}>
-                <thead><tr>
-                  {['단지명', '주소', '주택형', '전용면적(㎡)', '공급면적(㎡)', '세대수', '세대당분양가(원)', '원/㎡'].map(c =>
-                    <th key={c} style={S.th}>{c}</th>)}
-                </tr></thead>
-                <tbody>
-                  {chosen.flatMap(a => {
-                    const rows = a.types.length ? a.types : [null];
-                    return rows.map((t, i) => (
-                      <tr key={`${a.manageNo}-${i}`}>
-                        {i === 0 && <td style={S.tdL} rowSpan={rows.length}>{a.name}</td>}
-                        {i === 0 && <td style={S.tdL} rowSpan={rows.length}>{a.address}</td>}
-                        <td style={S.td}>{t?.type ?? '-'}</td>
-                        <td style={S.td}>{m2(t?.area)}</td>
-                        <td style={S.td}>{m2(t?.supplyArea)}</td>
-                        <td style={S.td}>{t ? t.households.toLocaleString('ko-KR') : '-'}</td>
-                        <td style={S.td}>{won(t?.amount)}</td>
-                        <td style={S.tdVal}>{won(areaBasis === 'supply' ? t?.unitPriceSupply : t?.unitPrice)}</td>
-                      </tr>
-                    ));
-                  })}
-                  {chosen.map(a => (
-                    <tr key={`sum-${a.manageNo}`}>
-                      <td style={S.tdL} colSpan={5}>
-                        <b>{a.name}</b> 계 · {mode === 'weighted' ? '세대수 가중' : '단순'}평균 ({basisNote})
-                      </td>
-                      <td style={S.td}>{a.households?.toLocaleString('ko-KR') ?? '-'}</td>
-                      <td style={S.td}>-</td>
-                      <td style={S.tdVal}>{won(priceOf(a))}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
       </>)}
     </div>
   );
