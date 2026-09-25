@@ -1,10 +1,10 @@
 'use client';
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import { T, mono } from './theme';
 import { INFLOW_CHOICES, inflowOn } from './inflow';
-import { manualSummary, PENDING_ITEMS, scaleTable, unitMixTable, nearbyTable } from '../src/lib/manual';
+import { manualSummary, PENDING_ITEMS, scaleTable, unitMixTable } from '../src/lib/manual';
+import ReviewInputs from './ReviewInputs';
 import { convertedUnits } from '../src/lib/scoring';
-import PresaleChain from './PresaleChain';
 
 /**
  * 수기입력 — **분양가격지수 제외 항목 점수(A)** 를 여기서 완성한다.
@@ -114,12 +114,12 @@ const GOTO_TAB = {
   '부동산시장 소비심리지수': '교통환경', '지역미분양': '교통환경',
 };
 
-export default function ManualView({ region, addr, data, facilities, manual, value, onChange, onJump }) {
+export default function ManualView({ region, addr, data, facilities, manual, value, onChange, onJump,
+  review, onReview, company = null, companyRank = null }) {
   const v = value ?? {};
   const set = (patch) => onChange?.({ ...v, ...patch });
   const setScale = (k, x) => set({ 규모및배치: { ...(v.규모및배치 ?? {}), [k]: x } });
   const setMix = (k, x) => set({ 평형구성: { ...(v.평형구성 ?? {}), [k]: x } });
-  const setNearby = (patch) => set({ 인근초기분양률: { ...(v.인근초기분양률 ?? {}), ...patch } });
   const setTyped = (k, x) => set({ 점수: { ...(v.점수 ?? {}), [k]: x } });
   /* 지역수요의 인구유입요인 — 원천이 없어 사람이 개수를 센다 */
   const setDemand = (patch) => set({ 지역수요: { ...(v.지역수요 ?? {}), ...patch } });
@@ -130,26 +130,7 @@ export default function ManualView({ region, addr, data, facilities, manual, val
 
   const scale = scaleTable();
   const mixT = unitMixTable();
-  const nearbyT = nearbyTable();
-  const nearby = v.인근초기분양률 ?? {};
 
-  /*
-   * **지역 평균 초기분양률은 참고치다**(HUG · KOSIS 414/DT_41401N_008, 2026-09-17 연결).
-   * 규정이 말하는 것은 「인근 단지」 초기분양률이지 지역 평균이 아니다.
-   * 처음엔 [이 값 넣기] 버튼을 뒀는데 **넣을 이유가 없다**(사용자 지적) —
-   * 규정과 맞지 않는 값을 한 번의 클릭으로 칸에 앉힐 수 있게 두면 그게 실수의 통로가 된다.
-   * **숫자만 회색으로 보여주고 끝낸다.** 이 칸은 본래 옆 단지를 조사해 넣는 수기입력이다.
-   */
-  const [hug, setHug] = useState(null);
-  useEffect(() => {
-    if (!region) return;
-    let dead = false;
-    fetch(`/api/hug?region=${encodeURIComponent(region)}`)
-      .then(r => r.json()).then(j => !dead && setHug(j)).catch(() => {});
-    return () => { dead = true; };
-  }, [region]);
-  const hugRate = hug?.rate?.latest ?? null;
-  const qLabel = (p) => (p ? `${String(p).slice(0, 4)}년 ${Number(String(p).slice(4))}분기` : '');
   const scaleSc = sum.formed[0].sc;
   const mixSc = sum.formed[1].sc;
   /*
@@ -162,7 +143,6 @@ export default function ManualView({ region, addr, data, facilities, manual, val
   const used = convertedUnits(v.평형구성 ?? {});
   const half = Number(v.평형구성?.['오피스텔·도시형생활주택']) > 0;
   const over = cap != null && used > cap;
-  const nearbySc = sum.formed[2].sc;
 
   return (
     <div style={S.page}>
@@ -270,63 +250,12 @@ export default function ManualView({ region, addr, data, facilities, manual, val
         </div>
       </div>
 
-      {/* ── 인근아파트 초기 분양률 ─────────────────────── */}
-      <div style={S.box}>
-        <div style={S.head}>
-          <span>인근아파트 초기 분양률</span>
-          <span style={S.headNote}>배점 10 · 입력 항목</span>
-        </div>
-        <div style={S.body}>
-          {/* 「초기분양률」 이 세 곳에 나와 헷갈린다 — 세 탭에 같은 그림을 둔다 */}
-          <PresaleChain here="input" values={{ input: nearby.rate }} />
-          <div style={S.formula}>옆 단지의 실제 분양률(분양개시 후 6개월 이내)을 조사해 넣습니다</div>
-          <div style={S.grid}>
-            <div style={S.field}>
-              <span style={S.lab}>인근 단지 초기분양률 (%)</span>
-              <input style={S.input} type="number" min="0" max="100" step="any" placeholder="입력"
-                disabled={!!nearby.special}
-                value={nearby.rate ?? ''} onChange={e => setNearby({ rate: e.target.value })} />
-              <span style={S.sub}>{nearby.special ? '특례가 선택되어 있습니다' : ''}</span>
-            </div>
-            {hugRate && !nearby.special && (
-              <div style={{ ...S.field, gap: 6 }}>
-                <span style={S.lab}>참고 — {hug?.rate?.areaName} 지역 평균</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <b style={{ fontSize: 15, color: T.muted, ...mono }}>{hugRate.rate}%</b>
-                  <span style={{ fontSize: 11, color: T.muted }}>{qLabel(hugRate.period)}</span>
-                </div>
-                <span style={S.sub}>HUG 민간아파트 평균 — <b>넣는 값이 아닙니다</b></span>
-              </div>
-            )}
-            <div style={{ ...S.field, gap: 6 }}>
-              <span style={S.lab}>특례</span>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {nearbyT?.special?.map(sp => (
-                  <button key={sp.id} style={S.chip(nearby.special === sp.id)}
-                    onClick={() => setNearby({ special: nearby.special === sp.id ? null : sp.id })}>
-                    {sp.label} = {sp.score}점
-                  </button>
-                ))}
-              </div>
-              <span style={S.sub}>해당하면 조사값 대신 이 점수를 씁니다</span>
-            </div>
-          <div style={S.out}>
-              {nearbySc?.pending
-                ? <span style={S.pend}>{nearbySc.text}</span>
-                : <b>{nearbySc.label} · 평가점수 {nearbySc.score}점 <span style={{ fontWeight: 400, color: T.muted }}>({nearbySc.text})</span></b>}
-            </div>
-          </div>
-          {hugRate && (
-            <div style={{ ...S.formula, marginTop: 10, marginBottom: 0 }}>
-              {hug?.rate?.citation} · {hug?.rate?.note}
-            </div>
-          )}
-          <div style={S.note}>
-            ※ 선정기준은 분양가 적정성(제16조)과 다릅니다 — 준공 단지를 안 쓰고, 유사도를 브랜드로 봅니다.
-            같은 목록을 돌려 쓰면 안 됩니다.
-          </div>
-        </div>
-      </div>
+      {/*
+        **인근아파트 초기 분양률은 [초기예상분양률] 탭으로 옮겼다**(사용자 지적 2026-09-25).
+        「초기분양률」 이라는 이름이 붙은 값 셋(인근 단지 조사값 · 본건 산정 결과 ·
+        심사평점표 배점)이 한 탭에서 이어져 읽혀야 헷갈리지 않는다.
+        점수는 그대로 아래 A 합산표에 들어온다 — 그 행에서 바로 갈 수 있게 해 두었다.
+      */}
 
       {/*
         구간표 미수령 항목 — **지금은 비어 있다**(2026-09-17 마지막 두 개를 받았다).
@@ -414,9 +343,9 @@ export default function ManualView({ region, addr, data, facilities, manual, val
                     </div>
                   )}
                   {/* 갈 곳을 글로만 적으면 탭을 찾아 눌러야 한다 — 그 자리에서 바로 보낸다 */}
-                  {r.score == null && GOTO_TAB[r.id] && (
-                    <button style={S.go} onClick={() => onJump?.(GOTO_TAB[r.id])}>
-                      {GOTO_TAB[r.id]} 탭으로 →
+                  {r.score == null && (r.tab ?? GOTO_TAB[r.id]) && (
+                    <button style={S.go} onClick={() => onJump?.(r.tab ?? GOTO_TAB[r.id])}>
+                      {r.tab ?? GOTO_TAB[r.id]} 탭으로 →
                     </button>
                   )}
                 </td>
@@ -466,6 +395,13 @@ export default function ManualView({ region, addr, data, facilities, manual, val
           </div>
         </div>
       </div>
+
+      {/*
+        **심사평점표 입력값** — 「심사평점표에 있는 이 표는 결과만 보여주는 곳」(사용자 확정 2026-09-25).
+        사업수익률·누적DSCR·자기자금·시공순위·신용등급·PF보증잔액비율·감점을 여기서 받는다.
+        A 합산표 **아래**에 둔다 — 이 값들은 A 에 들어가지 않고 심사평점표에서 따로 쓰인다.
+      */}
+      <ReviewInputs value={review} onChange={onReview} company={company} companyRank={companyRank} />
     </div>
   );
 }

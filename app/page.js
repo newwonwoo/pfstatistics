@@ -6,6 +6,7 @@ import { T, mono } from './theme';
 import { fetchJson } from './fetchJson';
 import Steps from './Steps';
 import SheetTabs from './SheetTabs';
+import ToTop from './ToTop';
 import { expectedRateOf } from '../src/lib/compare';
 import { manualSummary } from '../src/lib/manual';
 import { reviewScore, applyHidden } from '../src/lib/scoring';
@@ -441,7 +442,7 @@ export default function Home() {
       ...(mSum?.excl == null ? [`수기입력 (A 미완성${mSum?.missing?.length ? ` — ${mSum.missing.length}개 남음` : ''})`] : []),
       ...(() => {
         const r = reviewScore({ manual: review ?? {}, rate });
-        return r.missing?.length ? [`심사평점표 (${r.missing.length}개 미입력)`] : [];
+        return r.missing?.length ? [`심사평점표 입력값 (${r.missing.length}개 미입력 — [수기입력] 탭)`] : [];
       })(),
     ];
     if (missing.length && !window.confirm(
@@ -577,12 +578,22 @@ export default function Home() {
       });
     }
 
-    const miss = (mSum.rows ?? []).filter(r => r.kind === 'form' && r.score == null);
+    /*
+      **인근아파트 초기 분양률은 [초기예상분양률] 탭으로 옮겼다**(2026-09-25) —
+      행이 들고 있는 `tab` 을 그대로 써야 「수기입력 탭으로」 라고 해놓고
+      거기엔 그 칸이 없는 일이 생기지 않는다.
+    */
+    const form = (mSum.rows ?? []).filter(r => r.kind === 'form' && r.score == null);
+    const miss = form.filter(r => (r.tab ?? '수기입력') === '수기입력');
     put(miss.length === 0,
       `수기입력${miss.length ? ` — ${miss.length}개 남음` : ''}`, '수기입력',
       miss.length
         ? miss.slice(0, 2).map(r => `${r.id} — ${r.why}`).join(' / ') + (miss.length > 2 ? ` 외 ${miss.length - 2}개` : '')
-        : '규모 및 배치 · 평형구성 · 인근아파트 초기 분양률을 넣어야 점수가 완성됩니다');
+        : '규모 및 배치 · 평형구성을 넣어야 점수가 완성됩니다');
+
+    for (const r of form.filter(x => (x.tab ?? '수기입력') !== '수기입력')) {
+      put(false, `${r.id}`, r.tab, r.why);
+    }
 
     /* 비교사업장 — 세 가지를 한 탭에서 하므로 한 줄로 묶고, 남은 것만 순서대로 적는다 */
     const cmpLeft = [];
@@ -681,25 +692,6 @@ export default function Home() {
     return m;
   }, [data, facilities, compare, cmpSum, sheetInput, mSum.excl, ratePct, review, reviewRes]);
 
-  /*
-    **「이제 어디로」 를 탭 줄이 말한다**(사용자 요청 2026-09-24).
-    초기예상분양률이 나오면 다음 할 일은 심사평점표 하나뿐인데,
-    그 탭이 다른 탭과 똑같이 생겨 「끝났으니 넘어가라」 는 신호가 없었다.
-
-    **판정 전 기본점수가 섞였으면(`tainted`) 띄우지 않는다** — 그때는 분양률이
-    심사평점표로 넘어가지 않으므로, 가라고 해놓고 막는 꼴이 된다.
-    이미 그 탭에 있을 때도 띄우지 않는다(「이미 그 탭에 있는데 계속 다음 버튼」 함정).
-  */
-  const nextTab = useMemo(() => {
-    if (tainted) return null;
-    if (status['초기예상분양률'] !== 'ok') return null;
-    if (status['심사평점표'] === 'ok') return null;
-    if (tab === '심사평점표') return null;
-    return '심사평점표';
-  }, [status, tainted, tab]);
-  const nextNote = ratePct != null
-    ? `초기예상분양률 ${ratePct}% 가 나왔습니다 — 심사평점표에서 배점으로 들어갑니다`
-    : null;
 
   return (
     <main style={S.shell}>
@@ -1117,7 +1109,7 @@ export default function Home() {
       <div style={{ marginTop: 20 }}>
         <SheetTabs sheets={SHEETS} active={tab}
           onSelect={(id) => { setTab(id); setMapOpenManual(null); setMsg(null); }}
-          status={status} next={nextTab} nextNote={nextNote} />
+          status={status} />
         {/*
           모든 시트를 항상 마운트해 둔다.
           엑셀 내보내기가 각 시트의 증빙 카드와 지도를 캡쳐하는데,
@@ -1139,6 +1131,10 @@ export default function Home() {
                 <ManualView
                   region={region} addr={addr} data={data} facilities={view} manual={manual}
                   value={sheetInput} onChange={setSheetInput} onJump={setTab}
+                  /* 심사평점표가 쓰는 입력값도 여기서 받는다 — 그 탭은 결과만 읽는 자리다 */
+                  review={review} onReview={setReview}
+                  company={data?.company}
+                  companyRank={(data?.results ?? []).find(r => r.indicatorId === 'construction_capability_rank' && r.ok)?.value ?? null}
                 />
               )
               : s.kind === 'review'
@@ -1154,7 +1150,9 @@ export default function Home() {
               ? (
                 <RateView
                   region={region} addr={addr} facilities={view}
+                  coord={coord} polygon={polygon} radiusBasis={radiusBasis} company={data?.company}
                   compare={compare} excl={mSum.excl} manualSum={mSum} sheetInput={sheetInput}
+                  onSheetInput={(patch) => setSheetInput(x => ({ ...(x ?? {}), ...patch }))}
                   value={rate} onChange={setRate} onJump={setTab}
                 />
               )
@@ -1183,6 +1181,8 @@ export default function Home() {
           </div>
         ))}
       </div>
+      {/* 긴 표 끝에서 [엑셀 다운로드] 로 한 번에 올라간다 */}
+      <ToTop />
     </main>
   );
 }

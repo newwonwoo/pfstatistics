@@ -81,8 +81,6 @@ const S = {
 
 export default function ReviewView({ region, addr, data, facilities, compare, rate, excl = null, sheetInput = null, gate = null, value, onChange, onJump }) {
   const v = value ?? {};
-  const set = (patch) => onChange?.({ ...v, ...patch });
-  const put = (id, x) => set({ [id]: x });
 
   /* 초기예상분양률은 그 탭과 **같은 함수**로 낸다 — 두 화면의 숫자가 갈리면 안 된다 */
   const { total: rateTotal, res } = useMemo(() => expectedRateOf(compare, rate, excl, sheetInput), [compare, rate, excl, sheetInput]);
@@ -92,17 +90,15 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
   const items = r.groups.flatMap(g => g.items).length;
 
   /*
-    이 앱이 이미 수집한 값은 근거 칸에 띄우고 **한 번에 넣을 수 있게** 한다.
-    전에는 "이 앱이 수집한 순위 : 17위" 라고 적어만 두고 손으로 다시 치게 했다 —
-    옮겨 적다 틀리면 평점이 통째로 어긋난다. 그렇다고 말없이 채우면
-    "입력 안 한 칸이 채워진 것처럼 보임" 함정에 걸리므로 **버튼을 눌러야** 들어간다.
-    (공동시공은 시공자별로 따로 평점을 내야 해서 자동채택이 늘 옳지도 않다)
+    이 앱이 수집한 시공능력평가순위는 [수기입력] 탭이 **버튼 없이 바로 채운다**
+    (사용자 지적 2026-09-25 — 「3위인데 넣어주면 되지 왜 버튼을 또 누르게 해」).
+    여기서는 그 사실을 근거 칸에 적기만 한다.
   */
   const known = useMemo(() => {
     const g = (id) => (data?.results ?? []).find(x => x.indicatorId === id && x.ok)?.value ?? null;
     const rank = g('construction_capability_rank');
     return rank == null ? {} : {
-      '시공능력평가액순위': { text: `이 앱이 수집한 순위 : ${rank}위`, value: String(rank), label: `${rank}위 넣기` },
+      '시공능력평가액순위': { text: `이 앱이 수집한 순위 : ${rank}위 — [수기입력] 탭에서 자동으로 들어갑니다` },
     };
   }, [data]);
   const t = tableOf('심사평점표');
@@ -119,8 +115,9 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
           {' '}→ 초기분양률 배점 {r.presale?.pending ? '—' : `${r.presale.score}점`} → 종합평점
         </span><br />
         <span style={{ color: T.muted }}>
-          사업성·시공자 항목은 <b>값만 넣으면 점수가 납니다</b> (2026-09-16 전체 구간표 수령).
-          그 값들은 사업수지표·신용평가에서 나오므로 이 앱이 수집하지는 않습니다.
+          <b>이 표는 결과만 보여줍니다</b> — 사업수익률·누적DSCR·자기자금·신용등급 같은 값은
+          사업수지표·신용평가에서 나오므로 <b>[수기입력] 탭</b>에서 받습니다.
+          시공능력평가순위는 이 앱이 수집한 값이 그 탭에 자동으로 들어갑니다.
         </span>
         {/* 「초기분양률」 이 세 곳에 나와 헷갈린다 — 세 탭에 같은 그림을 둔다 */}
         <PresaleChain
@@ -193,7 +190,7 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
           </thead>
           <tbody>
             {r.groups.map(g => (
-              <FragmentRows key={g.label} g={g} v={v} put={put} pct={pct} presale={r.presale} known={known} onJump={onJump} gate={gate} />
+              <FragmentRows key={g.label} g={g} v={v} pct={pct} presale={r.presale} known={known} onJump={onJump} gate={gate} />
             ))}
             <tr>
               <td style={S.gh} colSpan={2}>합 계</td>
@@ -223,8 +220,9 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
               <td style={S.gh} colSpan={2}>감 점</td>
               <td style={S.td}>—</td>
               <td style={S.td}>
-                <input style={S.input(false)} type="number" step="any" placeholder="없음"
-                  value={v.__deduct ?? ''} onChange={e => put('__deduct', e.target.value)} />
+                {String(v.__deduct ?? '') !== ''
+                  ? <b>{v.__deduct}</b>
+                  : <span style={S.pend}>없음</span>}
               </td>
               <td style={S.td}>{r.deduct != null ? `−${r.deduct}` : <span style={S.pend}>—</span>}</td>
               <td style={S.tdWhy}>
@@ -281,7 +279,7 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
 }
 
 /** 그룹 한 덩어리 — 첫 줄에 구분을 병합해 캡쳐의 모양을 그대로 낸다 */
-function FragmentRows({ g, v, put, pct, presale, known = {}, onJump, gate = null }) {
+function FragmentRows({ g, v, pct, presale, known = {}, onJump, gate = null }) {
   return g.items.map((it, i) => (
     <tr key={it.id}>
       {i === 0 && (
@@ -296,33 +294,21 @@ function FragmentRows({ g, v, put, pct, presale, known = {}, onJump, gate = null
       </td>
       <td style={S.td}>{it.max}</td>
       {/* 값 칸과 평점 칸을 나눈다 — 한 칸에 두면 넣은 값(10.64)이 점수처럼 보인다 */}
+      {/*
+        **이 표는 결과만 읽는 자리다**(사용자 확정 2026-09-25 —
+        「여기서 입력하면 앞뒤가 안 맞잖아」). 값을 넣는 칸은 [수기입력] 탭에 모았다.
+        빈 칸은 숨기지 않고 「미입력」 이라 적고 그 자리에서 넣으러 갈 수 있게 한다.
+      */}
       <td style={S.td}>
         {it.auto
           ? <span style={S.pend}>{pct != null ? `${pct}%` : '—'}</span>
-          : it.select
-            ? (
-              <select style={S.select} value={v[it.id] ?? ''} onChange={e => put(it.id, e.target.value)}>
-                <option value="">선택</option>
-                {it.select.options.map(o => <option key={o.id} value={o.id}>{o.id}</option>)}
-              </select>
-            )
-            : (
-              <input style={S.input(it.over)} type="number" step="any"
-                /* 이 칸이 받는 것은 **원시값**이다 — 단위를 적어 점수와 헷갈리지 않게 한다 */
-                placeholder={it.unit || '값'}
-                value={v[it.id] ?? ''} onChange={e => put(it.id, e.target.value)} />
-            )}
-        {/*
-          **값을 넣는 버튼이 값 칸에서 280px 떨어진 근거 칸에 있었다**(실측 2026-09-24).
-          같은 성격의 버튼이 비교사업장 탭에서는 입력칸 바로 옆에 있어 문법도 갈렸다.
-          넣는 버튼은 넣는 칸 옆에 둔다 — 설명은 근거 칸에 그대로 남긴다.
-        */}
-        {known[it.id] && String(v[it.id] ?? '') !== known[it.id].value && (
-          <button type="button" style={{ ...S.take, marginLeft: 0, marginTop: 5, display: 'block' }}
-            onClick={() => put(it.id, known[it.id].value)}>
-            {known[it.id].label}
-          </button>
-        )}
+          : (String(it.value ?? '') !== ''
+            ? <b>{it.value}{it.select ? '' : (it.unit ?? '')}</b>
+            : (<>
+                <span style={S.pend}>미입력</span>
+                <button type="button" style={{ ...S.take, marginLeft: 0, marginTop: 5, display: 'block' }}
+                  onClick={() => onJump?.('수기입력')}>수기입력 탭에서 넣기 →</button>
+              </>))}
       </td>
       <td style={it.score != null ? S.auto : S.td}>
         {it.score == null ? <span style={S.pend}>—</span> : it.score}

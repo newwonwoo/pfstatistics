@@ -49,20 +49,11 @@ const groupStatus = (items, status) => {
   return undefined;
 };
 
-/**
- * **「다음은 여기」 를 탭 줄에서 말한다**(사용자 요청 2026-09-24).
- * 초기예상분양률이 나오면 그 다음 할 일은 심사평점표 하나뿐인데,
- * 지금까지는 그 탭이 다른 탭과 똑같이 생겨 「끝났으니 넘어가라」 는 신호가 없었다.
- * 값이 나온 것(초록 점)과 **다음 차례인 것**은 다른 말이므로 배지를 따로 둔다.
- */
-const NextBadge = ({ note }) => (
-  <span data-next-badge title={note ?? undefined} style={{
-    marginLeft: 7, padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap',
-    fontSize: 10.5, fontWeight: 800, letterSpacing: '.02em',
-    background: T.accent, color: '#fff',
-    animation: 'sheetNextPulse 1.8s ease-in-out infinite',
-  }}>다음 →</span>
-);
+/*
+  **「다음 →」 배지는 뺐다**(사용자 지적 2026-09-25 — 「다음 → 이런 이상한거 넣지말고」).
+  탭마다 붙는 완료 점이 이미 「어디까지 했는가」 를 말한다. 그 위에 파란 배지가
+  깜빡이면 한 화면에 신호가 둘이 되고, 배지가 붙은 탭만 눌러야 할 것처럼 읽힌다.
+*/
 
 const Dot = ({ st, size = 6 }) => (st ? (
   <span aria-hidden style={{
@@ -71,7 +62,7 @@ const Dot = ({ st, size = 6 }) => (st ? (
   }} />
 ) : null);
 
-export default function SheetTabs({ sheets, active, onSelect, status, next = null, nextNote = null }) {
+export default function SheetTabs({ sheets, active, onSelect, status }) {
   /* 단계별로 묶는다 — 등장 순서를 그대로 쓴다(그것이 심사 진행 순서다) */
   const groups = useMemo(() => {
     const out = [];
@@ -155,16 +146,6 @@ export default function SheetTabs({ sheets, active, onSelect, status, next = nul
 
   return (
     <div>
-      {/* 인라인 스타일로는 @keyframes 를 못 쓴다. 움직임을 꺼둔 사용자는 그대로 둔다 */}
-      <style>{`
-        @keyframes sheetNextPulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(27,79,216,.45); }
-          50%      { box-shadow: 0 0 0 5px rgba(27,79,216,0); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          [data-next-badge] { animation: none !important; }
-        }
-      `}</style>
       {/* ── 윗줄 : 단계 ── */}
       <div role="tablist" aria-label="심사 단계" style={S.top}>
         {groups.map((g) => {
@@ -181,7 +162,6 @@ export default function SheetTabs({ sheets, active, onSelect, status, next = nul
               {solo ? solo.label : g.key}
               {!solo && <span style={S.count}>{g.items.length}</span>}
               <Dot st={st} size={7} />
-              {g.items.some(x => x.id === next) && <NextBadge note={nextNote} />}
             </button>
           );
         })}
@@ -204,7 +184,6 @@ export default function SheetTabs({ sheets, active, onSelect, status, next = nul
                           onClick={() => onSelect(sh.id)} style={S.tab(on, c)}>
                           {sh.label}
                           <Dot st={status?.[sh.id]} />
-                          {sh.id === next && <NextBadge note={nextNote} />}
                         </button>
                       );
                     })}

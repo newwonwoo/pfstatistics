@@ -4,6 +4,7 @@ import { T, mono } from './theme';
 import { tableOf, scorePresaleRate } from '../src/lib/scoring';
 import { expectedRateOf } from '../src/lib/compare';
 import PresaleChain from './PresaleChain';
+import NearbyPresale from './NearbyPresale';
 
 /**
  * 초기예상분양률 — **평가표 전체의 결론**.
@@ -77,7 +78,9 @@ const SERIES = [
   { id: '오피스텔', label: '오피스텔 · 도시형생활주택' },
 ];
 
-export default function RateView({ region, addr, facilities, compare, excl: exclProp = null, manualSum = null, sheetInput = null, value, onChange, onJump }) {
+export default function RateView({ region, addr, coord, polygon, radiusBasis, company,
+  facilities, compare, excl: exclProp = null, manualSum = null,
+  sheetInput = null, onSheetInput, value, onChange, onJump }) {
   const v = value ?? {};
   const series = v.series ?? '주택';
   /*
@@ -208,6 +211,19 @@ export default function RateView({ region, addr, facilities, compare, excl: excl
           </tbody>
         </table>
       </div>
+
+      {/*
+        **인근아파트 초기 분양률을 여기로 옮겼다**(사용자 지적 2026-09-25 —
+        「이게 왜 수기입력에 있냐 … 종합평가 점수와 초기예상분양률 사이에 배치해」).
+        이름이 비슷한 세 값(조사값 · 산정 결과 · 배점)이 한 탭에서 이어져 읽힌다.
+        점수 자체는 위 A 로 들어가므로 **위 표가 이 값을 쓴다**고 머리에 적어 둔다.
+      */}
+      <NearbyPresale
+        region={region} addr={addr} coord={coord} polygon={polygon} radiusBasis={radiusBasis}
+        company={company} households={households} series={series}
+        value={sheetInput?.인근초기분양률}
+        onChange={(nb) => onSheetInput?.({ 인근초기분양률: nb })}
+      />
 
       <div style={S.box}>
         <div style={S.head}>

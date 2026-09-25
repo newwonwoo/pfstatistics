@@ -108,11 +108,22 @@ export function manualSummary({ sheetInput = {}, data = null, facilities = null,
   const scale = scoreWeighted('규모및배치', sheetInput.규모및배치 ?? {});
   /* 평형별 세대수는 규모및배치의 총세대수를 넘을 수 없다 — 넘으면 점수를 내지 않는다 */
   const mix = scoreUnitMix(sheetInput.평형구성 ?? {}, sheetInput.규모및배치?.총세대수);
-  const nearby = scoreNearbyPresale(sheetInput.인근초기분양률?.rate, sheetInput.인근초기분양률?.special || null);
+  /*
+    **인근 단지를 골라 평균분양률을 내는 길이 생겼다**(2026-09-25).
+    고른 단지가 있으면 그 평균이 조사값이고, 한 곳이라도 분양률이 비면
+    **평균을 내지 않는다** — 일부만 평균 내면 그럴듯한 값이 나와 틀린 채로 흘러간다.
+  */
+  const nb = sheetInput.인근초기분양률 ?? {};
+  const survey = nearbySurvey(nb);
+  const nearby = (survey.pending && !nb.special)
+    ? { pending: true, max: 10, text: survey.pending }
+    : scoreNearbyPresale(survey.value, nb.special || null);
   const formed = [
     { id: '규모 및 배치', max: 5, kind: 'form', sc: scale, score: num(scale), why: scale?.pending ? scale.text : `가중평균 ${scale?.avg} · ${scale?.label}` },
     { id: '평형구성', max: 5, kind: 'form', sc: mix, score: num(mix), why: mix?.pending ? mix.text : `가중평균 ${mix?.value} · ${mix?.label}` },
-    { id: '인근아파트 초기 분양률', max: 10, kind: 'form', sc: nearby, score: num(nearby), why: nearby?.pending ? nearby.text : `${nearby?.text} · ${nearby?.label}` },
+    /* 이 항목만 [초기예상분양률] 탭에서 조사한다 — 관문·A 표의 「가는 곳」 이 갈린다 */
+    { id: '인근아파트 초기 분양률', max: 10, kind: 'form', tab: '초기예상분양률',
+      sc: nearby, score: num(nearby), why: nearby?.pending ? nearby.text : `${nearby?.text} · ${nearby?.label}` },
   ];
 
   /* ③ 구간표를 못 받아 점수를 직접 받는 것 */
@@ -148,6 +159,26 @@ export function manualSummary({ sheetInput = {}, data = null, facilities = null,
     excl: override ?? (missing.length ? null : sum),
     source: override != null ? 'override' : (missing.length ? null : 'computed'),
   };
+}
+
+/**
+ * 인근 단지 조사표 → 쓸 값 하나.
+ *
+ * 고른 단지가 없으면 직접 넣은 값(`rate`)을 쓴다 — 조사표를 안 쓰고 손으로 넣는 길은 남긴다.
+ * 고른 단지가 있으면 **전부 채워졌을 때만** 평균을 낸다(원문: 비슷한 수준이 다수면 평균분양률).
+ */
+export function nearbySurvey(nb = {}) {
+  const picked = nb.picked ?? {};
+  const ids = Object.keys(picked);
+  if (!ids.length) return { value: nb.rate ?? null, from: 'typed', count: 0 };
+  const nums = ids.map(id => Number(picked[id]));
+  const blank = nums.filter(n => !Number.isFinite(n)).length;
+  if (blank) {
+    return { value: null, from: 'survey', count: ids.length, blank,
+      pending: `고른 인근 단지 ${ids.length}곳 중 ${blank}곳의 초기분양률이 비어 있습니다 — 다 채워야 평균을 냅니다` };
+  }
+  const avg = nums.reduce((a, b) => a + b, 0) / nums.length;
+  return { value: Number(avg.toFixed(1)), from: 'survey', count: ids.length };
 }
 
 export const unitMixTable = () => tableOf('평형구성');
