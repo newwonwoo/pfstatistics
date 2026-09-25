@@ -499,29 +499,62 @@ export default function Home() {
     관문을 한 장으로 모으고 각 줄에서 그 탭으로 바로 간다. **탭 자체는 막지 않는다** —
     사업수익률·자기자금·신용등급은 이 앱이 수집하지 않는 값이라 손에 든 실무자가 먼저 넣을 수 있어야 한다.
   */
+  /*
+    **관문 문구를 사람 말로 쓴다**(사용자 지적 2026-09-25).
+    전에는 「A 의 자동 항목(…)이 여기서 찬다」 처럼 **A 가 뭔지 말하지 않은 채** 썼고,
+    「먼저 채워야 초기분양률(22) 이 차고 종합평점이 납니다」 는 한국어로 읽히지 않았다.
+    · **A 라는 약어를 화면에 쓰지 않는다** — 「분양가격지수를 뺀 나머지 항목 점수」 라고 적는다.
+    · **버튼은 지금 화면에 있는 탭 이름 그대로** 적는다(탭을 2단으로 바꾼 뒤 이름이 갈렸다).
+    · **한 탭에서 끝나는 일은 한 줄로 묶는다** — 비교사업장 수집·선택·예정분양가는
+      전부 [비교사업장 · 분양가] 한 곳에서 한다(사용자 지적).
+  */
   const gate = useMemo(() => {
+    const tabLabel = (id) => SHEETS.find(x => x.id === id)?.label ?? id;
     const need = [], done = [];
-    const put = (ok, label, toTab, why) => (ok ? done : need).push({ label, tab: toTab, why });
-    put(!!data && data.okCount === data.total, `통계 수집 (${data?.okCount ?? 0}/${data?.total ?? 7})`,
-      '교통환경', 'A 의 자동 항목(지역미분양·소비심리·지역경쟁력·브랜드경쟁력·주택담보대출금리)이 여기서 찬다');
-    put(allPoi, '반경시설 수집 (3종)', '교통환경', '교통환경·주거편의·교육환경 점수가 A 에 들어간다');
+    const put = (ok, label, toTab, why, go) =>
+      (ok ? done : need).push({ label, tab: toTab, why, go: go ?? `${tabLabel(toTab)} 탭으로 →` });
+
+    /*
+      통계·반경시설은 **탭 안이 아니라 자료수집 단계 줄의 버튼**으로 한다 —
+      전에는 둘 다 「교통환경 탭으로 →」 라고 적어 엉뚱한 곳을 가리켰다.
+    */
+    put(!!data && data.okCount === data.total,
+      `통계 수집 (${data?.okCount ?? 0}/${data?.total ?? 7})`, '교통환경',
+      '지역미분양 · 소비심리 · 지역경쟁력 · 브랜드경쟁력 · 주택담보대출금리 점수가 여기서 매겨집니다',
+      '자료수집 단계로 →');
+    put(allPoi, '반경시설 수집 (3종)', '교통환경',
+      '교통환경 · 주거편의 · 교육환경 점수가 여기서 매겨집니다',
+      '자료수집 단계로 →');
+
+    /* 판정을 안 한 항목 — 비어 있는 것이 아니라 기본점수가 들어가 있어 더 위험하다 */
     for (const pv of (mSum.provisional ?? [])) {
-      need.push({ label: `${pv.id} — 판정 전 기본점수`, why: pv.text,
-        tab: pv.id === '지역수요' ? '수기입력' : pv.id });
+      const t = pv.id === '지역수요' ? '수기입력' : pv.id;
+      need.push({ label: `${pv.id} — 아직 판정하지 않음`, why: pv.text,
+        tab: t, go: `${tabLabel(t)} 탭으로 →` });
     }
+
     /*
       「1개 남음」 이라고 해놓고 사유 줄에 네 항목을 다 적으면 어느 것이 남았는지 모른다.
       이름만 적어도 부족하다 — 「지역수요」 라고만 하면 통계를 이미 받았는데 뭘 더 넣으란 말인지
       알 수 없다(실제로 남은 것은 **인구유입요인 개수**다). 행이 들고 있는 사유를 그대로 쓴다.
     */
     const miss = (mSum.rows ?? []).filter(r => r.score == null);
-    put(mSum.excl != null, `수기입력 — 제외 항목 점수(A)${miss.length ? ` · ${miss.length}개 남음` : ''}`,
-      '수기입력', miss.length
+    put(mSum.excl != null,
+      `수기입력${miss.length ? ` — ${miss.length}개 남음` : ''}`, '수기입력',
+      miss.length
         ? miss.slice(0, 2).map(r => `${r.id} — ${r.why}`).join(' / ') + (miss.length > 2 ? ` 외 ${miss.length - 2}개` : '')
-        : '규모및배치 · 평형구성 · 인근아파트 초기분양률 · 인구유입요인');
-    put(!!compare?.data, '비교사업장 수집', '비교사업장', '반경 안 분양단지를 받아야 평균이 난다');
-    put(cmpSum?.avg != null, '비교사업장 선택 (평균)', '비교사업장', '고른 단지의 평균이 분양가격지수의 분모다');
-    put(Number(compare?.site?.unitPrice) > 0, '본건 예정분양가', '비교사업장', '분양가격지수의 분자다');
+        : '규모및배치 · 평형구성 · 인근아파트 초기분양률 · 인구유입요인을 넣어야 점수가 완성됩니다');
+
+    /* 비교사업장 — 세 가지를 한 탭에서 하므로 한 줄로 묶고, 남은 것만 순서대로 적는다 */
+    const cmpLeft = [];
+    if (!compare?.data) cmpLeft.push('반경 안 분양단지 수집');
+    if (cmpSum?.avg == null) cmpLeft.push('비교할 단지 선택');
+    if (!(Number(compare?.site?.unitPrice) > 0)) cmpLeft.push('본건 예정분양가 입력');
+    put(cmpLeft.length === 0, '비교사업장 · 분양가', '비교사업장',
+      cmpLeft.length
+        ? `${cmpLeft.join(' → ')} — 고른 단지의 평균과 본건 분양가를 견주어 분양가경쟁력 점수를 냅니다`
+        : '고른 단지의 평균과 본건 분양가를 견주어 분양가경쟁력 점수를 냅니다');
+
     return { need, done, blocked: need.length > 0 };
   }, [data, allPoi, mSum.provisional, mSum.excl, mSum.rows, compare, cmpSum]);
 

@@ -30,6 +30,7 @@ const S = {
   gateHead: { display: 'flex', alignItems: 'baseline', gap: 10, fontSize: 12.5, fontWeight: 700,
               color: T.ink, marginBottom: 9 },
   gateCount: { marginLeft: 'auto', fontSize: 11.5, fontWeight: 700, color: T.warn },
+  gateNote: { margin: '4px 0 9px', fontSize: 11.5, lineHeight: 1.65, color: T.ink2 },
   gateRow: { display: 'flex', alignItems: 'center', gap: 9, padding: '5px 0', fontSize: 12.5,
              borderTop: `1px solid ${T.warn}22`, flexWrap: 'wrap' },
   gateX: { color: T.warn, fontWeight: 800 },
@@ -143,8 +144,16 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
       {gate?.blocked && (
         <div style={S.gate}>
           <div style={S.gateHead}>
-            먼저 채워야 <b>초기분양률(22)</b> 이 차고 종합평점이 납니다
-            <span style={S.gateCount}>남은 것 {gate.need.length}개</span>
+            아래 심사사항을 먼저 수행해 주세요
+            <span style={S.gateCount}>남은 항목 {gate.need.length}개</span>
+          </div>
+          {/*
+            까닭은 제목이 아니라 한 줄 아래에 적는다 — 제목에 넣었더니
+            「먼저 채워야 초기분양률(22) 이 차고 종합평점이 납니다」 처럼 읽히지 않는 문장이 됐다.
+          */}
+          <div style={S.gateNote}>
+            이 항목들이 모여 <b>초기예상분양률</b>이 산정되고, 그 값이 아래 표의
+            <b> 초기분양률(22)</b> 점수가 됩니다. 그래서 지금은 합계 · 종합평점 · 심사등급 · 보증료율이 나오지 않습니다.
           </div>
           {gate.need.map((n, i) => (
             <div key={i} style={S.gateRow}>
@@ -152,7 +161,7 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
               <span style={S.gateLabel}>{n.label}</span>
               <span style={S.gateWhy}>{n.why}</span>
               {n.tab && (
-                <button style={S.gateGo} onClick={() => onJump?.(n.tab)}>{n.tab} 탭으로 →</button>
+                <button style={S.gateGo} onClick={() => onJump?.(n.tab)}>{n.go ?? `${n.tab} 탭으로 →`}</button>
               )}
             </div>
           ))}
@@ -325,7 +334,7 @@ function FragmentRows({ g, v, put, pct, presale, known = {}, onJump, gate = null
             {/* 산정이 안 된 것과, 산정은 됐지만 판정 전 기본점수가 섞여 안 넘어온 것은 다르다 */}
             <span style={{ color: T.warn }}>
               {gate?.blocked
-                ? `위 관문의 남은 항목 ${gate.need.length}개를 채우면 찹니다`
+                ? `위에 적힌 ${gate.need.length}개를 먼저 수행하면 자동으로 채워집니다`
                 : '초기예상분양률이 산정되면 자동으로 찹니다'}
             </span>
             {!gate?.blocked && (

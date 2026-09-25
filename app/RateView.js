@@ -151,7 +151,7 @@ export default function RateView({ region, addr, facilities, compare, excl: excl
       <div style={S.box}>
         <div style={S.head}>
           <span>종합평가 점수</span>
-          <span style={S.headNote}>제외 항목 점수(A) + 분양가경쟁력</span>
+          <span style={S.headNote}>분양가격지수 제외 항목 + 분양가경쟁력</span>
         </div>
         <table style={S.tbl}>
           <tbody>
@@ -178,7 +178,7 @@ export default function RateView({ region, addr, facilities, compare, excl: excl
                 {hasExcl && manualSum?.provisional?.length > 0 && (
                   <div style={S.prov}>
                     <b>{manualSum.provisional.map(x => x.id).join(' · ')}</b> 에 판정 전 기본점수가 섞여 있습니다 —
-                    그 항목을 판정하면 A 가 바뀌므로 <b>심사평점표로 넘기지 않습니다.</b>
+                    그 항목을 판정하면 이 점수가 바뀌므로 <b>심사평점표로 넘기지 않습니다.</b>
                     <button style={S.go} onClick={() => onJump?.(manualSum.provisional[0].id === '지역수요' ? '수기입력' : manualSum.provisional[0].id)}>
                       {manualSum.provisional[0].id === '지역수요' ? '수기입력' : manualSum.provisional[0].id} 탭으로 →
                     </button>
@@ -271,7 +271,7 @@ export default function RateView({ region, addr, facilities, compare, excl: excl
         그리고 구간표를 아직 못 받아 점수를 직접 넣는 항목이 함께 들어 있습니다.<br />
         <b>항목별 점수와 합계는 [수기입력] 탭에서 한자리에 봅니다.</b>
         {manualSum?.missing?.length
-          ? <span style={{ color: T.warn }}> — 지금 {manualSum.missing.length}개가 비어 있어 A 가 확정되지 않았습니다.</span>
+          ? <span style={{ color: T.warn }}> — 지금 {manualSum.missing.length}개가 비어 있어 이 점수가 확정되지 않았습니다.</span>
           : null}
       </div>
     </div>

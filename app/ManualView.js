@@ -139,7 +139,7 @@ export default function ManualView({ region, addr, data, facilities, manual, val
       <p style={S.subject}>▶ 사업지 : {facilities?.address ?? addr ?? region}</p>
 
       <div style={S.intro}>
-        여기서 <b>분양가격지수 제외 항목 점수(A)</b> 가 완성됩니다. A 는 종합평가 점수에서
+        여기서 <b>분양가격지수 제외 항목 점수(A)</b> 가 완성됩니다. 이 점수는 종합평가 점수에서
         분양가경쟁력을 뺀 나머지 전부입니다.<br />
         <span style={{ color: T.muted }}>
           항목 대부분은 이 앱이 이미 냈고, 구간표가 있는 것은 <b>값만 넣으면 점수가 납니다</b>.{' '}
@@ -402,7 +402,7 @@ export default function ManualView({ region, addr, data, facilities, manual, val
                     ? <>미입력 <b style={{ color: T.warn }}>{sum.missing.length}개</b> — {sum.missing.join(' · ')}<br />
                         <span>전 항목이 차야 A 를 확정합니다. 부분 합계({sum.sum})를 A 로 쓰면 분양률이 통째로 낮아집니다.</span></>
                     : sum.provisional.length
-                      ? <>전 항목 입력됨 — 다만 <b style={{ color: T.warn }}>{sum.provisional.map(x => x.id).join(' · ')}</b> 에 판정 전 기본점수가 섞여 있습니다. 그 항목을 판정하면 A 가 바뀝니다.</>
+                      ? <>전 항목 입력됨 — 다만 <b style={{ color: T.warn }}>{sum.provisional.map(x => x.id).join(' · ')}</b> 에 판정 전 기본점수가 섞여 있습니다. 그 항목을 판정하면 이 점수가 바뀝니다.</>
                       : '전 항목 입력됨'}
               </td>
             </tr>

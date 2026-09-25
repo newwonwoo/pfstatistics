@@ -472,7 +472,7 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
           </label>
           {/* A 는 수기입력 탭이 만든다 — 여기서 또 받으면 두 값이 갈린다 */}
           <label style={S.field}>
-            <span style={S.label}>제외 항목 점수 (A)</span>
+            <span style={S.label}>분양가격지수 제외 항목 점수</span>
             <span style={S.exclRead}>
               {excl != null ? excl : '—'}
               <span style={S.exclNote}>
