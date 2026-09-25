@@ -1063,8 +1063,10 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
             없습니다」 라고 적었는데 **틀린 기록이었다** — 연속지적도가 필지 경계를 준다.
             필지를 못 받은 건이 섞일 수 있으므로 건수를 같이 적는다.
           */}
-          거리는 <b>사업지 {data.distance?.from ?? (data.basis === 'polygon' ? '사업지 경계' : '대표지번 중심')}</b>
-          {' '}↔ 상대 단지 <b>{data.distance?.to ?? '대표지번'}</b> 의 <b>최단거리</b>입니다
+          {/* 봉투의 from·to 가 이미 「사업지 경계」·「상대 단지 필지 경계」 라는 말을 들고 온다 —
+              앞에 「사업지」·「상대 단지」 를 또 붙이면 말이 겹친다(실측으로 겹쳐 나왔다) */}
+          거리는 <b>{data.distance?.from ?? (data.basis === 'polygon' ? '사업지 경계' : '대표지번 중심')}</b>
+          {' '}↔ <b>{data.distance?.to ?? '상대 단지 대표지번'}</b> 의 <b>최단거리</b>입니다
           {data.distance?.parcelCount > 0 && (
             <>{' '}(필지 경계로 잰 것 {data.distance.parcelCount}곳
               {data.distance.pointCount > 0 && <> · 필지를 못 받아 <b>대표지번 점</b>으로 잰 것 {data.distance.pointCount}곳</>})</>
