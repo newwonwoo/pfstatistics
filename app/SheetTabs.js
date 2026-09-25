@@ -1,5 +1,5 @@
 'use client';
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { T } from './theme';
 
 /**
@@ -124,6 +124,18 @@ export default function SheetTabs({ sheets, active, onSelect, status, next = nul
   const kids = activeGroup.items;
   const showRow2 = kids.length > 1;
 
+  /* 성격이 같은 시트끼리 묶는다 — 묶음이 하나뿐이면 이름표를 달지 않는다(군더더기다) */
+  const clusters = useMemo(() => {
+    const out = [];
+    for (const sh of kids) {
+      const key = sh.kind ?? 'etc';
+      let c = out.find(x => x.key === key);
+      if (!c) out.push(c = { key, label: CLUSTER[key] ?? null, items: [] });
+      c.items.push(sh);
+    }
+    return out.length > 1 ? out : out.map(c => ({ ...c, label: null }));
+  }, [kids]);
+
   return (
     <div>
       {/* 인라인 스타일로는 @keyframes 를 못 쓴다. 움직임을 꺼둔 사용자는 그대로 둔다 */}
@@ -164,24 +176,37 @@ export default function SheetTabs({ sheets, active, onSelect, status, next = nul
         {showRow2 && (
           <div style={{ position: 'relative' }}>
             <div ref={ref} onWheel={onWheel} role="tablist" aria-label={`${activeGroup.key} 시트`} style={S.row}>
-              {kids.map((s, i) => {
-                const on = s.id === active;
-                const cluster = CLUSTER[s.kind];
-                const newCluster = cluster && CLUSTER[kids[i - 1]?.kind] !== cluster;
-                return (
-                  <Fragment key={s.id}>
-                    {newCluster && (
-                      <span aria-hidden style={S.clusterLabel(i === 0)}>{cluster}</span>
-                    )}
-                    <button data-on={on ? '1' : '0'} role="tab" aria-selected={on}
-                      onClick={() => onSelect(s.id)} style={S.tab(on, s.tone === 'cover' ? '#6b7280' : null)}>
-                      {s.label}
-                      <Dot st={status?.[s.id]} />
-                      {s.id === next && <NextBadge note={nextNote} />}
-                    </button>
-                  </Fragment>
-                );
-              })}
+              {clusters.map((c) => (
+                <div key={c.key} style={S.cluster} role="group" aria-label={c.label ?? undefined}>
+                  {/*
+                    **이름표가 탭 옆에 붙어 있을 뿐이라 무엇을 아우르는지가 안 보였다**
+                    (사용자 지적 2026-09-25). 묶음 **폭만큼 걸치는 브래킷**으로 바꾼다 —
+                    상자로 감싸면 「탭이 아래 판에 이어진다」 는 시트 은유가 깨지므로,
+                    위쪽에만 가는 선을 두고 양 끝을 살짝 내려 괄호처럼 보이게 한다.
+                  */}
+                  {c.label && (
+                    <div style={S.capRow} aria-hidden>
+                      <span style={S.rail(true)} />
+                      <span style={S.capText}>{c.label}</span>
+                      <span style={S.rail(false)} />
+                    </div>
+                  )}
+                  <div style={S.clusterTabs}>
+                    {c.items.map(sh => {
+                      const on = sh.id === active;
+                      return (
+                        <button key={sh.id} data-on={on ? '1' : '0'} role="tab" aria-selected={on}
+                          onClick={() => onSelect(sh.id)}
+                          style={S.tab(on, sh.tone === 'cover' ? '#6b7280' : null)}>
+                          {sh.label}
+                          <Dot st={status?.[sh.id]} />
+                          {sh.id === next && <NextBadge note={nextNote} />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
             <button type="button" aria-label="이전 시트" title="이전 시트"
               style={fade('left', edge.left)} onClick={() => nudge(-1)}>‹</button>
@@ -221,22 +246,31 @@ const S = {
   /* 「쑤욱」 — 접힌 높이에서 펴진다 */
   wrap: (open) => ({
     marginTop: open ? 8 : 0,
-    maxHeight: open ? 60 : 0,
+    maxHeight: open ? 90 : 0,
     opacity: open ? 1 : 0,
     transform: open ? 'none' : 'translateY(-6px)',
     overflow: 'hidden',
     transition: 'max-height .22s ease, opacity .18s ease, transform .22s ease, margin-top .22s ease',
   }),
   row: {
-    display: 'flex', alignItems: 'flex-end', gap: 2, overflowX: 'auto',
+    display: 'flex', alignItems: 'flex-end', gap: 18, overflowX: 'auto',
     padding: '0 2px', borderBottom: `1px solid ${T.lineStrong}`, scrollbarWidth: 'none',
   },
-  /* 성격이 바뀌는 자리에 이름표 — 전에는 구분선만 있어 무엇이 바뀌는지 안 읽혔다 */
-  clusterLabel: (first) => ({
-    alignSelf: 'center', whiteSpace: 'nowrap',
-    margin: first ? '0 8px 6px 4px' : '0 8px 6px 14px',
-    fontSize: 10.5, fontWeight: 800, letterSpacing: '.06em', color: T.muted,
+  /* 한 묶음 = [브래킷 + 그 아래 탭들] — 세로로 쌓아 아우르는 관계를 보인다 */
+  cluster: { display: 'flex', flexDirection: 'column', minWidth: 0 },
+  capRow: { display: 'flex', alignItems: 'center', gap: 7, padding: '0 6px 5px' },
+  /* 양 끝이 아래로 꺾인 가는 선 — 상자 없이 괄호처럼 읽힌다 */
+  rail: (left) => ({
+    flex: 1, height: 5, minWidth: 10,
+    borderTop: `1px solid ${T.lineStrong}`,
+    [left ? 'borderLeft' : 'borderRight']: `1px solid ${T.lineStrong}`,
+    borderRadius: left ? '3px 0 0 0' : '0 3px 0 0',
   }),
+  capText: {
+    whiteSpace: 'nowrap', fontSize: 10, fontWeight: 800,
+    letterSpacing: '.09em', color: T.muted, transform: 'translateY(2px)',
+  },
+  clusterTabs: { display: 'flex', alignItems: 'flex-end', gap: 2 },
   tab: (on, tone) => ({
     position: 'relative', whiteSpace: 'nowrap', cursor: 'pointer',
     padding: '8px 14px 9px', fontSize: 12.5,
