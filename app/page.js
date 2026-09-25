@@ -120,6 +120,8 @@ const S = {
   arrow: { color: T.muted, fontSize: 16, fontWeight: 700, userSelect: 'none' },
   spacer: { marginLeft: 'auto' },
   /* 안내문이 「여기서 하세요」 라고 말하면 그 칸·버튼이 안내문 안에 있어야 한다 */
+  tagGo: { border: 0, background: 'none', color: T.ok, fontWeight: 700, cursor: 'pointer',
+           fontSize: 11, padding: 0, textDecoration: 'underline', fontFamily: 'inherit' },
   msgFix: { display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap', marginTop: 9 },
   msgGo: { padding: '8px 15px', borderRadius: 6, border: 0, fontSize: 12.5, fontWeight: 700,
            background: T.accent, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' },
@@ -856,6 +858,32 @@ export default function Home() {
 
               <span style={S.arrow}>›</span>
 
+              {/*
+                **경계가 통계 뒤에 있었다**(사용자 지적 2026-09-25).
+                실제 흐름은 주소 확정 → **사업지 경계** → 통계 → 반경시설 → 비교사업장이다
+                (CLAUDE.md 의 흐름과도 같다). 줄의 순서가 일의 순서와 달라 읽는 사람이 헷갈린다.
+                게다가 2번 자리에 오면 **눌러서 그릴 수 있어야** 한다 — 지금까지는
+                기준만 적어두고 [변경] 으로 기준을 되묻기만 하는 꼬리표였다.
+              */}
+              {basisMode && (
+                <span style={S.basisTag}>
+                  {basisMode === 'polygon'
+                    ? `사업지 경계${polygon?.length >= 3 ? ` (${polygon.length}점)` : ' (미지정)'}`
+                    : '중심 기준'}
+                  {basisMode === 'polygon' && !(polygon?.length >= 3) ? (
+                    <button style={S.tagGo}
+                      onClick={() => { setDrawNow(true); setMapOpenManual(true); setPolyDone(false); }}
+                    >그리기</button>
+                  ) : (
+                    <button style={S.tagGo}
+                      onClick={() => { setBasisMode(null); setPending(null); setDrawNow(false); }}
+                    >변경</button>
+                  )}
+                </span>
+              )}
+
+              <span style={S.arrow}>›</span>
+
               <button
                 style={S.btn({ busy: busy === 'collect', primary: !data, done: !!data })}
                 onClick={collect} disabled={!!busy}
@@ -865,16 +893,6 @@ export default function Home() {
               </button>
 
               <span style={S.arrow}>›</span>
-
-              {basisMode && (
-                <span style={S.basisTag}>
-                  {basisMode === 'polygon' ? `경계 기준${polygon?.length >= 3 ? ` (${polygon.length}점)` : ' (미지정)'}` : '중심 기준'}
-                  <button
-                    style={{ border: 0, background: 'none', color: T.ok, fontWeight: 700, cursor: 'pointer', fontSize: 11, padding: 0, textDecoration: 'underline' }}
-                    onClick={() => { setBasisMode(null); setPending(null); setDrawNow(false); }}
-                  >변경</button>
-                </span>
-              )}
 
               {/*
                 **파란 버튼이 셋이면 다음에 뭘 누를지 셋이 동시에 주장한다.**
@@ -902,6 +920,8 @@ export default function Home() {
                 ))
               )}
 
+              <span style={S.arrow}>›</span>
+
               {/* 반경·종류를 고른 뒤 수집해야 해서 버튼은 탭 안에 있다 — 여기서는 그 탭으로 보낸다 */}
               {/*
                 **이미 그 탭에 있는데도 「→」 파란 버튼이 화면 맨 위에서 다음이라 주장했다**
@@ -912,7 +932,8 @@ export default function Home() {
                 onClick={() => setTab('비교사업장')} disabled={!!busy}
               >
                 {compDone && <span style={S.check}>✓</span>}
-                {compDone ? '비교사업장 · 분양가' : '비교사업장 · 분양가 →'}
+                {/* 줄이 이미 › 로 이어져 있다 — 끝에 또 → 를 달면 무엇을 가리키는지 흐려진다 */}
+                비교사업장 · 분양가
               </button>
             </>
           )}
