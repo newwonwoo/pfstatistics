@@ -86,6 +86,40 @@ export function distanceToPolygon(point, ring) {
   return min;
 }
 
+/**
+ * **면 ↔ 면 최단거리(m).**
+ *
+ * 규정이 재는 거리는 「단지 경계로부터」다. 상대 단지도 **면**이 있으면
+ * 점(대표지번)까지가 아니라 **경계끼리** 재야 지도에서 보이는 최단거리와 같다
+ * (사용자 지적 2026-09-25 — 「실제 지도상 최단거리를 재서 표기해야 해」).
+ *
+ * 거리는 `distanceToPolygon` 으로만 잰다 — 반경원(`bufferPolygon`)이 그 함수를
+ * 역산해 그려지므로 다른 식으로 재면 그림과 판정이 갈린다. 그래서 두 링의 변을
+ * `step` m 이하로 잘게 나눠 **양쪽 방향으로** 점→면 거리를 재고 최소값을 쓴다
+ * (한쪽만 재면 긴 변 하나로 이어진 도형에서 최단점을 놓친다).
+ */
+export function ringToRing(ringA, ringB, step = 5) {
+  if (!ringA?.length || !ringB?.length) return null;
+  const dense = (ring) => {
+    if (ring.length < 2) return ring;
+    const out = [];
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i], b = ring[(i + 1) % ring.length];
+      const n = Math.max(1, Math.ceil(haversine(a, b) / step));
+      for (let k = 0; k < n; k++) {
+        const t = k / n;
+        out.push({ lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t });
+      }
+    }
+    return out;
+  };
+  const A = dense(ringA), B = dense(ringB);
+  let min = Infinity;
+  for (const p of A) { const d = distanceToPolygon(p, ringB); if (d != null && d < min) min = d; if (min === 0) return 0; }
+  for (const p of B) { const d = distanceToPolygon(p, ringA); if (d != null && d < min) min = d; if (min === 0) return 0; }
+  return Number.isFinite(min) ? min : null;
+}
+
 /** 로컬 평면 오프셋 → 위경도 */
 function offset(c, dist, theta, k) {
   const dx = dist * Math.cos(theta);

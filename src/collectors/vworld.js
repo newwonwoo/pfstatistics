@@ -183,3 +183,81 @@ export async function roadLines({ x, y }, radius = 1000, { polygon = null } = {}
   rows.__features = feats.length;
   return rows;
 }
+
+/* ── 연속지적도 (필지 경계) ───────────────────────────────────────────────
+ *
+ * **상대 단지의 경계는 공개 원천에 없다** 고 적어 두었던 것은 **틀렸다**(2026-09-25).
+ * 브이월드 WFS 의 `lp_pa_cbnd_bubun`(연속지적도)이 **필지 폴리곤 + 지번**을 준다 —
+ * 실측 속성: `pnu` · `jibun`("53-8대") · `addr`("인천광역시 미추홀구 도화동 53-8") ·
+ * `bonbun`/`bubun` · `jiga`.
+ *
+ * 그래서 비교·인근 단지까지의 거리를 **대표지번 점**이 아니라 **그 필지의 경계**까지
+ * 잴 수 있다 — 사용자 지적 「실제 지도상 최단거리를 재서 표기해야 해」.
+ *
+ * 한계 : 필지 경계는 **단지 경계와 정확히 같지는 않다**(단지가 여러 필지로 나뉘거나
+ * 도로·공원이 편입되기도 한다). 점보다 훨씬 가깝지만 **무엇으로 쟀는지 반드시 적는다.**
+ */
+const PARCEL_LAYER = 'lp_pa_cbnd_bubun';
+
+/** MultiPolygon/Polygon 의 가장 큰 외곽 링을 {lat,lng}[] 로 */
+function outerRing(geom) {
+  if (!geom) return null;
+  const polys = geom.type === 'MultiPolygon' ? geom.coordinates
+    : geom.type === 'Polygon' ? [geom.coordinates] : [];
+  let best = null, bestN = 0;
+  for (const poly of polys) {
+    const ring = poly?.[0] ?? [];
+    if (ring.length > bestN) { bestN = ring.length; best = ring; }
+  }
+  return best ? best.map(([lng, lat]) => ({ lat, lng })) : null;
+}
+
+/** 지번 비교용 — "도화동 53-28번지 일원" · "53-28대" 에서 숫자 꼴만 남긴다 */
+const numKey = (s) => (String(s ?? '').match(/(\d+)\s*-\s*(\d+)/) ?? String(s ?? '').match(/(\d+)/) ?? [])
+  .slice(1).filter(Boolean).join('-');
+
+/**
+ * 좌표가 놓인 **필지 경계**를 돌려준다.
+ *
+ * ① 지번(`jibun`)이 맞는 필지 → ② 그 점을 품은 필지 → ③ 가장 가까운 필지 순으로 고른다.
+ * 못 찾으면 null — 부르는 쪽은 그때 **점 거리로 물러서고 그 사실을 적는다.**
+ */
+export async function parcelRing({ x, y }, { jibun = null, span = 120 } = {}) {
+  const key = requireKey('VWORLD_API_KEY').trim();
+  const center = { lat: Number(y), lng: Number(x) };
+  if (!Number.isFinite(center.lat) || !Number.isFinite(center.lng)) return null;
+
+  const dLat = (span / 6371008.8) * (180 / Math.PI);
+  const dLng = dLat / Math.max(0.2, Math.cos((center.lat * Math.PI) / 180));
+  const bbox = [center.lng - dLng, center.lat - dLat, center.lng + dLng, center.lat + dLat].join(',');
+  const url = `${HOST}?SERVICE=WFS&REQUEST=GetFeature&VERSION=1.1.0&TYPENAME=${PARCEL_LAYER}`
+    + `&BBOX=${bbox}&SRSNAME=EPSG:4326&MAXFEATURES=200&output=application/json`
+    + `&key=${encodeURIComponent(key)}&domain=${encodeURIComponent(domain())}`;
+
+  let data = null;
+  try { data = await getJson(url, { retries: 1, timeout: 15000 }); } catch { return null; }
+  const feats = (data?.features ?? []).map(f => ({
+    ring: outerRing(f.geometry),
+    addr: f.properties?.addr ?? null,
+    jibun: f.properties?.jibun ?? null,
+    pnu: f.properties?.pnu ?? null,
+  })).filter(f => f.ring?.length >= 3);
+  if (!feats.length) return null;
+
+  const want = numKey(jibun);
+  const byJibun = want ? feats.find(f => numKey(f.jibun) === want || numKey(f.addr) === want) : null;
+  const byInside = feats.find(f => distanceToPolygon(center, f.ring) === 0);
+  const nearest = feats.reduce((a, b) =>
+    (distanceToPolygon(center, b.ring) < distanceToPolygon(center, a.ring) ? b : a));
+
+  const hit = byJibun ?? byInside ?? nearest;
+  return {
+    ring: hit.ring,
+    addr: hit.addr,
+    jibun: hit.jibun,
+    pnu: hit.pnu,
+    matched: byJibun ? 'jibun' : byInside ? 'inside' : 'nearest',
+    /* 필지 경계이지 단지 경계가 아니다 — 화면·엑셀이 이 말을 그대로 쓴다 */
+    source: '국토교통부 연속지적도(브이월드 WFS lp_pa_cbnd_bubun)',
+  };
+}

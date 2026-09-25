@@ -1,6 +1,8 @@
 import { requireKey } from '../lib/env.js';
 import { getJson } from '../lib/http.js';
-import { distanceToPolygon, haversine } from '../lib/geo.js';
+import { distanceToPolygon, haversine, ringToRing } from '../lib/geo.js';
+import { parcelRing } from './vworld.js';
+import { getKey } from '../lib/env.js';
 import { sidoShort } from '../lib/sido.js';
 import { lookup as rankLookup } from './constructor.js';
 import { loadSggIndex, matchByName } from './kapt.js';
@@ -802,6 +804,34 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
     .map(v => ({ name: v.r.HOUSE_NM, address: v.r.HSSPLY_ADRES, kind: v.kind,
                  saleStart: v.r.CNTRCT_CNCLS_BGNDE ?? null, url: v.r.PBLANC_URL ?? null }));
 
+  /*
+    ── 거리를 **실제 지도상 최단거리**로 다시 잰다 (사용자 지적 2026-09-25) ──────
+    여기까지의 `d` 는 상대 단지를 **대표지번 점**으로 보고 잰 값이다. 규정이 재는 거리는
+    「단지 경계로부터」이므로, 상대 쪽도 면이 있으면 **경계끼리** 재야 지도에서 보이는
+    최단거리와 같아진다. 브이월드 연속지적도가 그 필지 경계를 준다 —
+    「상대 단지의 경계는 공개 원천에 없다」 고 적어두었던 기록이 틀렸다.
+
+    · 반경의 **1.35배 안** 후보만 다시 잰다(밖은 어차피 떨어진다 · 호출 수를 줄인다).
+    · 필지를 못 받으면 **점 거리 그대로** 두고 `distanceBasis` 에 그 사실을 남긴다.
+    · 키가 없으면 통째로 건너뛴다 — 없다고 수집이 멈추면 안 된다.
+  */
+  const siteRing = polygon?.length >= 3 ? polygon : null;
+  const siteCenter = { lat: Number(site.y), lng: Number(site.x) };
+  if (getKey('VWORLD_API_KEY') && !census && !probe) {
+    const near2 = located.filter(v => v?.p && Number.isFinite(v.d) && v.d <= radius * 1.35);
+    await mapLimit(near2, 6, async (v) => {
+      try {
+        const pr = await parcelRing({ x: v.p.x, y: v.p.y }, { jibun: v.r.HSSPLY_ADRES });
+        if (!pr?.ring) return;
+        const dd = siteRing ? ringToRing(siteRing, pr.ring) : distanceToPolygon(siteCenter, pr.ring);
+        if (!Number.isFinite(dd)) return;
+        v.dPoint = v.d;
+        v.d = Math.round(dd);
+        v.parcel = pr;
+      } catch { /* 못 받으면 점 거리 그대로 */ }
+    });
+  }
+
   const siteKey = jibunKey(siteAddress ?? region);
   const within = located.filter(v => v?.p && v.d <= radius).sort((a, b) => a.d - b.d);
 
@@ -860,7 +890,7 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
   }
 
   // 3차 — 반경 안의 단지만 주택형별 상세를 받는다 (호출 수를 최소로)
-  const items = await mapLimit(inside, 5, async ({ r, q, p, d, dCenter, src, kind, precision, kapt }) => {
+  const items = await mapLimit(inside, 5, async ({ r, q, p, d, dPoint, dCenter, parcel, src, kind, precision, kapt }) => {
     let types = [];
     try {
       types = src === 'urbty' ? await fetchUrbtyModels(r.HOUSE_MANAGE_NO) : await fetchModels(r.HOUSE_MANAGE_NO);
@@ -878,6 +908,11 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
       query: q,
       x: p.x, y: p.y,
       distance: d,
+      /* 무엇까지 잰 거리인가 — 필지 경계(면) 인지 대표지번 점인지 끝까지 들고 다닌다 */
+      distanceBasis: parcel ? 'parcel' : 'point',
+      distancePoint: dPoint ?? null,
+      parcelAddr: parcel?.addr ?? null,
+      parcelMatch: parcel?.matched ?? null,
       /* 본건(심사대상)인가 — 같은 지번이거나 사실상 같은 자리(30m 이내) */
       isSite: (siteKey != null && jibunKey(r.HSSPLY_ADRES) === siteKey) || (dCenter ?? d) <= 30,
       /* 좌표를 어디까지 맞춰서 잰 거리인지 — dong·place 는 근사다 */
@@ -929,6 +964,20 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
       rental: excludedRental.length,
       listed: items.length,
       approx: within.filter(v => v.precision && v.precision !== 'exact').length,
+      /* 거리를 필지 경계(면)까지 잰 건수 — 나머지는 대표지번 점까지다 */
+      parcel: within.filter(v => v.parcel).length,
+    },
+    /*
+      **무엇까지 잰 거리인가** — 화면·엑셀이 이 문구를 그대로 쓴다.
+      섞여 있을 수 있으므로(필지를 못 받은 건은 점) 건수를 같이 준다.
+    */
+    distance: {
+      from: polygon?.length >= 3 ? '사업지 경계' : '대표지번 중심',
+      to: within.some(v => v.parcel) ? '상대 단지 필지 경계' : '상대 단지 대표지번',
+      parcelCount: within.filter(v => v.parcel).length,
+      pointCount: within.filter(v => !v.parcel).length,
+      note: '상대 단지 경계는 국토교통부 연속지적도(브이월드 WFS)의 필지 경계입니다 —'
+        + ' 필지 경계이지 단지 경계가 아니므로 도로·공원 편입분만큼 차이가 날 수 있습니다.',
     },
     source: {
       org: '한국부동산원 청약홈',
