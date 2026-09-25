@@ -119,6 +119,11 @@ const S = {
   matchSel: { padding: '5px 8px', border: `1px solid ${T.line}`, borderRadius: 5, fontSize: 12, background: '#fff', maxWidth: 460 },
   arrow: { color: T.muted, fontSize: 16, fontWeight: 700, userSelect: 'none' },
   spacer: { marginLeft: 'auto' },
+  /* 안내문이 「여기서 하세요」 라고 말하면 그 칸·버튼이 안내문 안에 있어야 한다 */
+  msgFix: { display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap', marginTop: 9 },
+  msgGo: { padding: '8px 15px', borderRadius: 6, border: 0, fontSize: 12.5, fontWeight: 700,
+           background: T.accent, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' },
+  msgNote: { fontSize: 11.5, color: T.muted, paddingBottom: 9 },
   msg: (kind) => ({
     marginTop: 11, padding: '9px 12px', borderRadius: 6, fontSize: 12.5,
     background: kind === 'err' ? T.errSoft : kind === 'ok' ? T.okSoft : T.warnSoft,
@@ -272,7 +277,8 @@ export default function Home() {
       */
       setMsg(String(form.company).trim()
         ? { kind: 'ok', text: `통계 ${j.okCount}/${j.total} 수집 완료` }
-        : { kind: 'warn', text: `통계 ${j.okCount}/${j.total} 수집 완료 — 시공사를 안 넣어 시공능력평가순위(브랜드경쟁력)가 빠졌습니다. 상호를 넣고 다시 [통계 수집] 을 누르세요.` });
+        : { kind: 'warn', needCompany: true,
+            text: `통계 ${j.okCount}/${j.total} 수집 완료 — 시공사를 안 넣어 시공능력평가순위(브랜드경쟁력)가 빠졌습니다.` });
     } catch (e) { setMsg({ kind: 'err', text: e.message }); }
     finally { setBusy(null); }
   }
@@ -959,7 +965,35 @@ export default function Home() {
           </div>
         )}
 
-        {msg && <div style={S.msg(msg.kind)}>{msg.text}</div>}
+        {/*
+          **안내문이 가리키는 칸이 화면에 없었다**(사용자 지적 2026-09-25).
+          「상호를 넣고 다시 [통계 수집] 을 누르세요」 라고 적어놓고, 정작 시공사 입력칸은
+          주소 확정 뒤 접힌 입력폼 안에 있어 보이지 않았다 —
+          경계 그리기에서 같은 실수를 한 적이 있다(「이 경계로 수집」 버튼이 없던 일).
+          **넣을 칸과 누를 버튼을 안내문 자리에 그대로 둔다.**
+        */}
+        {msg && (
+          <div style={S.msg(msg.kind)}>
+            {msg.text}
+            {msg.needCompany && (
+              <div style={S.msgFix}>
+                <div style={{ width: 280 }}>
+                  <CompanyPicker
+                    value={form.company}
+                    onChange={(v) => setForm(f => ({ ...f, company: v }))}
+                    onMeta={setRankMeta}
+                  />
+                </div>
+                <button style={S.msgGo} onClick={collect} disabled={!!busy || !String(form.company).trim()}>
+                  {busy === 'collect' ? '수집 중…' : '통계 다시 수집'}
+                </button>
+                {!String(form.company).trim() && (
+                  <span style={S.msgNote}>상호를 고르면 누를 수 있습니다</span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/*
@@ -990,7 +1024,8 @@ export default function Home() {
               [이 경계로 … 수집] 으로 흐름을 끝낸 경우 `polyDone` 이 안 서기 때문인데,
               **수집이 끝난 것이 곧 그 경계를 쓴 것**이다. 할 일이 남은 것처럼 읽히면 안 된다.
             */}
-            {(polyDone || allPoi) && polygon?.length >= 3 ? `✓ 경계 ${polygon.length}점 확정됨 — 경계 기준으로 잽니다`
+            {(polyDone || allPoi) && polygon?.length >= 3
+              ? `✓ 경계 ${polygon.length}점 확정됨 — ${data ? '경계 기준으로 잽니다' : '이제 [통계 수집] 을 누르세요'}`
               : polygon?.length >= 3 ? `경계 ${polygon.length}점 지정됨 — [경계 확정] 을 누르세요`
               : basisMode !== 'polygon' ? '중심 기준 — 대표지번 한 점에서 잽니다'
               : drawNow ? `지도를 클릭해 경계를 찍으세요 — ${polygon?.length ?? 0}점 (3점부터 경계가 됩니다)`
@@ -1012,6 +1047,7 @@ export default function Home() {
             ? () => runPoi(pending ?? null, polygon)
             : null}
           done={polyDone || allPoi}
+          doneHint={data ? '경계 기준으로 잽니다' : '이제 [통계 수집] 을 누르세요'}
           onConfirm={() => {
             setPolyDone(true); setDrawNow(false); setMapOpenManual(false);
             setMsg({ kind: 'ok', text: `경계 ${polygon?.length ?? 0}점 확정 — 이제 [통계 수집] 을 누르세요.` });

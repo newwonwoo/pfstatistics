@@ -43,7 +43,7 @@ const S = {
 };
 
 export default function PolygonDrawer({ center, polygon, onChange, busy, autoDraw = false, pendingSheet,
-  onCollect = null, onConfirm = null, onRedraw = null, done = false }) {
+  onCollect = null, onConfirm = null, onRedraw = null, done = false, doneHint = null }) {
   const el = useRef(null);
   const state = useRef({ map: null, poly: null, dots: [] });
   const [pts, setPts] = useState(polygon ?? []);
@@ -172,7 +172,7 @@ export default function PolygonDrawer({ center, polygon, onChange, busy, autoDra
           </button>
         ) : done ? (
           <>
-            <span style={S.ready(true)}>✓ 경계 {pts.length}점 확정됨</span>
+            <span style={S.ready(true)}>✓ 경계 {pts.length}점 확정됨{doneHint ? ` — ${doneHint}` : ''}</span>
             {onRedraw && (
               <button style={S.btn(false)} onClick={onRedraw}>다시 그리기</button>
             )}
