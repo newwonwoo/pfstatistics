@@ -200,7 +200,10 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
     let cur = writeTable(cw, 2, {
       title: '비교사업장',
       subtitle: `▶ 사업지 : ${compare.addr ?? facilities?.address ?? data.region}`
-        + ` · 반경 ${rkm} · ${c.basis === 'polygon' ? '사업지 경계 기준' : '대표지번 중심 기준'}`,
+        + ` · 반경 ${rkm}`
+        + ` · 거리 기준 : ${c.distance?.from ?? (c.basis === 'polygon' ? '사업지 경계' : '대표지번 중심')}`
+        + ` ↔ ${c.distance?.to ?? '상대 단지 대표지번'} 최단거리`
+        + (c.distance?.parcelCount ? ` (필지 경계 ${c.distance.parcelCount}곳${c.distance.pointCount ? ` · 대표지번 점 ${c.distance.pointCount}곳` : ''})` : ''),
       columns: ['선택', '#', '종류', '단지명', '시공사', '주소', '거리', '분양개시일', '시기', '공급세대', '면적(㎡)', '분양가(원/㎡)', '유사도'],
       rows: shown.map((a, i) => [
         picked.includes(a.manageNo) ? '■' : '',

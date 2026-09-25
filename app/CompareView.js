@@ -877,6 +877,13 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
                     */}
                     <td style={S.tdNo}>
                       {a.distance}m
+                      {/* 이 줄만 필지를 못 받아 점으로 쟀으면 그 사실을 줄에서 말한다 */}
+                      {a.distanceBasis === 'point' && data?.distance?.parcelCount > 0 && (
+                        <><br /><span style={S.badge('none')}
+                          title={`이 단지는 필지 경계를 받지 못해 대표지번 점까지 쟀습니다${a.distancePoint ? '' : ''}`}>
+                          대표지번 기준
+                        </span></>
+                      )}
                       {a.geocode && a.geocode !== 'exact' && (
                         <><br /><span style={S.badge('warn')} title={GEOCODE_NOTE[a.geocode]}>
                           {GEOCODE_LABEL[a.geocode]}
@@ -1051,9 +1058,19 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
 
         <p style={S.note}>
           {data.source?.citation}<br />
-          거리는 <b>사업지 {data.basis === 'polygon' ? '경계 최단거리' : '대표지번 중심'}</b> ↔ 상대 단지 <b>대표지번</b> 기준입니다.
-          규정은 경계↔경계를 요구하지만 상대 단지의 경계는 공개 원천에 없습니다 — 그만큼 거리가 길게 잡힙니다.
-          같은 단지가 재공고(조합원 취소분 등)로 여러 건 올라오면 <b>최신 공고 1건</b>만 남깁니다.
+          {/*
+            **거리 기준은 봉투가 말한다.** 전에는 「상대 단지 대표지번 기준 · 경계는 공개 원천에
+            없습니다」 라고 적었는데 **틀린 기록이었다** — 연속지적도가 필지 경계를 준다.
+            필지를 못 받은 건이 섞일 수 있으므로 건수를 같이 적는다.
+          */}
+          거리는 <b>사업지 {data.distance?.from ?? (data.basis === 'polygon' ? '사업지 경계' : '대표지번 중심')}</b>
+          {' '}↔ 상대 단지 <b>{data.distance?.to ?? '대표지번'}</b> 의 <b>최단거리</b>입니다
+          {data.distance?.parcelCount > 0 && (
+            <>{' '}(필지 경계로 잰 것 {data.distance.parcelCount}곳
+              {data.distance.pointCount > 0 && <> · 필지를 못 받아 <b>대표지번 점</b>으로 잰 것 {data.distance.pointCount}곳</>})</>
+          )}.
+          {data.distance?.note && <> {data.distance.note}</>}
+          {' '}같은 단지가 재공고(조합원 취소분 등)로 여러 건 올라오면 <b>최신 공고 1건</b>만 남깁니다.
         </p>
 
         <div style={S.secTitle}>반경 {rLabel(data.radius)} 분양단지 위치</div>

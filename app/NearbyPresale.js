@@ -281,7 +281,12 @@ export default function NearbyPresale({
               {data.source?.citation}<br />
               목록은 <b>청약홈 분양정보</b>에서 왔지만 <b>초기분양률(6개월 이내)은 어느 공개 원천에도 없습니다</b> —
               단지별 분양률은 조사해 넣는 값입니다(HUG 가 주는 것은 시도 평균 분기값뿐입니다).
-              거리는 사업지 {data.basis === 'polygon' ? '경계 최단거리' : '대표지번 중심'} ↔ 상대 단지 대표지번 기준입니다.
+              거리는 사업지 <b>{data.distance?.from ?? '대표지번 중심'}</b> ↔ 상대 단지{' '}
+              <b>{data.distance?.to ?? '대표지번'}</b> 의 <b>최단거리</b>입니다
+              {data.distance?.parcelCount > 0 && (
+                <>{' '}(필지 경계 {data.distance.parcelCount}곳
+                  {data.distance.pointCount > 0 && <> · 대표지번 점 {data.distance.pointCount}곳</>})</>
+              )}.
             </p>
 
             {rows.length > 0 && coord && (<>

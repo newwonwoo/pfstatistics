@@ -131,6 +131,22 @@ FeatureType 187개. 도로 관련 실측 속성(DescribeFeatureType):
 - 격자(카카오) → 선형 실측 차이(부천 상동 1km): 후보 23→**95곳** · 4.3s→**0.9s** · ±25~150m→**±5m**
   · 송내대로 **0m → 133m**(100m 구간 경계를 넘는다 · 5점→4점). 검증기록 `docs/QA-도로선형.md`
 
+### 상대 단지 경계 — 연속지적도 (VWORLD_API_KEY, 실측 2026-09-25)
+**「상대 단지의 경계는 공개 원천에 없다」 고 적어두었던 것은 틀렸다.**
+브이월드 WFS 가 **연속지적도**를 준다 — 필지 폴리곤 + 지번.
+```
+GET api.vworld.kr/req/wfs?...&TYPENAME=lp_pa_cbnd_bubun&BBOX=minx,miny,maxx,maxy
+    &SRSNAME=EPSG:4326&output=application/json&key=&domain=
+속성 : pnu · jibun("53-8대") · addr("인천광역시 미추홀구 도화동 53-8") · bonbun/bubun · jiga
+```
+`src/collectors/vworld.js` `parcelRing()` 이 **지번 일치 → 점을 품은 필지 → 최근접** 순으로 고른다.
+거리는 `geo.ringToRing()`(양쪽 링을 5m 로 나눠 `distanceToPolygon` 최소값)으로 **경계↔경계**를 잰다.
+실측(인천 도화동 · 반경 2km 20건 전부 필지로 잼): 두산위브 더센트럴 도화 **85m → 50m** ·
+서희스타힐스 더 도화 **570m → 325m** · 주안역 센트레빌 1324m → 1240m.
+- **필지 경계이지 단지 경계가 아니다** — 여러 필지로 나뉜 단지·도로·공원 편입분은 빠진다.
+  봉투 `distance{from,to,parcelCount,pointCount,note}` 로 무엇까지 쟀는지 화면·엑셀에 적는다.
+- 반경 **1.35배 안** 후보만 다시 잰다(호출 수). 필지를 못 받거나 키가 없으면 **점 거리로 물러선다.**
+
 ### 분양가 — 청약홈 (DATA_GO_KR_KEY 필요)
 비교사업장의 **분양가**를 주는 유일한 공공 원천이다. 실거래는 이미 팔린 값이고, KB시세는 기축이다.
 ```
