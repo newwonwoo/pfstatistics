@@ -295,6 +295,14 @@ export default function Home() {
       setCoord(j.coord);
       setFixed(true);
       setPanelOpenManual(null);   // [사업지 바꾸기] 로 펴 둔 상태를 자동 판단으로 되돌린다
+      /*
+        **탭이 제자리에 남아 있었다**(사용자 지적 2026-09-25).
+        심사평점표를 보다가 주소를 다시 검색하면 흐름은 1단계로 돌아가는데
+        화면은 마지막 탭 그대로라, 다음에 할 일(경계·통계)이 어디 있는지 안 보인다.
+        **흐름이 처음으로 가면 화면도 처음으로 간다.**
+      */
+      setTab(SHEETS.find(x => x.stage === '자료수집')?.id ?? '교통환경');
+      setMapOpenManual(null);
       /* 주소 다음은 경계다 — 지도를 그리기 모드로 열어 바로 찍게 한다 */
       if (basisMode === 'polygon') { setDrawNow(true); setPolyDone(false); setMapOpenManual(null); }
 
@@ -690,7 +698,9 @@ export default function Home() {
 
       {/* 원천 상태는 수집할 때 보는 것이다 — 뒤 단계에서는 그 자리를 표에 내준다 */}
       {gatherTab && <SourceHealth />}
-      <Steps current={current} done={done} />
+      {/* 로드맵인데 못 누르면 그림일 뿐이다 — 마디를 누르면 그 단계의 탭으로 간다 */}
+      <Steps current={current} done={done}
+        onJump={(id) => { setTab(id); setMapOpenManual(null); setMsg(null); }} />
 
       <div style={S.panel}>
         {/*
