@@ -23,7 +23,23 @@ import { T } from './theme';
  * - 아랫줄은 성격별로 **묶음 이름표**를 세운다(반경시설 · 분양가 · 지역통계).
  *   전에는 구분선만 있어 무엇이 바뀌는지 읽히지 않았다.
  */
-const CLUSTER = { poi: '반경시설', comp: '분양가', stat: '지역통계' };
+/*
+  묶음마다 **파스텔 배경**으로 감싼다(사용자 확정 2026-09-25).
+  처음엔 브래킷(가는 괄호선)으로 했는데 **눈에 안 들어왔다** — 선 하나로는
+  「이만큼이 한 묶음」 이 읽히지 않는다. 면으로 덮고 이름표를 키운다.
+
+  글자색은 배경과 같은 계열의 **진한 쪽**을 쓴다. 대비 실측(WCAG, 본문 기준 4.5 이상):
+    반경시설 캡션 8.02 · 탭글자 6.67
+    분양가   캡션 5.79 · 탭글자 6.07
+    지역통계 캡션 6.58 · 탭글자 6.85
+  고른 탭은 흰 바탕(아래 판과 이어진다)에 윗변만 묶음색으로 굵게 — 어느 묶음인지 유지된다.
+*/
+const CLUSTER = {
+  poi:  { label: '반경시설', bg: '#e6effd', edge: '#c3d8f6', cap: '#14458c', ink: '#2f5389' },
+  comp: { label: '분양가',   bg: '#fdf0df', edge: '#f0d9b4', cap: '#8a5008', ink: '#7c521d' },
+  stat: { label: '지역통계', bg: '#e5f3ea', edge: '#c2e2cf', cap: '#0f6139', ink: '#2a5b43' },
+};
+const PLAIN = { label: null, bg: 'transparent', edge: 'transparent', cap: T.muted, ink: T.muted };
 
 /** 단계 전체의 상태 — 다 됐으면 ok, 하나라도 됐으면 partial */
 const groupStatus = (items, status) => {
@@ -130,10 +146,11 @@ export default function SheetTabs({ sheets, active, onSelect, status, next = nul
     for (const sh of kids) {
       const key = sh.kind ?? 'etc';
       let c = out.find(x => x.key === key);
-      if (!c) out.push(c = { key, label: CLUSTER[key] ?? null, items: [] });
+      if (!c) out.push(c = { key, ...(CLUSTER[key] ?? PLAIN), items: [] });
       c.items.push(sh);
     }
-    return out.length > 1 ? out : out.map(c => ({ ...c, label: null }));
+    /* 묶음이 하나뿐이면 색도 이름표도 달지 않는다 — 나눌 것이 없는데 나눈 척하면 안 된다 */
+    return out.length > 1 ? out : out.map(c => ({ ...c, ...PLAIN }));
   }, [kids]);
 
   return (
@@ -177,27 +194,14 @@ export default function SheetTabs({ sheets, active, onSelect, status, next = nul
           <div style={{ position: 'relative' }}>
             <div ref={ref} onWheel={onWheel} role="tablist" aria-label={`${activeGroup.key} 시트`} style={S.row}>
               {clusters.map((c) => (
-                <div key={c.key} style={S.cluster} role="group" aria-label={c.label ?? undefined}>
-                  {/*
-                    **이름표가 탭 옆에 붙어 있을 뿐이라 무엇을 아우르는지가 안 보였다**
-                    (사용자 지적 2026-09-25). 묶음 **폭만큼 걸치는 브래킷**으로 바꾼다 —
-                    상자로 감싸면 「탭이 아래 판에 이어진다」 는 시트 은유가 깨지므로,
-                    위쪽에만 가는 선을 두고 양 끝을 살짝 내려 괄호처럼 보이게 한다.
-                  */}
-                  {c.label && (
-                    <div style={S.capRow} aria-hidden>
-                      <span style={S.rail(true)} />
-                      <span style={S.capText}>{c.label}</span>
-                      <span style={S.rail(false)} />
-                    </div>
-                  )}
+                <div key={c.key} style={S.cluster(c)} role="group" aria-label={c.label ?? undefined}>
+                  {c.label && <div style={S.cap(c)}>{c.label}</div>}
                   <div style={S.clusterTabs}>
                     {c.items.map(sh => {
                       const on = sh.id === active;
                       return (
                         <button key={sh.id} data-on={on ? '1' : '0'} role="tab" aria-selected={on}
-                          onClick={() => onSelect(sh.id)}
-                          style={S.tab(on, sh.tone === 'cover' ? '#6b7280' : null)}>
+                          onClick={() => onSelect(sh.id)} style={S.tab(on, c)}>
                           {sh.label}
                           <Dot st={status?.[sh.id]} />
                           {sh.id === next && <NextBadge note={nextNote} />}
@@ -253,32 +257,33 @@ const S = {
     transition: 'max-height .22s ease, opacity .18s ease, transform .22s ease, margin-top .22s ease',
   }),
   row: {
-    display: 'flex', alignItems: 'flex-end', gap: 18, overflowX: 'auto',
+    display: 'flex', alignItems: 'flex-end', gap: 10, overflowX: 'auto',
     padding: '0 2px', borderBottom: `1px solid ${T.lineStrong}`, scrollbarWidth: 'none',
   },
-  /* 한 묶음 = [브래킷 + 그 아래 탭들] — 세로로 쌓아 아우르는 관계를 보인다 */
-  cluster: { display: 'flex', flexDirection: 'column', minWidth: 0 },
-  capRow: { display: 'flex', alignItems: 'center', gap: 7, padding: '0 6px 5px' },
-  /* 양 끝이 아래로 꺾인 가는 선 — 상자 없이 괄호처럼 읽힌다 */
-  rail: (left) => ({
-    flex: 1, height: 5, minWidth: 10,
-    borderTop: `1px solid ${T.lineStrong}`,
-    [left ? 'borderLeft' : 'borderRight']: `1px solid ${T.lineStrong}`,
-    borderRadius: left ? '3px 0 0 0' : '0 3px 0 0',
+  /* 한 묶음 = [파스텔 면 + 이름표 + 그 안의 탭들] — 면이 아우르는 범위를 그대로 보여준다 */
+  cluster: (c) => ({
+    display: 'flex', flexDirection: 'column', minWidth: 0,
+    background: c.bg,
+    border: `1px solid ${c.edge}`, borderBottom: 'none',
+    borderRadius: '10px 10px 0 0',
+    padding: '6px 7px 0',
   }),
-  capText: {
-    whiteSpace: 'nowrap', fontSize: 10, fontWeight: 800,
-    letterSpacing: '.09em', color: T.muted, transform: 'translateY(2px)',
-  },
-  clusterTabs: { display: 'flex', alignItems: 'flex-end', gap: 2 },
-  tab: (on, tone) => ({
+  cap: (c) => ({
+    textAlign: 'center', whiteSpace: 'nowrap',
+    padding: '1px 4px 6px',
+    fontSize: 11.5, fontWeight: 800, letterSpacing: '.07em', color: c.cap,
+  }),
+  clusterTabs: { display: 'flex', alignItems: 'flex-end', gap: 4 },
+  tab: (on, c) => ({
     position: 'relative', whiteSpace: 'nowrap', cursor: 'pointer',
     padding: '8px 14px 9px', fontSize: 12.5,
-    fontWeight: on ? 700 : 500,
-    color: on ? T.ink : (tone ?? T.muted),
-    background: on ? T.panel : '#eaecf0',
-    border: `1px solid ${on ? T.lineStrong : 'transparent'}`,
-    borderBottom: on ? `1px solid ${T.panel}` : `1px solid ${T.lineStrong}`,
+    fontWeight: on ? 800 : 600,
+    color: on ? T.ink : c.ink,
+    background: on ? T.panel : 'transparent',
+    border: `1px solid ${on ? c.edge : 'transparent'}`,
+    borderBottom: `1px solid ${on ? T.panel : 'transparent'}`,
+    /* 고른 탭은 흰 바탕이라 묶음색이 사라진다 — 윗변으로 남겨 어느 묶음인지 유지한다 */
+    boxShadow: on ? `inset 0 3px 0 ${c.cap}` : 'none',
     borderRadius: '7px 7px 0 0',
     marginBottom: -1,
   }),

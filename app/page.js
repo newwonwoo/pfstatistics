@@ -768,7 +768,7 @@ export default function Home() {
             */
             <div style={{ ...S.field, gridColumn: '1 / -1', alignItems: 'flex-end' }}>
               <button style={S.btn({ busy: busy === 'geo', primary: true })} onClick={locate} disabled={!!busy}>
-                {busy === 'geo' ? '주소 확인 중…' : '주소 확정'}
+                {busy === 'geo' ? '지도에서 찾는 중…' : '지도에서 검색하기'}
               </button>
             </div>
           )}
