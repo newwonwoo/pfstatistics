@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { T, mono } from './theme';
 import { fetchJson } from './fetchJson';
 import RadiusMap from './RadiusMap';
@@ -105,6 +105,21 @@ const S = {
   card: { padding: '14px 16px', marginBottom: 14, borderRadius: 8, background: '#fffdf5', border: '1px solid #ecdfc0' },
   grid: { display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-end' },
   field: { display: 'flex', flexDirection: 'column', gap: 4 },
+  /* 안 채운 필수 칸은 **칸 자체가** 말한다 — 라벨 글자만으로는 안 읽힌다 */
+  needs: (on) => (on ? { borderColor: '#d98324', borderWidth: 2, background: '#fffaf2' } : null),
+  must: { marginLeft: 5, padding: '1px 5px', borderRadius: 3, fontSize: 9.5, fontWeight: 800,
+          background: '#fdecd8', color: '#8a5008', letterSpacing: '.03em' },
+  opt: { marginLeft: 5, padding: '1px 5px', borderRadius: 3, fontSize: 9.5, fontWeight: 700,
+         background: '#eef1f5', color: T.muted },
+  from: { fontSize: 10.5, color: T.ok, fontWeight: 700 },
+  siteHead: { display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10, flexWrap: 'wrap' },
+  siteTitle: { fontSize: 12.5, fontWeight: 800, color: T.ink },
+  siteSub: { fontSize: 11.5, color: T.muted },
+  reqTag: (done) => ({
+    marginLeft: 'auto', padding: '3px 10px', borderRadius: 11, fontSize: 11, fontWeight: 800,
+    background: done ? T.okSoft : '#fdecd8', color: done ? T.ok : '#8a5008',
+    border: `1px solid ${done ? '#c7e9d5' : '#f0d9b4'}`,
+  }),
   input: { padding: '5px 8px', fontSize: 12.5, border: `1px solid ${T.line}`, borderRadius: 4, background: '#fff', color: T.ink, fontFamily: 'inherit', width: 150, ...mono },
   select: { padding: '5px 8px', fontSize: 12.5, border: `1px solid ${T.line}`, borderRadius: 4, background: '#fff', color: T.ink, fontFamily: 'inherit' },
   sum: { display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap', padding: '14px 18px', marginBottom: 14, borderRadius: 8, background: '#f4f8ff', border: '1px solid #cfdcf0' },
@@ -250,6 +265,36 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
    * ③ 유사도 — 본건과 몇 개 항목이 일치하는가.
    * 택지유형은 원천에 없어 본건·상대 모두 수기다(상대는 아직 못 받으므로 판정에서 뺀다).
    */
+  /*
+    **필수 칸이 필수로 보이지 않았다**(사용자 지적 2026-09-25).
+    분양가격지수의 분자(본건 분양가)와 유사도 3항목이 없으면 이 탭은 아무 결론도 못 낸다 —
+    그런데 다른 칸과 똑같이 생겨서 「채워도 되고 말아도 되는 것」 으로 읽혔다.
+    택지유형은 뺀다 — **상대 단지 값을 원천이 주지 않아** 채워도 유사도 일치에 쓰이지 않는다.
+  */
+  const REQ = [
+    ['unitPrice', '본건 ㎡당 분양가'],
+    ['houseType', '가. 주택유형'],
+    ['sizeBand', '나. 단지규모'],
+    ['rankBand', '다. 시공능력평가순위'],
+  ];
+  const reqLeft = REQ.filter(([k]) => !site[k]).length;
+
+  /*
+    **시공순위를 또 묻고 있었다**(사용자 지적) — 시공사는 맨 처음에 고르고,
+    순위는 이 앱이 공시 명부에서 이미 찾아 두었다. 구간은 순위에서 바로 나온다.
+    「말없이 채우지 않는다」 는 규칙은 지키되, 채운 **출처를 칸 옆에 적어** 지킨다 —
+    조용한 자동채움이 문제였지 자동채움 자체가 문제가 아니었다.
+    사람이 다른 구간으로 바꾸면 그대로 둔다(공동시공은 다른 시공자로 볼 때가 있다).
+  */
+  const autoRank = useRef(null);
+  useEffect(() => {
+    const band = rankBandOf(companyRank);
+    if (!band || autoRank.current === companyRank) return;
+    autoRank.current = companyRank;
+    if (!site.rankBand) setSite({ rankBand: band, rankAuto: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyRank]);
+
   /* 본건 제원을 하나도 안 채웠으면 유사도를 "0개 일치" 로 붉게 띄우지 않는다 — 겁만 준다 */
   const siteFilled = Boolean(site.houseType || site.sizeBand || site.rankBand || site.landType);
   const similarity = (a) => {
@@ -450,13 +495,17 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
 
       {/* 본건 제원 — 유사도 판정과 분양가격지수에 쓴다 */}
       <div style={S.card}>
-        <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10, color: T.ink2 }}>
-          본건 제원 <span style={{ fontWeight: 400, color: T.muted }}>· 유사도 판정과 분양가격지수에 씁니다</span>
+        <div style={S.siteHead}>
+          <span style={S.siteTitle}>본건 제원</span>
+          <span style={S.siteSub}>유사도 판정과 분양가격지수에 씁니다</span>
+          <span style={S.reqTag(reqLeft === 0)}>
+            {reqLeft === 0 ? '✓ 필수 입력 완료' : `필수 ${REQ.length - reqLeft} / ${REQ.length} — ${reqLeft}개 남음`}
+          </span>
         </div>
         <div style={S.grid}>
           <label style={S.field}>
-            <span style={S.label}>본건 ㎡당 분양가 (원)</span>
-            <input style={S.input} inputMode="numeric" value={site.unitPrice ?? ''}
+            <span style={S.label}>본건 ㎡당 분양가 (원){!site.unitPrice && <span style={S.must}>필수</span>}</span>
+            <input style={{ ...S.input, ...S.needs(!site.unitPrice) }} inputMode="numeric" value={site.unitPrice ?? ''}
               placeholder="입력"
               onChange={e => setSite({ unitPrice: e.target.value.replace(/[^\d]/g, '') })} />
           </label>
@@ -483,41 +532,44 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
             </span>
           </label>
           <label style={S.field}>
-            <span style={S.label}>가. 주택유형</span>
-            <select style={S.select} value={site.houseType ?? ''} onChange={e => setSite({ houseType: e.target.value })}>
+            <span style={S.label}>가. 주택유형{!site.houseType && <span style={S.must}>필수</span>}</span>
+            <select style={{ ...S.select, ...S.needs(!site.houseType) }} value={site.houseType ?? ''} onChange={e => setSite({ houseType: e.target.value })}>
               <option value="">선택</option>
               {HOUSE_TYPES.map(x => <option key={x} value={x}>{x}</option>)}
             </select>
           </label>
           <label style={S.field}>
-            <span style={S.label}>나. 단지규모</span>
-            <select style={S.select} value={site.sizeBand ?? ''} onChange={e => setSite({ sizeBand: e.target.value })}>
+            <span style={S.label}>나. 단지규모{!site.sizeBand && <span style={S.must}>필수</span>}</span>
+            <select style={{ ...S.select, ...S.needs(!site.sizeBand) }} value={site.sizeBand ?? ''} onChange={e => setSite({ sizeBand: e.target.value })}>
               <option value="">선택</option>
               {SIZE_BANDS.map(x => <option key={x} value={x}>{x}</option>)}
             </select>
           </label>
           <label style={S.field}>
-            <span style={S.label}>다. 시공능력평가순위{companyRank ? ` (${companyRank}위)` : ''}</span>
-            {/*
-              순위를 알면서 구간을 또 고르게 하지 않는다. 말없이 채우면 입력값과 구분이 안 되므로
-              **누를 때만** 들어간다 — 공동시공처럼 다른 시공자로 볼 때가 있어 자동채택이 늘 옳지도 않다.
-              버튼을 select 아래에 두었더니 이 칸만 2줄이 되어 옆 칸(택지유형)이 밀렸다 — 같은 줄에 둔다.
-            */}
+            <span style={S.label}>
+              다. 시공능력평가순위{!site.rankBand && <span style={S.must}>필수</span>}
+            </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <select style={S.select} value={site.rankBand ?? ''} onChange={e => setSite({ rankBand: e.target.value })}>
+              <select style={{ ...S.select, ...S.needs(!site.rankBand) }} value={site.rankBand ?? ''}
+                onChange={e => setSite({ rankBand: e.target.value, rankAuto: false })}>
                 <option value="">선택</option>
                 {RANK_BANDS.map(x => <option key={x} value={x}>{x}</option>)}
               </select>
               {rankBandOf(companyRank) && site.rankBand !== rankBandOf(companyRank) && (
                 <button type="button" style={S.take}
-                  onClick={() => setSite({ rankBand: rankBandOf(companyRank) })}>
+                  title={`시공사 ${company ?? ''} ${companyRank}위 → ${rankBandOf(companyRank)}`}
+                  onClick={() => setSite({ rankBand: rankBandOf(companyRank), rankAuto: true })}>
                   {rankBandOf(companyRank)}
                 </button>
               )}
             </span>
+            {/* 자동으로 채웠으면 **어디서 왔는지 그 자리에 적는다** — 조용히 채우면 입력값과 구분이 안 된다 */}
+            {site.rankBand && site.rankAuto && companyRank && (
+              <span style={S.from}>시공사 {company ?? ''} {companyRank}위에서 자동</span>
+            )}
           </label>
           <label style={S.field}>
-            <span style={S.label}>라. 택지유형</span>
+            <span style={S.label}>라. 택지유형<span style={S.opt}>참고</span></span>
             <select style={S.select} value={site.landType ?? ''} onChange={e => setSite({ landType: e.target.value })}>
               <option value="">선택</option>
               {LAND_TYPES.map(x => <option key={x} value={x}>{x}</option>)}
