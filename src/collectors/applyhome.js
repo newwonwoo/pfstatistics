@@ -656,11 +656,11 @@ async function mapLimit(items, limit, fn) {
   묶음키가 달라져 재공고 정리가 통째로 빗나간다. 괄호·쉼표를 공백으로 바꾸고 찾는다.
 */
 const dongOf = (addr) => (String(addr ?? '').replace(/[(),]/g, ' ').match(/\S+?[동리가](?=\s|$)/) ?? [''])[0];
-const dedupeKey = (r) =>
+const nameKey = (r) =>
   // 괄호 **안의 내용까지** 지운다 — "역북 서희스타힐스 프라임시티(조합원 취소분)" 이
   // 원공고와 따로 앉아 같은 단지가 두 줄로 나왔다(실측).
   // 종류는 키에 따로 들어가므로 "○○(오피스텔)" 이 아파트와 합쳐지지는 않는다.
-  `${String(r.HOUSE_NM ?? '').replace(/\([^)]*\)/g, '').replace(/\s/g, '')}|${dongOf(r.HSSPLY_ADRES)}`;
+  String(r.HOUSE_NM ?? '').replace(/\([^)]*\)/g, '').replace(/\s/g, '');
 
 /** 주소 앞 두 토큰 = 시도 + 시군구 (광역시 자치구도 같은 모양) */
 const sggOf = (addr) => String(addr ?? '').split(/\s+/).slice(0, 2).join(' ');
@@ -709,10 +709,28 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
     ...urbtyRows.map(r => ({ r, src: 'urbty', kind: r.HOUSE_DTL_SECD_NM ?? '오피스텔' })),
   ];
 
-  // 같은 단지가 재공고로 여러 건 들어온다 — 최신 공고만 남긴다 (종류가 다르면 다른 줄이다)
+  /*
+    같은 단지가 재공고로 여러 건 들어온다 — 최신 공고만 남긴다 (종류가 다르면 다른 줄이다).
+
+    묶음키에 읍면동을 넣는 이유는 **같은 이름 다른 지역**을 가르기 위해서다.
+    그런데 도로명 주소는 읍면동을 안 줄 때가 있다 —
+    실측(2026-09-25): 「부평 신일해피트리 더루츠」 가
+      "인천광역시 부평구 산곡로 31 (산곡동, …)"  ← 읍면동 있음
+      "인천광역시 부평구 산곡로 31"              ← 읍면동 없음
+    으로 올라와 **같은 단지가 두 줄**로 앉았다.
+    그래서 먼저 `종류|이름` 으로 **대표 읍면동**을 정해두고, 읍면동이 빈 공고는 그것을 빌려 쓴다.
+    (이름이 같고 읍면동을 아는 공고가 하나라도 있으면 그 단지의 읍면동으로 본다)
+  */
+  const dongByName = new Map();
+  for (const n of notices) {
+    const k = `${n.kind}|${nameKey(n.r)}`;
+    const d = dongOf(n.r.HSSPLY_ADRES);
+    if (d && !dongByName.has(k)) dongByName.set(k, d);
+  }
   const latest = new Map();
   for (const n of notices) {
-    const key = `${n.kind}|${dedupeKey(n.r)}`;
+    const base = `${n.kind}|${nameKey(n.r)}`;
+    const key = `${base}|${dongOf(n.r.HSSPLY_ADRES) || dongByName.get(base) || ''}`;
     const prev = latest.get(key);
     if (!prev || String(n.r.RCRIT_PBLANC_DE) > String(prev.r.RCRIT_PBLANC_DE)) latest.set(key, n);
   }
