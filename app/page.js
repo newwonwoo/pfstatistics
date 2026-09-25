@@ -563,6 +563,20 @@ export default function Home() {
       위의 통계·반경시설 줄이 이미 말한다. (인구유입요인은 판정 전 기본점수라
       「지역수요 — 아직 판정하지 않음」 줄이 따로 맡는다)
     */
+    /*
+      **인구유입요인은 관문의 어느 줄도 말하지 않고 있었다**(2026-09-25).
+      지역수요 행은 `kind:'auto'`(주택보급률이 자동)라 아래 `form` 필터에 안 걸리고,
+      점수는 났지만 판정 전인 `provisional` 도 아니다 — 아예 `pending` 이라 A 가 null 이 된다.
+      그래서 통계·시설·수기입력·비교사업장이 전부 ✓ 인데 초기예상분양률이 안 나는 일이 생긴다.
+      주택보급률이 이미 와 있을 때만 적는다(안 왔으면 위 「통계 수집」 줄이 이미 말한다).
+    */
+    if (mSum.needInflow) {
+      need.push({
+        label: '인구유입요인 — 개수를 고르지 않음', tab: '지역수요', go: '지역수요 탭으로 →',
+        why: '지역수요(5) 의 반쪽입니다 — 신도시 · 혁신도시 · 기업도시 · 산업단지 등 요인 개수를 표에서 「없음 / 1개 / 2개 이상」 으로 고르세요',
+      });
+    }
+
     const miss = (mSum.rows ?? []).filter(r => r.kind === 'form' && r.score == null);
     put(miss.length === 0,
       `수기입력${miss.length ? ` — ${miss.length}개 남음` : ''}`, '수기입력',
@@ -581,7 +595,7 @@ export default function Home() {
         : '고른 단지의 평균과 본건 분양가를 견주어 분양가경쟁력 점수를 냅니다');
 
     return { need, done, blocked: need.length > 0 };
-  }, [data, allPoi, mSum.provisional, mSum.excl, mSum.rows, compare, cmpSum]);
+  }, [data, allPoi, mSum.provisional, mSum.needInflow, mSum.excl, mSum.rows, compare, cmpSum]);
 
   const done = [
     ...(fixed ? ['input'] : []),
@@ -1162,6 +1176,8 @@ export default function Home() {
                   radiusBasis={radiusBasis} onRadiusBasis={setRadiusBasis}
                   manual={manual} sheetInput={sheetInput}
                   onManual={(label, v) => setManual(m => ({ ...m, [label]: v }))}
+                  /* 지역수요 시트의 인구유입요인을 그 표에서 바로 고친다 */
+                  onSheetInput={(patch) => setSheetInput(x => ({ ...(x ?? {}), ...patch }))}
                 />
               )}
           </div>

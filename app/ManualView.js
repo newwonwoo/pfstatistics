@@ -1,6 +1,7 @@
 'use client';
 import { useMemo, useState, useEffect } from 'react';
 import { T, mono } from './theme';
+import { INFLOW_CHOICES, inflowOn } from './inflow';
 import { manualSummary, PENDING_ITEMS, scaleTable, unitMixTable, nearbyTable } from '../src/lib/manual';
 import PresaleChain from './PresaleChain';
 
@@ -79,6 +80,16 @@ const S = {
     border: `1px solid ${on ? T.accent : T.line}`, background: on ? T.accentSoft : '#fff',
     color: on ? T.accent : T.ink2,
   }),
+  /* 인구유입요인 — 점수가 읽히는 그 줄에서 바로 고른다 */
+  inflow: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 7 },
+  inflowLab: { fontSize: 11, fontWeight: 700, color: T.ink2 },
+  inflowSeg: { display: 'inline-flex', border: `1px solid ${T.lineStrong}`, borderRadius: 6, overflow: 'hidden' },
+  inflowBtn: (on) => ({
+    padding: '4px 10px', fontSize: 11, fontWeight: 700, border: 0, cursor: 'pointer',
+    background: on ? T.accentSoft : '#fff', color: on ? T.accent : T.ink2,
+    boxShadow: on ? `inset 0 -2px 0 ${T.accent}` : 'none',
+  }),
+  inflowHint: { fontSize: 10.5, color: T.muted },
   /* 상시 표시되는 설명을 경고색으로 두면 진짜 경고를 놓친다 — 정보 톤으로 */
   warn: { marginTop: 10, padding: '9px 13px', background: '#f7f9fb', border: `1px solid ${T.line}`, borderRadius: 6, fontSize: 11.5, color: T.ink2, lineHeight: 1.65 },
   note: { marginTop: 12, fontSize: 11.5, color: T.muted, lineHeight: 1.8 },
@@ -301,36 +312,6 @@ export default function ManualView({ region, addr, data, facilities, manual, val
         </div>
       )}
 
-      {/*
-        ── 지역수요 · 인구유입요인 ──────────────────────
-        **구간표 미수령 칸은 2026-09-17 로 없어졌다.** 지역미분양·지역수요 구간표를 받아
-        둘 다 수집값에서 점수가 난다. 다만 지역수요의 반쪽인 인구유입요인은
-        **어느 원천에도 없다** — 신도시·혁신도시·기업도시·산업단지 등 요인의 개수를 사람이 센다.
-      */}
-      <div style={S.box}>
-        <div style={S.head}>
-          <span>인구유입요인</span>
-          <span style={S.headNote}>지역수요(5) 의 반쪽 — 원천이 없어 직접 셉니다</span>
-        </div>
-        <div style={S.body}>
-          <div style={S.grid}>
-            <div style={S.field}>
-              <span style={S.lab}>요인 개수 <span style={{ fontWeight: 400, color: T.muted }}>(없으면 0)</span></span>
-              <input style={S.input} type="number" min="0" step="1" placeholder="개수"
-                value={v.지역수요?.inflow ?? ''}
-                onChange={e => setDemand({ inflow: e.target.value })} />
-              <span style={S.sub}>2개 이상 5점 · 1개 3점 · 없음 1점</span>
-            </div>
-          </div>
-          <div style={S.note}>
-            ※ 대상은 <b>신도시 · 혁신도시 · 기업도시 · 산업단지 등</b> 입니다(원문).
-            <b>4점·2점 행은 원문에 없습니다</b> — 세 단계뿐입니다.<br />
-            ※ 주택보급률은 이미 수집돼 있어 자동으로 점수가 납니다.
-            지역수요 점수 = (주택보급률 점수 + 인구유입요인 점수) / 2 → 등급 → 대표점수.
-          </div>
-        </div>
-      </div>
-
       {/* ── A 합산 ─────────────────────────────────────── */}
       <div style={S.box}>
         <div style={S.head}>
@@ -367,6 +348,27 @@ export default function ManualView({ region, addr, data, facilities, manual, val
                   : <td style={S.blank}><span style={S.wait}>대기</span></td>}
                 <td style={S.tdWhy}>
                   {r.why}
+                  {/*
+                    **인구유입요인은 어느 원천에도 없다** — 신도시·혁신도시·기업도시·산업단지 등
+                    요인의 개수를 사람이 센다. 전에는 표 위에 별도 입력칸을 두었는데,
+                    점수가 읽히는 줄과 넣는 칸이 떨어져 있었다(「넣는 버튼은 넣는 칸에」).
+                    구간표가 세 단계뿐이라 칩으로 정확히 덮인다 — 3개·4개를 구분해 넣어도 점수는 같다.
+                  */}
+                  {r.id === '지역수요' && (
+                    <div style={S.inflow}>
+                      <span style={S.inflowLab}>인구유입요인</span>
+                      <div style={S.inflowSeg}>
+                        {INFLOW_CHOICES.map(([n, lab]) => (
+                          <button key={n} style={S.inflowBtn(inflowOn(v.지역수요?.inflow, n))}
+                            onClick={() => setDemand({ inflow: n })}>{lab}</button>
+                        ))}
+                      </div>
+                      <span style={S.inflowHint}>
+                        신도시 · 혁신도시 · 기업도시 · 산업단지 등 — 원천이 없어 직접 셉니다
+                        (2개 이상 5점 · 1개 3점 · 없음 1점, <b>4점·2점 행은 원문에 없습니다</b>)
+                      </span>
+                    </div>
+                  )}
                   {/* 갈 곳을 글로만 적으면 탭을 찾아 눌러야 한다 — 그 자리에서 바로 보낸다 */}
                   {r.score == null && GOTO_TAB[r.id] && (
                     <button style={S.go} onClick={() => onJump?.(GOTO_TAB[r.id])}>

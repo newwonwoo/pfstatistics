@@ -6,6 +6,7 @@ import { T, mono } from './theme';
 import EvidenceCard from './EvidenceCard';
 import RadiusMap from './RadiusMap';
 import RoadPicker, { shownSet } from './RoadPicker';
+import { INFLOW_CHOICES, inflowOn } from './inflow';
 
 const S = {
   /* 시설 행 지우기 — 도로 후보 목록과 같은 모양이어야 같은 동작으로 읽힌다 */
@@ -52,6 +53,11 @@ const S = {
     color: poly ? T.ok : T.warn,
     border: `1px solid ${poly ? '#c7e9d5' : '#f0dcb4'}`,
   }),
+  /* 인구유입요인 칸 — 값이 읽히는 자리에서 바로 고른다 */
+  tdPick: { border: `1px solid ${T.sheetLine}`, padding: '7px 10px', textAlign: 'center', background: '#fffdf0' },
+  pick: { display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 5 },
+  seg2: { display: 'inline-flex', border: `1px solid ${T.lineStrong}`, borderRadius: 6, overflow: 'hidden' },
+  pickHint: { fontSize: 10.5, color: T.muted, whiteSpace: 'nowrap' },
   input: {
     width: '100%', minWidth: 150, padding: '4px 7px', fontSize: 12.5,
     border: `1px solid ${T.line}`, borderRadius: 4, background: '#fffdf0',
@@ -66,6 +72,21 @@ function Cell({ v, highlight }) {
   if (v == null) return <td style={S.td}><span style={S.pend}>수집 대기</span></td>;
   if (v === '') return <td style={S.blank} />;
   return <td style={highlight ? S.tdVal : S.td}>{v}</td>;
+}
+
+/** 인구유입요인 칩 — 규칙과 선택 판정은 `app/inflow.js` 한 곳에만 둔다 */
+function InflowPick({ value, onPick }) {
+  const set = String(value ?? '').trim() !== '';
+  return (
+    <div style={S.pick}>
+      <div style={S.seg2}>
+        {INFLOW_CHOICES.map(([v, lab]) => (
+          <button key={v} style={S.segBtn(inflowOn(value, v))} onClick={() => onPick?.(v)}>{lab}</button>
+        ))}
+      </div>
+      {!set && <span style={S.pickHint}>신도시 · 혁신도시 · 기업도시 · 산업단지 등</span>}
+    </div>
+  );
 }
 
 /**
@@ -103,7 +124,7 @@ function AvgRow({ sheetId, facilities, manual, label, span, S }) {
   );
 }
 
-export default function SheetView({ sheetId, data, facilities, manual, onManual, sheetInput = {}, radiusBasis = 'polygon', onRadiusBasis }) {
+export default function SheetView({ sheetId, data, facilities, manual, onManual, sheetInput = {}, onSheetInput, radiusBasis = 'polygon', onRadiusBasis }) {
   // 도로 후보에서 고른 지점 — 로드뷰를 그곳으로 보낸다
   const [roadSpot, setRoadSpot] = useState({});
   // 후보 목록 자체 — 큰 도로를 지도에 자동으로 찍기 위해 들고 있는다
@@ -575,6 +596,16 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
 
   // 통계 시트
   const evid = (spec.evidence ?? []).map(id => byId[id]).filter(r => r?.ok);
+  /*
+    지역수요의 인구유입요인만은 표 안에서 직접 고른다 — 원천이 없어 사람이 세는 값인데
+    그 칸이 이 표에 있다(사용자 요청 2026-09-25: 「이 표에서 바로 설정할 수 있으면 좋겠어」).
+    엑셀은 `buildSheet` 의 문자열을 그대로 쓰므로 증빙에는 고른 값(「1개」)이 들어간다.
+  */
+  const inflowRow = sheetId === '지역수요'
+    ? spec.rows.findIndex(r => r[0] === '인구유입요인')
+    : -1;
+  const pickInflow = (n) =>
+    onSheetInput?.({ 지역수요: { ...(sheetInput?.지역수요 ?? {}), inflow: n } });
   return (
     <div style={S.page}>
       <h2 style={S.h2}>{spec.title}</h2>
@@ -586,9 +617,15 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
           <tbody>
             {spec.rows.map((r, ri) => (
               <tr key={ri}>
-                {r.map((c, ci) => ci === 0
-                  ? <td key={ci} style={S.tdL}>{c}</td>
-                  : <Cell key={ci} v={c} highlight={ci === 2 && c != null && c !== ''} />)}
+                {r.map((c, ci) => ri === inflowRow && ci === 3
+                  ? (
+                    <td key={ci} style={S.tdPick}>
+                      <InflowPick value={sheetInput?.지역수요?.inflow} onPick={pickInflow} />
+                    </td>
+                  )
+                  : ci === 0
+                    ? <td key={ci} style={S.tdL}>{c}</td>
+                    : <Cell key={ci} v={c} highlight={ci === 2 && c != null && c !== ''} />)}
               </tr>
             ))}
           </tbody>

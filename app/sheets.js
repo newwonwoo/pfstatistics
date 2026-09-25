@@ -94,7 +94,7 @@ export function buildSheet(sheetId, { byId, region, period, company, sheetInput 
       /*
         **두 항목을 각각 5점 척도로 매겨 평균 → 등급 → 대표점수**(구간표 원문).
         지역미분양과 같은 이유로 시트에는 점수가 안 찍히고 있었다.
-        인구유입요인은 원천이 없어 [수기입력] 탭에서 개수를 받는다 — 그 값을 여기로 들고 온다.
+        인구유입요인은 원천이 없어 사람이 센다 — **이 표의 칩에서 바로 고른다**(2026-09-25).
       */
       const supply = val('housing_supply_ratio');
       const inflow = sheetInput?.지역수요?.inflow;
@@ -117,7 +117,8 @@ export function buildSheet(sheetId, { byId, region, period, company, sheetInput 
         ],
         footnote: '※ 주택보급률은 낮을수록 높은 점수(집이 모자란 곳이 수요가 있다) ·'
           + ' 광역시 이상은 구, 시는 시, 시급 미만은 군 단위 · 미고시면 상급 행정구역 ·'
-          + ' 인구유입요인(신도시·혁신도시·기업도시·산업단지 등)은 원천이 없어 [수기입력] 탭에서 개수를 받습니다',
+          + ' 인구유입요인(신도시·혁신도시·기업도시·산업단지 등)은 원천이 없어 실무자가 직접 셉니다'
+          + ' — 화면에서는 이 표의 「없음 / 1개 / 2개 이상」 에서 고릅니다(2개 이상 5점 · 1개 3점 · 없음 1점)',
         evidence: ['housing_supply_ratio'],
       };
     }

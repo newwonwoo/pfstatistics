@@ -132,9 +132,17 @@ export function manualSummary({ sheetInput = {}, data = null, facilities = null,
   const ov = Number(ovRaw);
   const override = Number.isFinite(ov) && String(ovRaw ?? '').trim() !== '' ? ov : null;
 
+  /*
+    **인구유입요인만 안 골랐을 때**를 따로 알려준다 — 지역수요 행은 `auto` 로 분류돼
+    화면의 「수기입력 N개 남음」(=`kind:'form'`) 에도, `provisional` 에도 안 걸린다.
+    주택보급률이 이미 와 있을 때만 참이다(안 왔으면 통계 수집이 먼저다).
+  */
+  const inflowSet = String(inflow ?? '').trim() !== '' && Number.isFinite(Number(inflow)) && Number(inflow) >= 0;
+  const needInflow = supplyRatio != null && !inflowSet;
+
   return {
     rows, auto, formed, typed,
-    sum, missing, provisional,
+    sum, missing, provisional, needInflow,
     override,
     excl: override ?? (missing.length ? null : sum),
     source: override != null ? 'override' : (missing.length ? null : 'computed'),
