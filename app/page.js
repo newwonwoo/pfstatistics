@@ -692,6 +692,20 @@ export default function Home() {
     return m;
   }, [data, facilities, compare, cmpSum, sheetInput, mSum.excl, ratePct, review, reviewRes]);
 
+  /*
+    수기입력 탭 옆 숫자 = **아직 넣지 않은 입력 칸 수**.
+    A 쪽 수기 항목(규모 및 배치 · 평형구성)과 심사평점표 입력값(사업수익률 · 누적DSCR ·
+    자기자금 · 시공순위 · 신용등급 · PF보증잔액비율)을 함께 센다.
+    **감점(사고사망만인율)은 빼고 센다** — 없는 것이 정상이라 「안 넣은 칸」 이 아니다.
+    인근아파트 초기 분양률은 [초기예상분양률] 탭에서 조사하므로 여기서 세지 않는다.
+  */
+  const tabCounts = useMemo(() => {
+    const form = (mSum.rows ?? []).filter(r => r.kind === 'form' && (r.tab ?? '수기입력') === '수기입력' && r.score == null).length;
+    const rv = (reviewRes?.groups ?? []).flatMap(g => g.items)
+      .filter(it => !it.auto && String(it.value ?? '') === '').length;
+    return { 수기입력: form + rv };
+  }, [mSum.rows, reviewRes]);
+
 
   return (
     <main style={S.shell}>
@@ -1109,7 +1123,7 @@ export default function Home() {
       <div style={{ marginTop: 20 }}>
         <SheetTabs sheets={SHEETS} active={tab}
           onSelect={(id) => { setTab(id); setMapOpenManual(null); setMsg(null); }}
-          status={status} />
+          status={status} counts={tabCounts} />
         {/*
           모든 시트를 항상 마운트해 둔다.
           엑셀 내보내기가 각 시트의 증빙 카드와 지도를 캡쳐하는데,

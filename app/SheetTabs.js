@@ -62,7 +62,7 @@ const Dot = ({ st, size = 6 }) => (st ? (
   }} />
 ) : null);
 
-export default function SheetTabs({ sheets, active, onSelect, status }) {
+export default function SheetTabs({ sheets, active, onSelect, status, counts = null }) {
   /* 단계별로 묶는다 — 등장 순서를 그대로 쓴다(그것이 심사 진행 순서다) */
   const groups = useMemo(() => {
     const out = [];
@@ -160,7 +160,21 @@ export default function SheetTabs({ sheets, active, onSelect, status }) {
               onClick={() => onSelect(lastSeen.current[g.key] ?? g.items[0].id)}
               style={S.topBtn(on, tone)}>
               {solo ? solo.label : g.key}
-              {!solo && <span style={S.count}>{g.items.length}</span>}
+              {/*
+                **자료수집에는 숫자가 있는데 수기입력에는 없었다**(사용자 지적 2026-09-25).
+                자료수집의 9 는 「이 단계에 시트가 9장」 이다. 수기입력은 시트가 한 장이라
+                그 셈으로는 숫자가 안 붙지만, 정작 **손으로 넣을 칸이 가장 많은 단계**다.
+                그래서 남은 입력 칸 수를 적는다 — 다 넣으면 숫자를 지우고 초록 점만 남긴다.
+                결론 탭(초기예상분양률·심사평점표)에는 달지 않는다 — 거기 숫자는 점수라
+                옆에 개수가 또 붙으면 무엇을 세는 숫자인지 갈린다.
+              */}
+              {!solo
+                ? <span style={S.count}>{g.items.length}</span>
+                : (counts?.[solo.id] > 0 && (
+                    <span style={S.count} title={`아직 넣지 않은 입력 칸 ${counts[solo.id]}개`}>
+                      {counts[solo.id]}
+                    </span>
+                  ))}
               <Dot st={st} size={7} />
             </button>
           );
