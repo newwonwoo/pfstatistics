@@ -751,12 +751,21 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
   const dist = (p) => (polygon?.length >= 3
     ? distanceToPolygon({ lat: p.y, lng: p.x }, polygon)
     : haversine({ lat: Number(site.y), lng: Number(site.x) }, { lat: p.y, lng: p.x }));
+  /*
+    **본건 판정은 경계 거리로 하면 안 된다**(실측 2026-09-25 · 인천 도화동).
+    `isSite` 의 「사실상 같은 자리(30m)」 규칙에 경계 최단거리를 쓰면,
+    경계를 넉넉히 그린 순간 **그 안에 들어온 옆 단지가 전부 0m** 가 되어 본건으로 먹힌다 —
+    실측: 경계 ~265m 로 그리자 85m 떨어진 「두산위브 더센트럴 도화」(1년 이내 분양개시)가
+    0m·본건으로 판정돼 인근단지 후보에서 통째로 빠졌고, 화면은 「1년 이내 0건」 이라고만 했다.
+    본건인지는 **대표지번 중심에서의 실제 거리**로 본다(경계와 무관하다).
+  */
+  const distCenter = (p) => haversine({ lat: Number(site.y), lng: Number(site.x) }, { lat: p.y, lng: p.x });
 
   const located = await mapLimit(shortlist, 10, async (n) => {
     const q = normalizeSupplyAddress(n.r.HSSPLY_ADRES);
     const p = await geocodeSupply(q, n.r.HSSPLY_ADRES, n.r.HOUSE_NM);
     if (!p) return { ...n, q, p: null };
-    return { ...n, q: p.query, p, d: Math.round(dist(p)), precision: p.precision };
+    return { ...n, q: p.query, p, d: Math.round(dist(p)), dCenter: Math.round(distCenter(p)), precision: p.precision };
   });
 
   /*
@@ -851,7 +860,7 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
   }
 
   // 3차 — 반경 안의 단지만 주택형별 상세를 받는다 (호출 수를 최소로)
-  const items = await mapLimit(inside, 5, async ({ r, q, p, d, src, kind, precision, kapt }) => {
+  const items = await mapLimit(inside, 5, async ({ r, q, p, d, dCenter, src, kind, precision, kapt }) => {
     let types = [];
     try {
       types = src === 'urbty' ? await fetchUrbtyModels(r.HOUSE_MANAGE_NO) : await fetchModels(r.HOUSE_MANAGE_NO);
@@ -870,7 +879,7 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
       x: p.x, y: p.y,
       distance: d,
       /* 본건(심사대상)인가 — 같은 지번이거나 사실상 같은 자리(30m 이내) */
-      isSite: (siteKey != null && jibunKey(r.HSSPLY_ADRES) === siteKey) || d <= 30,
+      isSite: (siteKey != null && jibunKey(r.HSSPLY_ADRES) === siteKey) || (dCenter ?? d) <= 30,
       /* 좌표를 어디까지 맞춰서 잰 거리인지 — dong·place 는 근사다 */
       geocode: precision ?? 'exact',
       /* K-apt 로 지번을 찾아 다시 잰 것 — 사용승인일·세대수·시공사도 같이 왔다 */

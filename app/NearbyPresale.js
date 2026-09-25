@@ -116,6 +116,7 @@ export default function NearbyPresale({
     const kindOK = (a) => (wantOfficetel
       ? ['오피스텔', '도시형생활주택'].includes(a.kind)
       : (a.kind ?? '아파트') === '아파트');
+    const site = all.filter(a => a.isSite);
     const notSite = all.filter(a => !a.isSite);
     const kind = notSite.filter(kindOK);
     /* 민간임대는 분양이 아니라 임대다 — 초기분양률 개념이 성립하지 않는다 */
@@ -124,7 +125,7 @@ export default function NearbyPresale({
     const ongoing = sale.filter(a => a.timing === '분양 진행중');
     const done = sale.filter(a => a.timing === '준공');
     const stage = fresh.length ? 'fresh' : (ongoing.length ? 'ongoing' : 'none');
-    return { all, notSite, kind, sale, fresh, ongoing, done, stage,
+    return { all, site, notSite, kind, sale, fresh, ongoing, done, stage,
       rows: stage === 'fresh' ? fresh : stage === 'ongoing' ? ongoing : [] };
   }, [data, wantOfficetel]);
 
@@ -203,6 +204,15 @@ export default function NearbyPresale({
         {data && (<>
           <div style={S.funnel}>
             <span style={S.step}>반경 {rLabel(data.radius)} 안 {funnel.notSite.length}건</span>
+            {/*
+              **본건으로 걸러낸 것을 말한다.** 조용히 빼면 「왜 옆 단지가 안 보이나」 에 답을 못 한다
+              (실측 2026-09-25: 경계를 넉넉히 그리자 85m 옆 단지가 본건으로 잡혀 1년 이내가 0건이 됐다).
+            */}
+            {funnel.site.length > 0 && (
+              <span style={S.hit}>
+                (본건으로 판정해 제외 {funnel.site.length}건 — {funnel.site.map(a => a.name).join(' · ')})
+              </span>
+            )}
             <span style={S.arrow}>›</span>
             <span style={S.step}>{wantOfficetel ? '오피스텔·도시형' : '아파트'} {funnel.sale.length}건</span>
             <span style={S.arrow}>›</span>
