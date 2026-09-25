@@ -221,21 +221,10 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
   const usePoly = polygon?.length >= 3 && radiusBasis === 'polygon';
 
   /*
-   * **지역 평균 분양가 기준선**(HUG · KOSIS 414/DT_41401N_005, 2026-09-17 연결).
-   * 사용자 제안 — "분양가 정보를 얻지 못할 때는 분양보증 현황에서 가져올 수 있을 것 같다".
-   * **시도 단위라 비교사업장(단지별)을 대체하지 못한다.** 규정 제16조가 요구하는 것은
-   * 반경 안 유사사업장의 평균가격이다. 이 값은 "이 지역에서 이 정도가 보통" 이라는
-   * 감각을 주는 기준선일 뿐이므로 평균에 섞지 않고 따로 적는다.
-   */
-  const [hug, setHug] = useState(null);
-  useEffect(() => {
-    if (!region) return;
-    let dead = false;
-    fetch(`/api/hug?region=${encodeURIComponent(region)}`)
-      .then(r => r.json()).then(j => !dead && setHug(j)).catch(() => {});
-    return () => { dead = true; };
-  }, [region]);
-  const hugPrice = hug?.price?.all ?? null;
+    지역 평균 분양가(HUG · KOSIS 414/DT_41401N_005)를 화면에서 뺐으므로
+    **받아오지도 않는다** — 탭을 열 때마다 쓰지 않을 값을 부르고 있었다.
+    필요하면 탐색 창구 `/api/hug?region=` 로 직접 본다.
+  */
 
   const collect = async () => {
     if (!coord) { setErr('사업지 주소를 먼저 확정하세요'); return; }
@@ -789,24 +778,14 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
           <span style={{ fontSize: 12 }}>한국부동산원 청약홈 분양정보에서 반경 안의 분양 단지를 찾습니다.</span>
         </div>
       )}
-      {hugPrice && (
-        <div style={S.baseline}>
-          <b>{hug.price.areaName} 지역 평균 분양가</b>
-          <span style={S.baseNum}>{won(hugPrice)}</span>
-          <span style={{ color: T.muted }}>원/㎡ · {String(hug.price.period).slice(0, 4)}년 {String(hug.price.period).slice(4)}월</span>
-          {avg != null && (
-            <span style={{ marginLeft: 8, color: T.ink2 }}>
-              비교사업장 평균은 이 값의 <b>{((avg / hugPrice) * 100).toFixed(1)}%</b>
-            </span>
-          )}
-          <span style={{ width: '100%', color: T.muted, fontSize: 11, marginTop: 4 }}>
-            {hug.price.citation} · <b>시도 단위</b>라 규정 제16조의 「인근 유사사업장 평균가격」을 대체하지 못합니다 —
-            반경 안에 비교할 단지가 없을 때 감각을 잡는 기준선입니다.
-            {' '}{hug.price.areaBasisNote}.
-            {hug.price.bySize?.T3 && <> 규모별 : 60㎡이하 {won(hug.price.bySize.T2?.won)} · 60~85 {won(hug.price.bySize.T3?.won)} · 85~102 {won(hug.price.bySize.T4?.won)} · 102초과 {won(hug.price.bySize.T5?.won)}</>}
-          </span>
-        </div>
-      )}
+      {/*
+        **지역 평균 분양가 기준선을 화면에서 뺐다**(사용자 지적 2026-09-25 —
+        「헷갈리고 지면 차지하니까 그냥 없애」).
+        시도 단위라 규정 제16조의 「인근 유사사업장 평균가격」을 **대체하지 못하는데**,
+        표 바로 위에 큰 숫자로 앉아 있어 그 값이 기준인 것처럼 읽혔다.
+        같은 화면에 성격이 다른 두 평균을 나란히 두면 어느 쪽이 판정값인지 흐려진다.
+        수집 자체는 남겨 둔다 — `/api/hug` 는 탐색 창구로 계속 쓴다.
+      */}
 
       {data && all.length === 0 && (
         <div style={S.warn}>
