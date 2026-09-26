@@ -276,13 +276,26 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
             [17 + lw / 2, 40], [-(17 + lw / 2), 40],
             [0, -56 - lh / 2], [0, 44 + lh / 2],
           ];
-          let put = null;
+          /*
+            **겹치지만 않으면 된 줄 알았는데, 남의 핀에 더 가까이 붙는 자리가 나왔다**
+            (실측 2026-09-26 · 의료시설 「모아병원」 제 핀 22px vs 옆 핀 19px).
+            핀 둘이 나란히 있으면 이름표가 어느 쪽 것인지 읽는 사람이 못 가린다 —
+            겹침이 없어도 **제 핀이 가장 가까운 자리**여야 한다.
+            그런 자리가 없으면 겹침만 없는 첫 자리로 물러선다(이름표를 버리는 것보다 낫다).
+          */
+          const gapTo = (b, c) => Math.hypot(
+            Math.max(b.x1 - c.x, 0, c.x - b.x2), Math.max(b.y1 - c.y, 0, c.y - b.y2));
+          const others = markers.filter(m => !m.faint && !(m.lat === it.lat && m.lng === it.lng)).map(m => px(m.lat, m.lng));
+          let put = null, fallback = null;
           for (const [dx, dy] of cands) {
             const b = { x1: q.x + dx - lw / 2, y1: q.y + dy - lh / 2, x2: q.x + dx + lw / 2, y2: q.y + dy + lh / 2 };
             if (b.x1 < 3 || b.y1 < 3 || b.x2 > W - 3 || b.y2 > H - 26) continue;   // 각주 띠도 피한다
             if (boxes.some(o => hit(b, o))) continue;
-            put = { dx, dy, b }; break;
+            if (!fallback) fallback = { dx, dy, b };
+            const mine = gapTo(b, q);
+            if (others.every(o => gapTo(b, o) > mine)) { put = { dx, dy, b }; break; }
           }
+          put = put ?? fallback;
           if (put) {
             it.el.style.display = '';
             it.el.style.transform = `translate(${Math.round(put.dx)}px, ${Math.round(put.dy)}px)`;
