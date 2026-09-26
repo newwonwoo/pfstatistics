@@ -310,6 +310,25 @@ export async function composeMap(el, spec = {}) {
       증빙이 화면과 달라지면 안 된다 — 화면이 준 배치가 있으면 그것만 그린다.
     */
     if (labels && labelPlacement?.length) {
+      /* 연결선을 먼저 깔고 이름표를 덮는다 — 선이 글자 위로 지나가면 안 된다 */
+      for (const L of labelPlacement) {
+        const q = pt(L.lat, L.lng);
+        const len = Math.hypot(L.dx, L.dy);
+        if (!(len > 6)) continue;
+        const ux = -L.dx / len, uy = -L.dy / len;
+        const t = Math.min(
+          Math.abs(ux) > 1e-6 ? (L.w / 2) / Math.abs(ux) : Infinity,
+          Math.abs(uy) > 1e-6 ? (L.h / 2) / Math.abs(uy) : Infinity);
+        const cx = q.x + L.dx, cy = q.y + L.dy;
+        ctx.save();
+        ctx.strokeStyle = '#111111';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx + ux * t, cy + uy * t);
+        ctx.lineTo(q.x, q.y);
+        ctx.stroke();
+        ctx.restore();
+      }
       for (const L of labelPlacement) {
         const q = pt(L.lat, L.lng);
         const box = { x1: q.x + L.dx - L.w / 2, y1: q.y + L.dy - L.h / 2,

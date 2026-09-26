@@ -231,10 +231,20 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
             위치는 픽셀이라 `transform` 으로 옮긴다 — 앵커로는 이만큼 세밀하게 못 잡는다.
           */
           const el = document.createElement('div');
-          el.style.cssText = 'background:#fff;border:2px solid #111;padding:2px 8px;border-radius:4px;'
+          el.style.cssText = 'position:relative;background:#fff;border:2px solid #111;padding:2px 8px;border-radius:4px;'
             + "font:700 12px 'Malgun Gothic',sans-serif;white-space:nowrap;"
             + 'box-shadow:0 1px 4px rgba(0,0,0,.35);will-change:transform';
           el.textContent = `${no}. ${m.name}${m.distance != null ? ` · ${m.distance}m` : ''}`;
+          /*
+            **연결선** — 핀이 몰린 곳에서는 이름표가 계단처럼 쌓여
+            어느 핀의 이름인지 못 읽는다(실측 2026-09-26 · 주안역 부근 의료시설 4장).
+            자리를 아무리 잘 잡아도 핀 사이가 라벨 폭보다 좁으면 한계다 —
+            **선으로 이어 준다.** 지도 라벨링의 표준 해법이고, 캡쳐도 같은 선을 그린다.
+          */
+          const leader = document.createElement('div');
+          leader.style.cssText = 'position:absolute;height:0;border-top:2px solid #111;'
+            + 'transform-origin:0 50%;pointer-events:none;display:none';
+          el.appendChild(leader);
           const lo = new kakao.maps.CustomOverlay({
             position: p, xAnchor: 0.5, yAnchor: 0.5, zIndex: 4, content: el,
           });
@@ -269,6 +279,8 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
           const lw = it.el.offsetWidth || 110, lh = it.el.offsetHeight || 22;
           /* 오른쪽·왼쪽이 가장 가깝다 — 위아래는 그 다음, 먼 자리는 마지막 */
           const cands = [
+            /* 핀 바로 옆(같은 높이)이 가장 가깝다 — 붙을수록 어느 핀의 이름인지 분명하다 */
+            [15 + lw / 2, 0], [-(15 + lw / 2), 0],
             [17 + lw / 2, -13], [-(17 + lw / 2), -13],
             [17 + lw / 2, 13], [-(17 + lw / 2), 13],
             [0, -30 - lh / 2], [0, 18 + lh / 2],
@@ -300,6 +312,28 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
             it.el.style.display = '';
             it.el.style.transform = `translate(${Math.round(put.dx)}px, ${Math.round(put.dy)}px)`;
             boxes.push(put.b);
+            /*
+              이름표 가장자리에서 핀까지 선을 긋는다 — 이름표 안쪽은 긋지 않는다(글자를 지운다).
+              라벨 중심 기준 좌표계라 `dx,dy` 를 뒤집으면 핀 방향이다.
+            */
+            const lead = it.el.firstElementChild;
+            if (lead) {
+              const len = Math.hypot(put.dx, put.dy);
+              if (len < 6) { lead.style.display = 'none'; }
+              else {
+                const ux = -put.dx / len, uy = -put.dy / len;
+                /* 라벨 사각형을 벗어나는 지점까지 건너뛴다 */
+                const t = Math.min(
+                  Math.abs(ux) > 1e-6 ? (lw / 2) / Math.abs(ux) : Infinity,
+                  Math.abs(uy) > 1e-6 ? (lh / 2) / Math.abs(uy) : Infinity);
+                const sx = lw / 2 + ux * t, sy = lh / 2 + uy * t;
+                lead.style.display = '';
+                lead.style.left = `${Math.round(sx)}px`;
+                lead.style.top = `${Math.round(sy)}px`;
+                lead.style.width = `${Math.max(0, Math.round(len - t))}px`;
+                lead.style.transform = `rotate(${(Math.atan2(uy, ux) * 180) / Math.PI}deg)`;
+              }
+            }
             out.push({ lat: it.lat, lng: it.lng, text: it.text, dx: put.dx, dy: put.dy, w: lw, h: lh });
           } else {
             it.el.style.display = 'none';   // 자리가 없으면 이름표만 포기한다 (핀은 남는다)
