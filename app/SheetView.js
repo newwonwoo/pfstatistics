@@ -7,6 +7,7 @@ import EvidenceCard from './EvidenceCard';
 import RadiusMap from './RadiusMap';
 import RoadPicker, { shownSet } from './RoadPicker';
 import { INFLOW_CHOICES, inflowOn } from './inflow';
+import { districtLabel } from './DistrictRow';
 
 const S = {
   /* 시설 행 지우기 — 도로 후보 목록과 같은 모양이어야 같은 동작으로 읽힌다 */
@@ -232,6 +233,10 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
           {/* 입력 주소와 실제 매칭 주소가 다르면 증빙에 그대로 드러나야 한다 */}
           {facilities?.matched && facilities.matched !== facilities.address && (
             <span style={{ color: T.muted }}> · 좌표매칭 {facilities.matched}</span>
+          )}
+          {/* 사업지구 특례가 걸리는 시트는 무엇을 근거로 하한이 섰는지 머리에 적는다 — 엑셀도 같은 줄을 쓴다 */}
+          {(sheetId === '교통환경' || sheetId === '주거편의') && districtLabel(manual?.['사업지구']) && (
+            <span style={{ color: T.muted }}> · {districtLabel(manual['사업지구'])}</span>
           )}
         </p>
 

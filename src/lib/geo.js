@@ -161,3 +161,31 @@ export function bufferPolygon(ring, radius, steps = 180) {
   }
   return out;
 }
+
+/**
+ * **면적(㎡)** — 사업지구 면적을 경계에서 잰다.
+ *
+ * 원천이 면적을 안 주거나(지구단위계획 `dgm_ar` 가 0 인 표가 있다 · 실측 부천 상동) 아예 필드가 없을 때
+ * (택지정보시스템 사업지구경계 `lt_c_lhzone`) 경계 좌표로 계산한다. 등거리원통 근사라
+ * 수 km 지구에서 오차가 0.1% 안쪽이다 — 특례 구간(50만·100만·500만㎡)을 가르기에 충분하다.
+ * 구멍(내부 링)은 뺀다.
+ *
+ * @param {Array<Array<{lat,lng}>>} rings  [외곽, 구멍1, 구멍2 …]
+ */
+export function polygonArea(rings) {
+  if (!rings?.length || !(rings[0]?.length >= 3)) return 0;
+  const lat0 = rings[0].reduce((s, p) => s + p.lat, 0) / rings[0].length;
+  const proj = projector(lat0);
+  const shoelace = (ring) => {
+    const pts = ring.map(proj);
+    let a2 = 0;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) a2 += pts[j].x * pts[i].y - pts[i].x * pts[j].y;
+    return Math.abs(a2) / 2;
+  };
+  return Math.max(0, shoelace(rings[0]) - rings.slice(1).reduce((s, r) => s + shoelace(r), 0));
+}
+
+/** 점이 링 안에 있는가 (경계 위는 안으로 본다) */
+export function pointInRing(point, ring) {
+  return distanceToPolygon(point, ring) === 0;
+}

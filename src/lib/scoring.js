@@ -346,6 +346,22 @@ function groupText(sheetId, groupLabel, facilities) {
   return parts.length ? parts.join(' · ') : null;
 }
 
+/**
+ * **수용·환지 사업지구 특례** — 지구면적별 등급 하한 (`config/scoring.json` 「사업지구특례」).
+ *
+ * 입력은 주소 확정 때 고른 `manual['사업지구']` 다 — `{ status: 'yes'|'no'|null, name, area }`.
+ *   status 'yes' 이고 면적이 있어야 하한이 선다. 'no' 는 특례 없음, null 은 **아직 안 고름**.
+ * @returns {{ score, floor, text, area, name } | null}
+ */
+export function districtFloor(district) {
+  const t = TABLE['사업지구특례'];
+  if (!t || district?.status !== 'yes') return null;
+  const area = Number(district.area);
+  if (!Number.isFinite(area) || area <= 0) return null;
+  const rule = t.rules.find(r => area >= r.gte);
+  return rule ? { score: rule.score, floor: rule.floor, text: rule.text, area, name: district.name ?? '' } : null;
+}
+
 export function scoreAverage(sheetId, { facilities, manual } = {}) {
   let parts = null;
   /* **실측치를 같이 들고 간다** — "지하철역 5" 만 적으면 몇 m 라서 5점인지 검산이 안 된다(사용자 지적) */
@@ -382,12 +398,27 @@ export function scoreAverage(sheetId, { facilities, manual } = {}) {
   }
   const avg = parts.reduce((t, p) => t + p.sc.score, 0) / parts.length;
   const band = gradeOf(avg);
+  /*
+    **사업지구 특례** — 반경 안 시설로 낸 등급이 지구면적의 하한보다 낮으면 하한을 쓴다.
+    평균은 그대로 적고(검산할 수 있어야 한다) 등급·대표점수만 끌어올린다.
+  */
+  const fl = (TABLE['사업지구특례']?.applies ?? []).includes(sheetId) ? districtFloor(manual?.['사업지구']) : null;
+  const lifted = fl && band?.score != null && fl.score > band.score;
+  const score = lifted ? fl.score : band?.score ?? null;
+  const label = lifted ? fl.floor : band?.label ?? '';
   /* 수기 입력을 아직 안 한 항목은 점수가 나와도 "확정" 이 아니다 — 평균 옆에 적어 둔다 */
-  const unset = parts.filter(p => p.sc.reason === '도로 미선택' || p.sc.reason === '차선 수 미입력');
+  /* 하한이 만점(5)이면 무엇을 넣어도 결과가 같다 — 그때는 미입력이 판정을 흔들지 않는다 */
+  const unset = fl?.score >= 5 ? []
+    : parts.filter(p => p.sc.reason === '도로 미선택' || p.sc.reason === '차선 수 미입력');
+  const floorText = fl
+    ? `　·　사업지구 특례 : ${fl.name ? `${fl.name} ` : ''}${Math.round(fl.area).toLocaleString('ko-KR')}㎡ — ${fl.text}`
+      + (lifted ? ` → ${band?.label ?? ''} ${band?.score ?? '?'}점을 ${fl.floor} ${fl.score}점으로 올림` : ' (하한보다 높아 그대로)')
+    : '';
   return {
     avg: Number(avg.toFixed(2)),      // 평균점수 — 평가표의 "평균점수" 칸
-    score: band?.score ?? null,       // 평가점수 — **등급 대표점수**이지 평균이 아니다
-    label: band?.label ?? '',
+    score,                            // 평가점수 — **등급 대표점수**이지 평균이 아니다
+    label,
+    floor: fl ? { ...fl, lifted } : null,
     /*
      * **산술평균을 (a + b) / 2 꼴로 적는다**(사용자 요청 2026-09-17).
      * 전에는 "지하철역 5 + 6차선 왕복도로 4 ÷ 2" 라 괄호가 없어
@@ -396,7 +427,8 @@ export function scoreAverage(sheetId, { facilities, manual } = {}) {
      */
     text: `${parts.map(p => `${p.name} ${p.basis ? `${p.basis} → ` : ''}${p.sc.score}점`).join(' · ')}`
         + `　⇒　(${parts.map(p => p.sc.score).join(' + ')}) / ${parts.length} = ${Number(avg.toFixed(2))}`
-        + ` → ${band?.label ?? ''} → ${band?.score ?? '?'}점`,
+        + ` → ${band?.label ?? ''} → ${band?.score ?? '?'}점`
+        + floorText,
     caution: unset.length ? `${unset.map(p => p.name).join(' · ')} 미입력 상태의 기본점수가 섞여 있습니다` : null,
     parts,
   };

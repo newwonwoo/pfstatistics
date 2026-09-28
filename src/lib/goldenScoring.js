@@ -1,7 +1,7 @@
 import {
   scoreBand, scoreRank, scoreCount, scoreRegionDemand, gradeOf, scoreMatrix,
   scoreFacility, expectedSaleRate, scorePresaleRate, scoreNearbyPresale,
-  reviewScore, reviewGrade,
+  reviewScore, reviewGrade, districtFloor, scoreAverage,
 } from './scoring.js';
 
 /**
@@ -78,6 +78,21 @@ export function checkScoringGolden() {
   }
   chk('① 특례 수용·환지 최초분양', scoreNearbyPresale(null, 'firstInDistrict')?.score, 4);
   chk('① 특례 적용아파트 미존재', scoreNearbyPresale(null, 'none')?.score, 2);
+
+  /* 수용·환지 사업지구 특례 — 지구면적별 등급 하한 (경계값 전수) */
+  for (const [area, want] of [[5000000, 5], [4999999, 4], [1000000, 4], [999999, 3], [500000, 3], [499999, 2]]) {
+    chk(`사업지구 특례 ${area.toLocaleString('ko-KR')}㎡`, districtFloor({ status: 'yes', area })?.score, want);
+  }
+  chk('사업지구 특례 — 해당 없음이면 하한 없음', districtFloor({ status: 'no', area: 9000000 }), null);
+  {
+    /* 골든 교통환경(지하철역 부재 1 + 6차선 4 → 보통 3점) 을 500만㎡ 지구에 두면 매우양호 5점, 30만㎡ 면 그대로 3점 */
+    const facilities = { facilities: { 지하철역: { sheet: '교통환경', items: [], nearest: null, count: 0 } } };
+    const road = { '6차선 왕복도로': { name: '골든', distance: 250, lanes: 6 } };
+    chk('사업지구 특례 교통환경 500만㎡ → 올림',
+      scoreAverage('교통환경', { facilities, manual: { ...road, 사업지구: { status: 'yes', area: 5000000 } } })?.score, 5);
+    chk('사업지구 특례 교통환경 30만㎡ → 그대로',
+      scoreAverage('교통환경', { facilities, manual: { ...road, 사업지구: { status: 'yes', area: 300000 } } })?.score, 3);
+  }
 
   for (const [t2, want] of [[96, 100], [95, 100], [90, 90], [85, 90], [80, 80], [75, 80],
     [70, 70], [65, 70], [60, 60], [55, 60], [50, 50], [45, 50], [40, 40], [35, 40], [34, 30]]) {

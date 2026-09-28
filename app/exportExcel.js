@@ -23,6 +23,7 @@ const MARK_FILL = 'FFFFFDF0';
 const BORDER = { style: 'thin', color: { argb: 'FF9AA5B1' } };
 const box = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
 
+import { districtLabel } from './DistrictRow';
 import { scoreSheet, scoreGroup, scoreFacility, scorePoi, scoreMatrix, scoreAverage, expectedSaleRate, reviewScore, tableOf } from '../src/lib/scoring';
 import { compareSummary, expectedRateOf } from '../src/lib/compare';
 import { manualSummary } from '../src/lib/manual';
@@ -557,7 +558,8 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
 
       cursor = writeTable(ws, 2, {
         title: spec.title,
-        subtitle: `▶ 사업지 : ${facilities?.address ?? spec.subject}`,
+        subtitle: `▶ 사업지 : ${facilities?.address ?? spec.subject}`
+          + ((s.id === '교통환경' || s.id === '주거편의') && districtLabel(manual?.['사업지구']) ? ` · ${districtLabel(manual['사업지구'])}` : ''),
         columns: spec.columns,
         rows,
       });

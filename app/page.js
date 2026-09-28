@@ -21,6 +21,7 @@ import PolygonDrawer from './PolygonDrawer';
 import RegionPicker from './RegionPicker';
 import { matchRegion } from '../src/lib/sido';
 import CompanyPicker from './CompanyPicker';
+import DistrictRow, { initialDistrict, districtLabel } from './DistrictRow';
 import * as store from './storage';
 
 const S = {
@@ -204,7 +205,9 @@ export default function Home() {
   const [polyDone, setPolyDone] = useState(false);
   const [geo, setGeo] = useState(null);             // 주소 매칭 결과 (후보 포함)
   const [pick, setPick] = useState(0);              // 고른 후보
-  const [manual, setManual] = useState({});         // 위성 육안 판정(6차선 등)
+  const [manual, setManual] = useState({});         // 위성 육안 판정(6차선 등) · 사업지구(수용·환지)
+  const [distBusy, setDistBusy] = useState(false);  // 사업지구 원천 조회 중
+  const [distErr, setDistErr] = useState(null);
   /*
    * 반경을 어디서부터 잴지. 지도 안쪽 버튼으로만 두니 아무도 못 찾았다 —
    * 시트 상단으로 꺼내고, 경계가 없을 때도 왜 못 고르는지 보이게 한다.
@@ -222,6 +225,25 @@ export default function Home() {
     if (pending === undefined || basisMode !== 'polygon' || !(polygon?.length >= 3)) return;
     setMsg({ kind: 'ok', text: `경계 ${polygon.length}점 지정 완료 — [${pending ?? '시트'} 수집] 을 누르세요.` });
   }, [polygon?.length, basisMode, pending]);   // eslint-disable-line react-hooks/exhaustive-deps
+  /*
+    **사업지구는 주소를 고르는 자리에서 같이 정한다**(사용자 지시 2026-09-28).
+    좌표가 정해지면 그 점이 걸린 사업지구·지구단위계획·토지이용계획을 원천에서 찾아
+    면적이 있으면 바로 보여 준다. 사람이 이미 고른 값(같은 좌표)은 건드리지 않는다 — 보관본을 열 때도 그렇다.
+  */
+  const distKey = fixed && coord?.x != null ? `${Number(coord.x).toFixed(6)},${Number(coord.y).toFixed(6)}` : null;
+  const [distTry, setDistTry] = useState(0);
+  useEffect(() => {
+    if (!distKey || manual['사업지구']?.key === distKey) return;
+    let dead = false;
+    setDistBusy(true); setDistErr(null);
+    const [x, y] = distKey.split(',');
+    fetchJson(`/api/district?x=${x}&y=${y}`)
+      .then(j => { if (!dead) setManual(m => (m['사업지구']?.key === distKey ? m : { ...m, 사업지구: initialDistrict(j, distKey) })); })
+      .catch(e => { if (!dead) { setDistErr(e.message); setManual(m => ({ ...m, 사업지구: { key: distKey, status: null, scan: null } })); } })
+      .finally(() => { if (!dead) setDistBusy(false); });
+    return () => { dead = true; };
+  }, [distKey, distTry]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   const [tab, setTab] = useState('교통환경');   // 자료수집 첫 시트에서 시작한다
   /* 지도는 탭을 화면 밖으로 밀어낸다 — 경계를 쓰는 시트에서만 펴 둔다 */
   const [mapOpenManual, setMapOpenManual] = useState(null);
@@ -322,7 +344,8 @@ export default function Home() {
         text: j.geo?.via === 'keyword'
           ? `주소검색으로는 못 찾아 장소검색으로 잡았습니다 — 매칭이 맞는지 먼저 확인하세요.${filled ? ` (시군구를 ${hit.sgg} 로 맞췄습니다)` : ''}`
           /* 후보 드롭다운은 이 메시지보다 **위**에 있다 — "아래에서" 라고 적어 눈이 헛돌았다 */
-          : `주소 매칭 완료${n > 1 ? ` (후보 ${n}건 — 다르면 위 [사업지 매칭] 에서 고르세요)` : ''}.`
+          /* 확정하면 입력폼이 접혀 [사업지 매칭] 드롭다운이 안 보인다 — 여는 버튼 이름으로 가리킨다 */
+          : `주소 매칭 완료${n > 1 ? ` (후보 ${n}건 — 다르면 [사업지 바꾸기] 를 눌러 고르세요)` : ''}.`
             + (filled ? ` 시군구를 ${hit.sgg} 로 맞췄습니다.` : ''),
       });
     } catch (e) { setMsg({ kind: 'warn', text: e.message }); }
@@ -387,6 +410,8 @@ export default function Home() {
     setFixed(false); setGeo(null); setPick(0);
     setCoord(null); setPolygon(null); setFacilities(null); setData(null);
     setBasisMode('polygon'); setPolyDone(false); setPending(undefined); setDrawNow(false);   // 기본값은 경계
+    /* 사업지구는 그 사업지의 것이다 — 사업지를 버리면 같이 버린다 */
+    setManual(m => { const { 사업지구: _d, ...rest } = m; return rest; }); setDistErr(null);
     setMsg({ kind: 'warn', text: '사업지를 초기화했습니다. 시도·시군구부터 다시 지정하세요.' });
   }
 
@@ -541,6 +566,13 @@ export default function Home() {
     put(allPoi, '반경시설 수집 (3종)', '교통환경',
       '교통환경 · 주거편의 · 교육환경 점수가 여기서 매겨집니다',
       '자료수집 단계로 →');
+    /* 사업지구 — 고르지 않으면 특례(등급 하한)를 적용할지 알 수 없다. 해당 없음도 하나의 답이다 */
+    const dist = manual['사업지구'];
+    put(dist?.status === 'no' || (dist?.status === 'yes' && Number(dist.area) > 0),
+      `사업지구 (수용·환지)${dist?.status === 'yes' && !(Number(dist.area) > 0) ? ' — 면적 없음' : dist?.status == null ? ' — 고르지 않음' : ''}`,
+      '교통환경',
+      '주소 아래 「사업지구」 줄에서 해당 여부와 지구면적을 정하세요 — 교통환경 · 주거편의 등급 하한이 여기서 정해집니다',
+      '자료수집 단계로 →');
 
     /* 판정을 안 한 항목 — 비어 있는 것이 아니라 기본점수가 들어가 있어 더 위험하다 */
     for (const pv of (mSum.provisional ?? [])) {
@@ -605,7 +637,7 @@ export default function Home() {
         : '고른 단지의 평균과 본건 분양가를 견주어 분양가경쟁력 점수를 냅니다');
 
     return { need, done, blocked: need.length > 0 };
-  }, [data, allPoi, mSum.provisional, mSum.needInflow, mSum.excl, mSum.rows, compare, cmpSum]);
+  }, [data, allPoi, mSum.provisional, mSum.needInflow, mSum.excl, mSum.rows, compare, cmpSum, manual]);
 
   const done = [
     ...(fixed ? ['input'] : []),
@@ -737,6 +769,7 @@ export default function Home() {
               {data ? ` · 통계 ${data.okCount}/${data.total}` : ''}
               {facilities ? ` · 시설 ${POI_SHEETS.filter(poiDone).length}/${POI_SHEETS.length}` : ''}
               {compare?.data ? ' · 비교사업장' : ''}
+              {districtLabel(manual['사업지구']) ? ` · ${districtLabel(manual['사업지구'])}` : ''}
             </span>
             {/* 내보내기는 어느 단계에서나 쓴다 — 요약 줄에 붙여 한 줄을 아낀다 */}
             {data && (
@@ -862,6 +895,21 @@ export default function Home() {
         )}
 
         </>)}
+
+        {/*
+          **사업지구 줄 — 주소 바로 아래**(사용자 지시 2026-09-28 「주소 검색하는 그리드에서」).
+          주소가 정해지는 순간 그 점의 사업지구와 면적이 같이 정해진다. 면적이 원천에 있으면 바로 보이고,
+          없으면 그 자리에서 넣는다. 자료수집 단계에서만 편다 — 뒤 단계에서는 요약 줄이 한 줄로 말한다.
+        */}
+        {fixed && gatherTab && (
+          <DistrictRow
+            value={manual['사업지구']}
+            loading={distBusy}
+            error={distErr}
+            onRetry={() => { setManual(m => { const { 사업지구: _d, ...rest } = m; return rest; }); setDistTry(t => t + 1); }}
+            onChange={(v) => setManual(m => ({ ...m, 사업지구: { ...v, key: distKey ?? v.key } }))}
+          />
+        )}
 
         {/*
           순서: 사업지 경계 → 통계 수집 → 반경시설 수집.
