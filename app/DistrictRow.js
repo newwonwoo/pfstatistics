@@ -74,8 +74,10 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
       <div style={S.head}>
         <span style={S.title}>사업지구 (수용·환지)</span>
         {(needPick || needArea) && <span style={S.must}>필수</span>}
+        {/* 자동으로 골랐다는 표시는 제목 줄에 — 버튼 줄 끝에 두니 버튼으로 보였다 */}
+        {v.auto && v.status && <span style={S.tagAuto}>원천에서 자동 선택 — 다르면 바꾸세요</span>}
         <span style={S.sub}>
-          수용·환지 방식 사업지구 안이면 교통환경·주거편의 등급에 지구면적별 하한이 섭니다
+          수용·환지 방식으로 개발하는 사업지구 안이면 지구면적에 따라 교통환경·주거편의의 최저 등급이 정해집니다
         </span>
       </div>
 
@@ -104,7 +106,6 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
           onClick={() => choose({ status: 'yes', pick: 'custom', name: v.pick === 'custom' ? v.name : '', area: v.pick === 'custom' ? v.area : null, areaBasis: '직접 입력', source: '실무자 입력' })}>
           직접 입력
         </button>
-        {v.auto && v.status && <span style={S.tagAuto}>원천에서 자동 선택 — 다르면 바꾸세요</span>}
       </div>
 
       {v.status === 'yes' && (
@@ -129,16 +130,17 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
           <span style={S.lab}>㎡</span>
           {fl ? (
             <span style={S.floor(fl.score >= 4)}>
-              교통환경·주거편의 하한 : {fl.floor}{fl.score < 5 ? ' 이상' : ''} ({fl.score}점)
+              교통환경·주거편의 최저 등급 : {fl.floor}{fl.score < 5 ? ' 이상' : ''} ({fl.score}점)
             </span>
-          ) : needArea ? <span style={{ ...S.sub, color: '#8a5008' }}>면적을 넣으면 하한이 정해집니다</span> : null}
+          ) : needArea ? <span style={{ ...S.sub, color: '#8a5008' }}>면적을 넣으면 최저 등급이 정해집니다</span> : null}
         </div>
       )}
 
       {/* 무엇을 근거로 골랐는지 — 원천·면적 계산 방법·추정한 개발방식 */}
       {v.status === 'yes' && cur && (
         <div style={S.basis}>
-          {cur.source} · 면적은 {v.areaBasis ?? cur.areaBasis}
+          {/* 레이어 ID(lt_c_…)는 화면에 쓰지 않는다 — 괄호 앞 이름만 */}
+          {String(cur.source).replace(/\(.*\)$/, '')} · 면적은 {v.areaBasis ?? cur.areaBasis}
           {cur.kind && <> · {cur.kind}({cur.law}) — {cur.method} 방식</>}
           {cur.operator && <> · 시행 {cur.operator}</>}
           {cur.status && <> · {cur.status}</>}
@@ -189,5 +191,5 @@ export function districtLabel(v) {
   if (!v || v.status == null) return null;
   if (v.status === 'no') return '사업지구 해당 없음';
   const fl = districtFloor(v);
-  return `${v.name || '사업지구'} ${fmt(v.area) || '?'}㎡${fl ? ` · 하한 ${fl.floor}` : ''}`;
+  return `${v.name || '사업지구'} ${fmt(v.area) || '?'}㎡${fl ? ` · 최저 ${fl.floor}` : ''}`;
 }
