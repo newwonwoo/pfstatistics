@@ -261,7 +261,7 @@ export default function NearbyPresale({
             <div style={{ ...S.bar, marginBottom: 8 }}>
               <span style={S.hit}>
                 {rows.length === 1
-                  ? '대상이 1곳입니다 — 그 단지의 초기분양률을 조사합니다(사례 EX1).'
+                  ? `대상이 1곳입니다 — 그 단지의 초기분양률을 조사합니다${funnel.stage === 'ongoing' ? '(사례 EX1)' : ''}.`
                   : `대상 ${rows.length}곳 — 4개 항목이 가장 많이 일치하는 곳을 고릅니다(비고2).`}
               </span>
               <button style={{ ...S.pick, marginLeft: 'auto' }} onClick={autoPick}>규정대로 선정</button>
