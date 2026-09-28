@@ -48,6 +48,8 @@ const S = {
   }),
   run: (busy) => ({ padding: '8px 16px', borderRadius: 6, border: 0, fontSize: 12.5, fontWeight: 700,
     cursor: busy ? 'progress' : 'pointer', background: busy ? '#9fb4e8' : T.accent, color: '#fff' }),
+  quiet: { padding: '8px 16px', borderRadius: 6, border: `1px solid ${T.line}`, fontSize: 12.5, fontWeight: 700,
+           cursor: 'pointer', background: '#fff', color: T.ink2 },
   done: { padding: '8px 16px', borderRadius: 6, border: `1px solid #c7e9d5`, fontSize: 12.5, fontWeight: 700,
           cursor: 'pointer', background: T.okSoft, color: T.ok },
   funnel: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 11.5, color: T.ink2, margin: '2px 0 10px' },
@@ -241,7 +243,8 @@ export default function NearbyPresale({
           <span style={S.step}>{rLabel(radius)} 이내 <span style={{ fontWeight: 400, color: T.muted }}>(규정)</span></span>
           {collected
             ? <button style={S.done} onClick={collect}>✓ 수집 완료 — 다시 찾기</button>
-            : <button style={S.run(busy)} disabled={busy || !coord} onClick={collect}>
+            /* 특례로 조사가 필요 없으면 진한 실행 버튼으로 두지 않는다 — 주버튼은 지금 할 일에만 */
+            : <button style={special === 'firstInDistrict' ? S.quiet : S.run(busy)} disabled={busy || !coord} onClick={collect}>
                 {busy ? '찾는 중…' : `반경 ${rLabel(radius)} 인근 단지 찾기`}
               </button>}
           {!coord && <span style={S.pend}>사업지 주소를 먼저 확정하세요</span>}
