@@ -20,10 +20,10 @@ import { polygonArea, pointInRing } from '../lib/geo.js';
  * - 사업지구경계의 `zonecode` 는 택지정보시스템(국토교통부·LX) 지구지정번호 체계다 —
  *   `법정동5 + 시행사2 + 등록연도4 + 일련3` (예 41590MX2008001). 시행사 코드표는 원천의 코드정의서 그대로다.
  * - 택지정보시스템 속성자료 CSV 에 면적·법령이 있지만 **해외 망에서 406** 을 준다(샌드박스 실측).
- *   경계가 있으므로 면적은 **경계에서 잰다**(`polygonArea`). 지구단위계획은 고시 도면면적이 0 이 아니면 그것을 쓴다.
+ *   경계가 있으므로 면적은 **경계에서 잰다**(`polygonArea`).
  * - **개발방식(수용/환지)은 어느 원천에도 필드로 없다.** 지구 이름과 토지이용계획의 지역지구명으로
- *   추정만 하고, 확정은 실무자가 한다. 특히 **지구단위계획구역은 개발방식과 무관**하다
- *   (골든 표본 「탄벌A」 는 지구단위계획만 있다 — 수용·환지 사업지구가 아닐 수 있다).
+ *   추정만 하고, 확정은 실무자가 한다.
+ * - **지구단위계획구역은 사업지구가 아니다** — 후보로 내지 않는다(아래 `plans` 주석).
  */
 const HOST = 'https://api.vworld.kr/req/wfs';
 const NED = 'https://api.vworld.kr/ned/data/getLandUseAttr';
@@ -110,21 +110,23 @@ export async function detectDistrict({ x, y }) {
       source: '택지정보시스템 사업지구경계(브이월드 lt_c_lhzone)',
     });
   }
-  for (const { f, parts } of containing(plans, pt)) {
+  /*
+    **지구단위계획은 사업지구 후보에서 뺀다**(사용자 지적 2026-09-28 「지구단위계획은 분양단지랑 같은게 아냐」).
+    지구단위계획구역은 도시관리계획상의 **계획 구역**이지 수용·환지로 조성하는 사업지구가 아니다 —
+    골든 탄벌A(333,797㎡)처럼 한 단지의 계획 구역인 경우도 있어, 그 면적을 「지구면적」 으로 고르면
+    특례가 엉뚱하게 걸린다. 탐색용으로만 `plans` 에 남긴다(화면에는 쓰지 않는다).
+  */
+  const planList = containing(plans, pt).map(({ f, parts }) => {
     const p = f.properties ?? {};
     const ar = Number(p.dgm_ar);
-    const k = kindOf(p.dgm_nm);
-    candidates.push({
-      id: `plan:${p.present_sn ?? p.dgm_nm}`,
-      layer: '지구단위계획',
+    return {
       name: p.dgm_nm ?? '지구단위계획구역',
       code: p.ntfc_sn ?? null,
-      kind: k?.kind ?? null, law: k?.law ?? null, method: k?.method ?? null,
       area: ar > 0 ? Math.round(ar) : areaOf(parts),
       areaBasis: ar > 0 ? '고시 도면면적' : '구역 경계에서 계산',
       source: '도시계획정보 지구단위계획(브이월드 lt_c_upisuq161)',
-    });
-  }
+    };
+  });
 
   /* 필지의 토지이용계획 — 지구 경계 레이어가 못 잡는 도시개발구역 등을 이름으로 알려 준다 */
   let landUse = [];
@@ -139,17 +141,13 @@ export async function detectDistrict({ x, y }) {
       landUse = [...new Set(rows
         .filter(r => r.cnflcAtNm !== '접함')
         .map(r => r.prposAreaDstrcCodeNm)
-        .filter(n => /택지|도시개발|공공주택|지구단위|산업단지|산업시설|혁신도시|기업도시|경제자유|정비구역|재개발|재건축/.test(n ?? '')))];
+        /* 지구단위계획구역은 적지 않는다 — 사업지구가 아니다(위 주석) */
+        .filter(n => /택지|도시개발|공공주택|산업단지|산업시설|혁신도시|기업도시|경제자유|정비구역|재개발|재건축/.test(n ?? '')))];
     } catch (e) { errors.push(`토지이용계획: ${e.message}`); }
   }
 
-  /*
-    **추천만 한다.** 수용·환지 사업지구로 볼 근거(이름이 택지개발·공공주택·도시개발…)가 있는 첫 후보.
-    사업지구경계를 지구단위계획보다 앞에 둔다 — 지구단위계획은 개발방식과 무관하기 때문이다.
-  */
-  const byName = candidates.find(c => c.layer === '사업지구' && c.kind)
-    ?? candidates.find(c => c.layer === '사업지구')
-    ?? candidates.find(c => c.kind);
+  /* **추천만 한다.** 수용·환지 사업지구로 볼 근거(이름이 택지개발·공공주택·도시개발…)가 있는 첫 후보 */
+  const byName = candidates.find(c => c.kind) ?? candidates[0];
   const luKind = landUse.map(kindOf).find(Boolean);
   const suggestion = byName
     ? { id: byName.id, why: byName.kind ? `${byName.kind}(${byName.law}) — ${byName.method} 방식` : '택지정보시스템에 사업지구로 등록돼 있습니다' }
@@ -157,11 +155,12 @@ export async function detectDistrict({ x, y }) {
 
   return {
     candidates,
+    plans: planList,
     landUse,
     landUseKind: luKind ?? null,
     pnu: pnu ?? null,
     suggestion,
-    /* 세 원천 모두 비었는가 — 그때만 「사업지구 밖」 을 권한다 */
+    /* 사업지구경계도 없고 토지이용계획에도 사업지구 이름이 없으면 「사업지구 밖」 을 권한다 (지구단위계획은 보지 않는다) */
     nothing: candidates.length === 0 && !luKind,
     errors,
     source: {

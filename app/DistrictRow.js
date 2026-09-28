@@ -10,7 +10,8 @@ import { districtFloor } from '../src/lib/scoring';
  * (500만㎡↑ 매우양호 · 100만㎡↑ 양호 이상 · 50만㎡↑ 보통 이상 · 그 밖 열악 이상).
  * 그래서 **주소를 고르는 자리에서** 같이 고른다(사용자 지시 2026-09-28 — 「주소 검색하는 그리드에서」).
  *
- * · 원천이 면적을 주면 **바로 보여 준다**(택지정보시스템 사업지구경계 · 지구단위계획 고시면적).
+ * · 원천이 면적을 주면 **바로 보여 준다**(택지정보시스템 사업지구경계 — 경계에서 계산).
+ *   **지구단위계획구역은 후보로 내지 않는다** — 계획 구역이지 사업지구가 아니다(사용자 지적 2026-09-28).
  * · 원천에 없으면 **직접 입력**한다.
  * · 개발방식(수용/환지)은 원천에 필드가 없다 — 이름으로 추정해 미리 골라 둘 뿐, 확정은 사람이 한다.
  *
@@ -105,7 +106,7 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
             title={`${c.source} · ${c.areaBasis}`}>
             <span>{c.name}</span>
             <span style={S.area}>{fmt(c.area)}㎡</span>
-            <span style={{ fontSize: 10.5, color: T.muted, fontWeight: 600 }}>{c.layer}</span>
+            {c.status && <span style={{ fontSize: 10.5, color: T.muted, fontWeight: 600 }}>{c.status}</span>}
           </button>
         ))}
         <button style={S.chip(v.pick === 'custom')}
@@ -152,16 +153,18 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
           {cur.status && <> · {cur.status}</>}
         </div>
       )}
-      {v.status === 'yes' && cur?.layer === '지구단위계획' && !cur.kind && (
+      {/* 사업지구경계에는 없는데 필지 토지이용계획이 사업지구라고 하면 — 면적은 원천에 없으니 직접 넣게 한다 */}
+      {scan && cands.length === 0 && scan.landUseKind && (
         <div style={S.warn}>
-          지구단위계획구역은 개발방식과 무관합니다 — 수용·환지 방식으로 조성된 지구일 때만 고르세요.
+          필지 토지이용계획상 {scan.landUseKind.kind} 안입니다 — 사업지구경계 원천에 이 지구가 없어 면적을 모릅니다.
+          안에 있다면 [직접 입력] 으로 지구면적을 넣으세요.
         </div>
       )}
       {scan && (
         <div style={S.basis}>
           {scan.landUse?.length
             ? <>필지 토지이용계획 : {scan.landUse.join(' · ')}</>
-            : cands.length === 0 ? '원천 세 곳(사업지구경계 · 지구단위계획 · 토지이용계획)에서 사업지구가 잡히지 않았습니다' : null}
+            : cands.length === 0 ? '사업지구경계 · 토지이용계획 어디에도 사업지구가 잡히지 않았습니다' : null}
           {scan.errors?.length > 0 && <> · 일부 원천 실패({scan.errors.length})</>}
         </div>
       )}
@@ -173,7 +176,7 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
  * 원천 결과로 **처음 값**을 정한다 — 이미 사람이 고른 값이 있으면 건드리지 않는다.
  *   · 이름이 수용·환지 법(택지개발·공공주택·도시개발…)을 말하는 사업지구 → 그것을 미리 고른다
  *   · 원천 세 곳 모두 아무것도 없으면 → 「아니오 — 사업지구 밖」 을 미리 고른다
- *   · 지구단위계획만 있으면 → **고르지 않는다**(개발방식과 무관 — 사람이 판단)
+ *   · 토지이용계획만 사업지구라고 하면(경계 원천에 없는 도시개발구역 등) → **고르지 않는다** — 면적을 사람이 넣는다
  */
 export function initialDistrict(scan, key) {
   const base = { scan, key, auto: true };
