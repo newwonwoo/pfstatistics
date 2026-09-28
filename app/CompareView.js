@@ -4,6 +4,8 @@ import { T, mono } from './theme';
 import { fetchJson } from './fetchJson';
 import RadiusMap from './RadiusMap';
 import { scoreMatrix } from '../src/lib/scoring';
+import { similarityOf, pickComparables, guaranteeSetOf, baseRadius, PRIORITY_YEARS,
+  HOUSE_TYPES, SIZE_BANDS, RANK_BANDS, LAND_TYPES } from '../src/lib/similar';
 
 /**
  * 비교사업장 · 분양가 적정성.
@@ -19,19 +21,23 @@ import { scoreMatrix } from '../src/lib/scoring';
  * 분양가를 전국 단위로 주는 공공 원천은 여기뿐이다 — 실거래는 이미 팔린 값이고 KB시세는 기축이다.
  */
 
-/* ── 인근 유사사업장 요건 (보증심사 실무기준) ────────────────────────── */
+/*
+  ── 인근 유사사업장 요건 (보증심사 실무기준) ──────────────────────────
+  이 탭은 **두 기준**을 쓴다(docs/규정-인근단지-선정기준.md).
+    A. 분양가경쟁력(15) 평가 시 「인근아파트 유사사업장」 → 분양가격지수 · 점수
+    C. 분양보증 대상 사업장의 「인근 유사사업장」 조사    → 적정분양가(제2조의2 1호 · 제16조)
+  둘은 ③유사도 단서 한 줄만 다르다 — C 에 「5년 이내 분양 개시 사업장으로 우선 선정」 이 더 붙는다.
+  판정은 전부 `src/lib/similar.js` 한 곳이 한다. 여기 문구는 화면에 적을 원문 요약이다.
+*/
 const REG = {
   거리: '단위사업장으로부터 2km(수도권·광역시는 1km) 이내. 없으면 매 1km 범위로 확장',
   거리측정: '단위 사업장(단지) 경계로부터 인근 사업장 경계까지의 거리',
   시기: '심사 시점 기준 최근 1년 이내 분양 개시(=공급계약시작일)한 사업장. 없으면 분양 진행중 + 준공 사업장',
   유사도: '주택유형 · 단지규모 · 시공능력평가순위 · 택지유형 중 2개 이상 일치. 3개 이상이면 우선 선정',
+  유사도C: `분양보증 대상 사업장의 적정분양가(제16조)는 여기에 더해 ${PRIORITY_YEARS}년 이내 분양 개시 사업장을 우선 선정`,
   제외: '공공분양, 분양개시 후 10년 경과 등 평균가격을 현저히 왜곡하는 사업장은 제외',
-  // 수도권·광역시는 1km, 그 밖은 2km (거리 요건의 기본값)
-  METRO: ['서울', '인천', '경기', '부산', '대구', '광주', '대전', '울산', '세종'],
 };
 
-const HOUSE_TYPES = ['아파트', '주상복합', '기타'];
-const SIZE_BANDS = ['500세대 미만', '500~999세대', '1,000세대 이상'];
 /*
   좌표를 어디까지 맞춰서 잰 거리인가 — `exact` 는 배지를 달지 않는다(기본이라 조용해야 한다).
   나머지는 근사라서 **반경 판정이 뒤집힐 수 있다**는 걸 표에서 바로 보여야 한다.
@@ -45,14 +51,12 @@ const GEOCODE_NOTE = {
   sample: '견본주택 위치입니다 — 단지와 다른 자리일 수 있습니다',
 };
 
-const RANK_BANDS = ['50위 이내', '51~100위', '101~200위', '201~300위', '300위 밖'];
 /* 이 앱이 시공능력평가순위를 이미 수집한다 — 순위를 구간으로 옮기는 일을 사람에게 시키지 않는다 */
 const rankBandOf = (rank) => {
   const n = Number(rank);
   if (!Number.isFinite(n) || n <= 0) return null;
   return n <= 50 ? '50위 이내' : n <= 100 ? '51~100위' : n <= 200 ? '101~200위' : n <= 300 ? '201~300위' : '300위 밖';
 };
-const LAND_TYPES = ['민간택지', '공공택지', '신도시', '기타'];
 
 const S = {
   page: { background: T.panel, border: `1px solid ${T.lineStrong}`, borderTop: 0, borderRadius: `0 0 ${T.radius}px ${T.radius}px`, padding: '22px 24px 26px' },
@@ -179,6 +183,7 @@ const S = {
   propAskHead: { fontSize: 11, fontWeight: 700, color: T.muted, letterSpacing: '.04em', marginBottom: 7 },
   propCheck: { display: 'flex', gap: 7, alignItems: 'flex-start', fontSize: 11.5, color: T.ink2, lineHeight: 1.7, marginTop: 4 },
   propHint: { color: T.muted },
+  gNote: { color: T.warn, fontWeight: 700 },
   exclRead: { display: 'flex', alignItems: 'baseline', gap: 7, padding: '5px 0', fontSize: 15, fontWeight: 700, ...mono },
   exclNote: { fontSize: 10.5, fontWeight: 400, color: T.muted, fontFamily: 'inherit', lineHeight: 1.4 },
   regScope: { marginTop: 7, paddingTop: 7, borderTop: `1px dashed ${T.line}`, fontSize: 11.5, color: T.ink2, lineHeight: 1.7 },
@@ -197,9 +202,6 @@ const RADII = [1000, 2000, 3000, 4000, 5000];
 const KIND_ORDER = ['아파트', '민간임대', '오피스텔', '도시형생활주택', '생활형숙박시설'];
 const rLabel = (r) => `${r / 1000}km`;
 
-/** 거리 요건 기본값 — 수도권·광역시 1km, 그 밖 2km */
-const baseRadius = (region) =>
-  REG.METRO.some(m => String(region ?? '').startsWith(m)) ? 1000 : 2000;
 
 export default function CompareView({ addr, coord, region, polygon, radiusBasis, company, companyRank, excl = null, manualSum = null, value, onChange }) {
   const [busy, setBusy] = useState(false);
@@ -292,19 +294,7 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
 
   /* 본건 제원을 하나도 안 채웠으면 유사도를 "0개 일치" 로 붉게 띄우지 않는다 — 겁만 준다 */
   const siteFilled = Boolean(site.houseType || site.sizeBand || site.rankBand || site.landType);
-  const similarity = (a) => {
-    const hit = [];
-    const miss = [];
-    const cmp = (name, mine, theirs) => {
-      if (!mine || !theirs) { miss.push(`${name}(미상)`); return; }
-      (mine === theirs ? hit : miss).push(`${name}${mine === theirs ? '' : `(${theirs})`}`);
-    };
-    cmp('주택유형', site.houseType, a.houseType);
-    cmp('단지규모', site.sizeBand, a.sizeBand);
-    cmp('시공순위', site.rankBand, a.rankBand);
-    cmp('택지유형', site.landType, a.landType);        // 상대 택지유형은 원천에 없다
-    return { n: hit.length, hit, miss };
-  };
+  const similarity = (a) => similarityOf(site, a);
 
   const items = useMemo(
     () => all.filter(a => kinds.includes(a.kind ?? '아파트')).map(a => ({ ...a, sim: similarity(a) })),
@@ -337,25 +327,15 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
     0건이면 **지우지 않고** 왜 0건인지 말한다.
   */
   const autoPick = () => {
-    const sale = items.filter(isSale);
-    const excluded = sale.filter(a => a.publicSale || a.years > 10).length;
-    let c = sale.filter(a => a.sim.n >= 2 && !a.isSite && !a.publicSale && !(a.years > 10));
-    if (!c.length) {
-      setAutoMsg(`규정 요건(유사도 2개 이상 일치)을 채우는 단지가 없습니다`
-        + `${excluded ? ` (공공분양·10년 경과로 제외한 ${excluded}건 별도)` : ''}`
-        + ` — [본건 제원] 을 더 채우면 일치 항목이 늘어납니다. 고른 단지는 그대로 두었습니다.`);
+    const r = pickComparables(items, site, 'price');
+    const ex = r.excluded ? ` · 공공분양·10년 경과 ${r.excluded}건 제외` : '';
+    if (!r.ids.length) {
+      setAutoMsg(`규정 요건(유사도 2개 이상 일치)을 채우는 단지가 없습니다${ex}`
+        + ' — [본건 제원] 을 더 채우면 일치 항목이 늘어납니다. 고른 단지는 그대로 두었습니다.');
       return;
     }
-    const fresh = c.filter(a => a.timing === '1년 이내 분양개시');
-    const usedFresh = fresh.length > 0;
-    if (usedFresh) c = fresh;
-    const three = c.filter(a => a.sim.n >= 3);
-    const usedThree = three.length > 0;
-    if (usedThree) c = three;
-    setAutoMsg(`${c.length}곳을 골랐습니다 — 유사도 ${usedThree ? '3개 이상' : '2개 이상'} 일치`
-      + `${usedFresh ? ' · 1년 이내 분양개시 우선' : ''}`
-      + `${excluded ? ` · 공공분양·10년 경과 ${excluded}건 제외` : ''}`);
-    set({ picked: c.map(a => a.manageNo) });
+    setAutoMsg(`${r.ids.length}곳을 골랐습니다 — 유사도 2개 이상 · ${r.steps.join(' · ')}${ex}`);
+    set({ picked: r.ids });
   };
 
   /* 비교사업장 평균 = 고른 단지들의 **산술평균** (평가표 검산으로 확인) */
@@ -364,6 +344,17 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
     return vals.length ? vals.reduce((s, x) => s + x, 0) / vals.length : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chosen, mode, areaBasis]);
+
+  /*
+    적정분양가(제16조)는 **C 기준**이다 — 고른 단지에 「5년 이내 분양개시 우선」 한 줄을 더 건다.
+    5년 이내가 하나라도 섞여 있으면 5년 넘은 곳을 뺀다. 대부분은 A 와 같은 목록이 된다.
+  */
+  const guarantee = useMemo(() => guaranteeSetOf(chosen.filter(isSale)), [chosen]);
+  const gAvg = useMemo(() => {
+    const vals = guarantee.set.map(priceOf).filter(x => x != null);
+    return vals.length ? vals.reduce((s, x) => s + x, 0) / vals.length : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guarantee, mode, areaBasis]);
 
   /* 본건 ㎡당 분양가 — ㎡ 또는 평 어느 쪽으로 넣어도 된다 */
   const sitePrice = Number(site.unitPrice) || null;
@@ -381,10 +372,10 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
    * 원칙(나목)은 평균가격 채택이고, ④는 심사자가 체크해야 열린다.
    */
   const proper = (() => {
-    if (!sitePrice || !avg) return null;
-    const ratio = (sitePrice / avg) * 100;
+    if (!sitePrice || !gAvg) return null;
+    const ratio = (sitePrice / gAvg) * 100;
     const within10 = ratio <= 110;
-    if (sitePrice <= avg) {
+    if (sitePrice <= gAvg) {
       return {
         price: sitePrice, ratio, within10, tone: 'ok',
         clause: '제16조①2 가목',
@@ -401,7 +392,7 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
       };
     }
     return {
-      price: avg, ratio, within10, tone: 'warn',
+      price: gAvg, ratio, within10, tone: 'warn',
       clause: '제16조①2 나목',
       why: '예정분양가가 평균가격보다 높으므로 평균가격을 적용하며, 보증신청인과 사전협의가 필요합니다.',
     };
@@ -429,7 +420,8 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
       <button style={S.regHead} onClick={() => setRegOpen(o => !o)}>
         <span style={{ fontWeight: 700 }}>인근 유사사업장 선정기준</span>
         <span style={S.regHeadNote}>
-          제16조 · 거리 {radius / 1000}km · 1년 이내 분양개시 우선 · 유사도 2개 이상 · 공공분양/10년경과 제외
+          거리 {radius / 1000}km · 1년 이내 분양개시 우선 · 유사도 2개 이상(3개 이상 우선) · 공공분양/10년경과 제외
+          · 적정분양가는 {PRIORITY_YEARS}년 이내 분양개시 추가 우선
         </span>
         <span style={S.regHeadArrow}>{regOpen ? '접기 ▲' : '펴기 ▼'}</span>
       </button>
@@ -438,17 +430,19 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
         <div><span style={S.regKey}></span><span style={{ color: T.muted }}>측정 : {REG.거리측정}</span></div>
         <div><span style={S.regKey}>② 시기</span> {REG.시기}</div>
         <div><span style={S.regKey}>③ 유사도</span> {REG.유사도}</div>
+        <div><span style={S.regKey}></span><b>{REG.유사도C}</b></div>
         <div><span style={S.regKey}>제외</span> {REG.제외}</div>
         {/*
           같은 "인근 단지" 라는 말을 쓰지만 초기분양률의 선정기준은 이것과 다르다
-          (준공 단지를 안 쓰고, 유사도를 브랜드로 보고, 못 찾으면 최하위 배점).
+          (준공 단지를 안 쓰고, 주택유형 일치가 요건이고, 가장 많이 일치하는 곳을 고르고, 못 찾으면 최하위 배점).
           이 목록을 그쪽에 돌려 쓰면 틀린다 — 어느 규정의 목록인지 못박아 둔다.
           대조표: docs/규정-인근단지-선정기준.md
         */}
         <div style={S.regScope}>
-          이 선정기준은 <b>분양가 적정성(제16조)</b> 전용입니다 —
-          인근아파트 <b>초기분양률</b>은 선정기준이 달라(준공 단지 제외 · 유사도를 브랜드로 판단 ·
-          미존재시 최하위 배점) 이 목록을 그대로 쓸 수 없습니다.
+          이 탭은 두 기준을 씁니다 — <b>분양가격지수·분양가경쟁력</b>은 「분양가경쟁력(15) 인근아파트 유사사업장」,
+          <b>적정분양가</b>는 「분양보증 대상 사업장 인근 유사사업장(제16조)」. 둘은 {PRIORITY_YEARS}년 이내 우선 한 줄만 다릅니다.<br />
+          인근아파트 <b>초기분양률</b>은 기준이 또 달라(준공 단지 제외 · 주택유형 일치가 요건 · 가장 많이 일치하는 곳 ·
+          없으면 최하위 배점) 이 목록을 그대로 쓰지 않습니다.
         </div>
       </div>
 
@@ -671,9 +665,17 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
             <tbody>
               <tr>
                 <td style={S.propKey}>① 비교사업장 평균가격</td>
-                <td style={S.propNum}>{won(avg)}</td>
+                <td style={S.propNum}>{won(gAvg)}</td>
                 <td style={S.propUnit}>원/㎡</td>
-                <td style={S.propPy}>평당 {won(avg * PY)}</td>
+                <td style={S.propPy}>
+                  평당 {won(gAvg * PY)} · {guarantee.set.length}곳
+                  {guarantee.dropped.length > 0 && (
+                    <span style={S.gNote}>
+                      {' '}— 분양보증 기준({PRIORITY_YEARS}년 이내 분양개시 우선)으로{' '}
+                      {guarantee.dropped.map(a => a.name).join(' · ')} 제외
+                    </span>
+                  )}
+                </td>
               </tr>
               <tr>
                 <td style={S.propKey}>② 본건 예정분양가</td>
@@ -702,14 +704,14 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
           <div style={S.propAsk}>
             <div style={S.propAskHead}>심사자 판단</div>
             {/* ④ 는 자동이 아니다 — 타당성 인정은 사람이 한다 */}
-            <label style={{ ...S.propCheck, opacity: proper.within10 && sitePrice > avg ? 1 : 0.45 }}>
+            <label style={{ ...S.propCheck, opacity: proper.within10 && sitePrice > gAvg ? 1 : 0.45 }}>
               <input type="checkbox" checked={!!site.art4}
-                disabled={!(proper.within10 && sitePrice > avg)}
+                disabled={!(proper.within10 && sitePrice > gAvg)}
                 onChange={e => setSite({ art4: e.target.checked })} />
               <span>
                 <b>제16조④ 타당성 인정</b> — ±10% 이내이고 입지여건·마감수준·인근 중개업소
                 방문조사 결과를 감안해 타당하다고 판단
-                {proper.within10 && sitePrice > avg
+                {proper.within10 && sitePrice > gAvg
                   ? <span style={S.propHint}> → 체크하면 적정분양가가 예정분양가 {won(sitePrice)} 이 됩니다</span>
                   : <span style={S.propHint}> (예정분양가가 평균보다 높고 ±10% 이내일 때만 해당)</span>}
               </span>
@@ -745,9 +747,9 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
             <tbody>
               <tr>
                 <td style={S.propKey}>① 비교사업장 평균가격</td>
-                <td style={{ ...S.propNum, color: avg == null ? T.muted : T.ink }}>{avg == null ? '—' : won(avg)}</td>
+                <td style={{ ...S.propNum, color: gAvg == null ? T.muted : T.ink }}>{gAvg == null ? '—' : won(gAvg)}</td>
                 <td style={S.propUnit}>원/㎡</td>
-                <td style={S.propPy}>{avg == null ? '아래 표에서 비교사업장을 고르세요' : `평당 ${won(avg * PY)}`}</td>
+                <td style={S.propPy}>{gAvg == null ? '아래 표에서 비교사업장을 고르세요' : `평당 ${won(gAvg * PY)}`}</td>
               </tr>
               <tr>
                 <td style={S.propKey}>② 본건 예정분양가</td>
@@ -770,9 +772,9 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
             </tbody>
           </table>
           <div style={{ ...S.propWhy, color: T.muted }}>
-            {avg == null && sitePrice == null
+            {gAvg == null && sitePrice == null
               ? '반경 안의 분양단지를 수집해 비교사업장을 고르고, 본건 예정분양가를 입력하면 여기서 적정분양가가 산정됩니다.'
-              : avg == null
+              : gAvg == null
                 ? '비교사업장을 고르면 평균가격이 잡히고 적정분양가가 산정됩니다.'
                 : '본건 예정분양가를 입력하면 적정분양가가 산정됩니다.'}
           </div>

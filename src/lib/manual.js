@@ -180,7 +180,8 @@ export function nearbySurvey(nb = {}) {
   const picked = nb.picked ?? {};
   const ids = Object.keys(picked);
   if (!ids.length) return { value: nb.rate ?? null, from: 'typed', count: 0 };
-  const nums = ids.map(id => Number(picked[id]));
+  /* 빈 칸은 0% 가 아니다 — Number('') 는 0 이라 그대로 두면 고르기만 한 단지가 0% 로 평균에 들어간다 */
+  const nums = ids.map(id => (String(picked[id] ?? '').trim() === '' ? NaN : Number(picked[id])));
   const blank = nums.filter(n => !Number.isFinite(n)).length;
   if (blank) {
     return { value: null, from: 'survey', count: ids.length, blank,

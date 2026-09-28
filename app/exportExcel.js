@@ -26,6 +26,7 @@ const box = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
 import { scoreSheet, scoreGroup, scoreFacility, scorePoi, scoreMatrix, scoreAverage, expectedSaleRate, reviewScore, tableOf } from '../src/lib/scoring';
 import { compareSummary, expectedRateOf } from '../src/lib/compare';
 import { manualSummary } from '../src/lib/manual';
+import { guaranteeSetOf, PRIORITY_YEARS } from '../src/lib/similar';
 
 const fmt = (v) =>
   typeof v === 'number' ? v : (v == null || v === '' ? '' : String(v));
@@ -194,6 +195,10 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
     const chosen = c.items.filter(a => picked.includes(a.manageNo));
     const vals = chosen.filter(isSale).map(priceOf).filter(v => v != null);
     const avg = vals.length ? vals.reduce((s2, v) => s2 + v, 0) / vals.length : null;
+    /* 적정분양가는 분양보증 기준(C) — 화면과 같은 한 줄(5년 이내 분양개시 우선)을 건다 */
+    const guarantee = guaranteeSetOf(chosen.filter(isSale));
+    const gVals = guarantee.set.map(priceOf).filter(v => v != null);
+    const gAvg = gVals.length ? gVals.reduce((s2, v) => s2 + v, 0) / gVals.length : null;
     const rkm = c.radius >= 1000 ? `${c.radius / 1000}km` : `${c.radius}m`;
 
     const cw = wb.addWorksheet('비교사업장', { views: [{ showGridLines: false }] });
@@ -243,23 +248,27 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
      * 적정분양가 산정 — 화면과 **같은 규칙**을 쓴다.
      * 제16조④(타당성 인정)는 자동이 아니라 심사자가 화면에서 체크한 경우에만 걸린다.
      */
-    if (sitePrice && avg) {
-      const ratio = (sitePrice / avg) * 100;
+    if (sitePrice && gAvg) {
+      const ratio = (sitePrice / gAvg) * 100;
       const within10 = ratio <= 110;
-      const p = sitePrice <= avg
+      const p = sitePrice <= gAvg
         ? { price: sitePrice, clause: '제16조①2 가목',
             why: '예정분양가가 평균가격보다 낮으므로 예정분양가를 적용'
               + (ratio < 90 ? ' (적정분양가의 90% 미만 — 실무상 적정한 것으로 간주)' : '') }
         : (within10 && site.art4)
           ? { price: sitePrice, clause: '제16조④',
               why: '±10% 이내이고 타당성이 인정되는 것으로 판단하여 예정분양가를 적용 (심사자 판단)' }
-          : { price: avg, clause: '제16조①2 나목',
+          : { price: gAvg, clause: '제16조①2 나목',
               why: '예정분양가가 평균가격보다 높으므로 평균가격을 적용 — 보증신청인과 사전협의 필요' };
       const c = cw.getCell(cur.nextRow + 2, 2);
       c.value = `적정분양가 ${Math.round(p.price).toLocaleString('ko-KR')} 원/㎡`
         + ` (평당 ${Math.round(p.price * PY).toLocaleString('ko-KR')}) · ${p.clause}`
         + ` · ②÷① ${ratio.toFixed(1)}% · ${p.why}`
-        + (site.unsoldZone ? ` · 미분양관리지역 105% 기준 ${ratio <= 105 ? '충족' : '초과'} (제16조⑥)` : '');
+        + (site.unsoldZone ? ` · 미분양관리지역 105% 기준 ${ratio <= 105 ? '충족' : '초과'} (제16조⑥)` : '')
+        + (guarantee.dropped.length
+          ? ` · 평균가격은 분양보증 기준(${PRIORITY_YEARS}년 이내 분양개시 우선)으로 ${guarantee.set.length}곳`
+            + ` — ${guarantee.dropped.map(x => x.name).join('·')} 제외`
+          : '');
       c.font = { bold: true, size: 10 };
       cur.nextRow += 1;
     }

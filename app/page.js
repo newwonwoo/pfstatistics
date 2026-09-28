@@ -1164,7 +1164,7 @@ export default function Home() {
                 <RateView
                   region={region} addr={addr} facilities={view}
                   coord={coord} polygon={polygon} radiusBasis={radiusBasis} company={data?.company}
-                  compare={compare} excl={mSum.excl} manualSum={mSum} sheetInput={sheetInput}
+                  compare={compare} onCompare={setCompare} excl={mSum.excl} manualSum={mSum} sheetInput={sheetInput}
                   onSheetInput={(patch) => setSheetInput(x => ({ ...(x ?? {}), ...patch }))}
                   value={rate} onChange={setRate} onJump={setTab}
                 />

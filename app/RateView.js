@@ -79,7 +79,7 @@ const SERIES = [
 ];
 
 export default function RateView({ region, addr, coord, polygon, radiusBasis, company,
-  facilities, compare, excl: exclProp = null, manualSum = null,
+  facilities, compare, onCompare, excl: exclProp = null, manualSum = null,
   sheetInput = null, onSheetInput, value, onChange, onJump }) {
   const v = value ?? {};
   const series = v.series ?? '주택';
@@ -220,7 +220,10 @@ export default function RateView({ region, addr, coord, polygon, radiusBasis, co
       */}
       <NearbyPresale
         region={region} addr={addr} coord={coord} polygon={polygon} radiusBasis={radiusBasis}
-        company={company} households={households} series={series}
+        series={series}
+        /* 비고2 의 4개 항목 = 비교사업장 탭 [본건 제원] 과 같은 값(한 곳에서 들고 있는다) */
+        site={compare?.site ?? {}}
+        onSite={(patch) => onCompare?.({ ...(compare ?? {}), site: { ...(compare?.site ?? {}), ...patch } })}
         value={sheetInput?.인근초기분양률}
         onChange={(nb) => onSheetInput?.({ 인근초기분양률: nb })}
       />

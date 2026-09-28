@@ -5,24 +5,29 @@ import { fetchJson } from './fetchJson';
 import RadiusMap from './RadiusMap';
 import { nearbyTable, nearbySurvey } from '../src/lib/manual';
 import { scoreNearbyPresale } from '../src/lib/scoring';
+import {
+  baseRadius, presaleCandidates, pickPresale, HOUSE_TYPES, SIZE_BANDS, RANK_BANDS, LAND_TYPES,
+} from '../src/lib/similar';
 
 /**
  * 인근아파트 초기 분양률(10) — **조사 항목**이다.
  *
- * 「왜 아파트를 선정하는 로직이 없냐」(사용자 지적 2026-09-25)에 대한 답 —
- * 전에는 이 시트를 범위 밖으로 두어 숫자 칸 하나만 있었다. 이제 후보를 찾아 준다.
+ * 선정 방법은 가이드북 원문 「"인근아파트 초기 분양률(10)" 항목 평가 시 '인근아파트' 선정 방법」 을 따른다
+ * (2026-09-28 원문 수령 · docs/규정-인근단지-선정기준.md 의 B).
+ *   ① 거리   단위사업장으로부터 2km (수도권·광역시 1km) 이내
+ *   ② 시기   최근 1년 이내 분양 개시 → 없으면 분양 진행 중 (**준공은 쓰지 않는다**)
+ *   ③ 유형   주택유형이 일치하는 사업장
+ *   비고1   해당 사업장이 없으면 **최하위 배점**
+ *   비고2   2개 이상이면 주택유형·단지규모·시공능력평가순위·택지유형 4개 항목이 **가장 많이** 일치하는 곳.
+ *           가장 많이 일치하는 곳이 여럿이면 그 **평균값**(사례 EX3)
  *
- * **분양가 적정성(제16조)의 목록을 돌려 쓰면 안 된다**(docs/규정-인근단지-선정기준.md).
- * 셋이 다르다 —
- *   ① 준공 단지를 **안 쓴다**(준공 단지에는 볼 초기분양률이 없다).
- *      1년 이내 분양개시 → 없으면 **분양 진행중까지**. 거기서 멈춘다.
- *   ② 유사도를 **위치 · 세대수 · 브랜드**로 본다(시공능력평가순위·택지유형이 아니다).
- *   ③ 못 찾으면 범위를 넓히지 않고 **최하위 기준배점**을 준다.
- * 거리 규정은 원문에 **없다** — 「인근」 이라고만 적혀 있어 반경을 실무자가 고른다.
+ * **전에 틀렸던 것 두 가지**(원문을 받기 전 옛 문구로 만들었다) —
+ *   · 거리 규정이 없다고 보고 반경을 사람이 고르게 했다(기본 2km) → 이제 규정 거리로 고정한다
+ *   · 유사도를 위치·세대수·브랜드로 봤다 → 원문은 분양가 쪽과 **같은 4개 항목**이다
  *
  * **초기분양률(6개월 이내) 값 자체는 어느 공개 원천에도 없다.**
- * 청약홈·K-apt·실거래 어디에도 단지별 분양률은 없다(HUG 는 시도 평균뿐이다).
  * 그래서 이 화면은 **누구를 조사할지**까지 대신하고, 조사한 값은 사람이 넣는다.
+ * 판정은 `src/lib/similar.js` 한 곳에서 한다 — 자가진단이 원문 사례해설을 매일 재현한다.
  */
 
 const S = {
@@ -72,84 +77,76 @@ const S = {
     border: `1px solid ${on ? T.accent : T.line}`, background: on ? T.accentSoft : '#fff', color: on ? T.accent : T.ink2 }),
   err: { marginTop: 10, padding: '9px 13px', background: T.warnSoft, border: `1px solid #f0dcb4`, borderRadius: 6, fontSize: 12, color: T.warn },
   note: { marginTop: 10, fontSize: 11, color: T.muted, lineHeight: 1.7 },
+  siteRow: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10,
+             padding: '8px 12px', background: '#fbfcfd', border: `1px solid ${T.line}`, borderRadius: 6 },
+  siteSel: (need) => ({ padding: '4px 6px', fontSize: 12, borderRadius: 4, fontFamily: 'inherit', background: '#fff',
+    border: need ? '2px solid #d98324' : `1px solid ${T.line}` }),
+  pick: { padding: '6px 13px', fontSize: 11.5, fontWeight: 700, borderRadius: 6, cursor: 'pointer',
+          border: `1px solid ${T.accent}`, background: '#fff', color: T.accent },
+  autoMsg: { flexBasis: '100%', padding: '7px 11px', borderRadius: 6, background: '#f7f9fb',
+             border: `1px solid ${T.line}`, fontSize: 11.5, color: T.ink2, lineHeight: 1.6 },
   secTitle: { fontSize: 12, fontWeight: 700, color: T.muted, letterSpacing: '.04em', margin: '18px 0 10px' },
 };
 
-const RADII = [1000, 2000, 3000, 5000];
 const rLabel = (r) => (r >= 1000 ? `${r / 1000}km` : `${r}m`);
-/* 상호 표기차((주)/㈜/주식회사/공백)를 지운다 — 명부 매칭과 같은 규칙이다 */
-const normCo = (s) => String(s ?? '').replace(/\(주\)|㈜|주식회사|\s/g, '').trim();
+const SITE_FIELDS = [
+  ['houseType', '가. 주택유형', HOUSE_TYPES],
+  ['sizeBand', '나. 단지규모', SIZE_BANDS],
+  ['rankBand', '다. 시공순위', RANK_BANDS],
+  ['landType', '라. 택지유형', LAND_TYPES],
+];
 
 export default function NearbyPresale({
-  region, addr, coord, polygon, radiusBasis, company, households, series = '주택',
-  value, onChange,
+  region, addr, coord, polygon, radiusBasis, series = '주택',
+  site = {}, onSite, value, onChange,
 }) {
   const v = value ?? {};
   const set = (patch) => onChange?.({ ...v, ...patch });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [autoMsg, setAutoMsg] = useState(null);
 
   const t = nearbyTable();
-  const radius = v.radius ?? 2000;
+  /* ① 거리는 규정으로 정해진다 — 고르는 칸을 두지 않는다 */
+  const radius = baseRadius(region);
   const data = v.data ?? null;
+  const collected = Boolean(data) && data.radius === radius;
   const picked = v.picked ?? {};
   const usePoly = polygon?.length >= 3 && radiusBasis === 'polygon';
-  /* 오피스텔 분양보증이면 대상이 오피스텔이다(원문 괄호) */
-  const wantOfficetel = series === '오피스텔';
+  /* ③ 유형 — 오피스텔 분양보증이면 대상이 오피스텔이다 */
+  const officetel = series === '오피스텔';
 
   const collect = async () => {
     if (!coord) { setErr('사업지 주소를 먼저 확정하세요'); return; }
-    setBusy(true); setErr(null);
+    setBusy(true); setErr(null); setAutoMsg(null);
     try {
       const qs = new URLSearchParams({ x: String(coord.x), y: String(coord.y), region, radius: String(radius) });
       if (addr) qs.set('site', `${region} ${addr}`.trim());
       if (usePoly) qs.set('polygon', JSON.stringify(polygon));
       const j = await fetchJson(`/api/apts?${qs}`);
-      /* 반경을 바꿔 다시 받으면 고른 단지는 비운다 — 목록에 없는 단지가 평균에 남으면 안 된다 */
+      /* 다시 받으면 고른 단지는 비운다 — 목록에 없는 단지가 평균에 남으면 안 된다 */
       set({ radius, data: j, picked: {} });
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
-  /** 규정대로 거른다 — 종류 → 본건 제외 → 시기(준공 없음) */
-  const funnel = useMemo(() => {
-    const all = data?.items ?? [];
-    const kindOK = (a) => (wantOfficetel
-      ? ['오피스텔', '도시형생활주택'].includes(a.kind)
-      : (a.kind ?? '아파트') === '아파트');
-    const site = all.filter(a => a.isSite);
-    const notSite = all.filter(a => !a.isSite);
-    const kind = notSite.filter(kindOK);
-    /* 민간임대는 분양이 아니라 임대다 — 초기분양률 개념이 성립하지 않는다 */
-    const sale = kind.filter(a => a.priceKind !== 'deposit');
-    const fresh = sale.filter(a => a.timing === '1년 이내 분양개시');
-    const ongoing = sale.filter(a => a.timing === '분양 진행중');
-    const done = sale.filter(a => a.timing === '준공');
-    const stage = fresh.length ? 'fresh' : (ongoing.length ? 'ongoing' : 'none');
-    return { all, site, notSite, kind, sale, fresh, ongoing, done, stage,
-      rows: stage === 'fresh' ? fresh : stage === 'ongoing' ? ongoing : [] };
-  }, [data, wantOfficetel]);
+  /** 규정대로 거른다 — 본건 제외 → ③ 유형 → ② 시기(준공 없음) → 비고2 유사도 */
+  const funnel = useMemo(
+    () => presaleCandidates(data?.items ?? [], site, { officetel }),
+    [data, site, officetel]);
+  const rows = funnel.rows;
+  const best = useMemo(() => pickPresale(rows), [rows]);
+  const siteLeft = SITE_FIELDS.filter(([k]) => !site[k]).map(([, label]) => label.slice(3));
 
-  /**
-   * 유사도 — 원문이 말하는 **위치 · 세대수 · 브랜드**로만 본다.
-   * 시공능력평가순위·택지유형은 분양가 적정성(제16조) 잣대라 여기서 쓰지 않는다.
-   */
-  const rows = useMemo(() => {
-    const mine = Number(households);
-    const co = normCo(company);
-    const half = radius / 2;
-    return funnel.rows.map(a => {
-      const hit = [], miss = [];
-      if (a.distance != null && a.distance <= half) hit.push(`위치 ${rLabel(half)} 이내`); else miss.push('위치');
-      const n = Number(a.totalHouseholds);
-      if (Number.isFinite(mine) && mine > 0 && Number.isFinite(n) && n > 0) {
-        if (Math.abs(n - mine) / mine <= 0.3) hit.push('세대수 ±30%'); else miss.push('세대수');
-      } else miss.push('세대수 미상');
-      const theirs = normCo(a.builder);
-      if (co && theirs && (co === theirs || a.name?.replace(/\s/g, '').includes(co) || theirs.includes(co))) hit.push('브랜드');
-      else miss.push('브랜드');
-      return { ...a, sim: { n: hit.length, hit, miss } };
-    }).sort((x, y) => (y.sim.n - x.sim.n) || (x.distance - y.distance));
-  }, [funnel.rows, households, company, radius]);
+  /* 비고2 — 가장 많이 일치하는 곳을 고른다. 이미 넣은 분양률은 지우지 않는다 */
+  const autoPick = () => {
+    if (!best.ids.length) return;
+    const next = {};
+    for (const id of best.ids) next[id] = picked[id] ?? '';
+    set({ picked: next, special: null });
+    setAutoMsg(best.ids.length === 1
+      ? `${rows.length === 1 ? '대상이 1곳뿐이라 그 1곳' : `4개 항목 중 ${best.top}개가 일치하는 1곳`}을 골랐습니다 — 그 단지의 초기분양률을 조사해 넣으세요.`
+      : `4개 항목 중 ${best.top}개가 일치하는 ${best.ids.length}곳을 골랐습니다 — 가장 많이 일치하는 곳이 여럿이라 초기분양률 평균값을 씁니다(사례 EX3).`);
+  };
 
   const survey = nearbySurvey(v);
   const sc = (survey.pending && !v.special)
@@ -167,36 +164,61 @@ export default function NearbyPresale({
     set({ picked: next });
   };
 
+  const typeLabel = officetel ? '오피스텔·도시형생활주택' : '아파트';
+
   return (
     <div style={S.box}>
       <div style={S.head}>
         <span>인근아파트 초기 분양률</span>
-        <span style={S.headNote}>배점 10 · 조사 항목 (이 점수는 위 A 에 들어갑니다)</span>
+        <span style={S.headNote}>배점 10 · 조사 항목 (이 점수는 위 분양가격지수 제외 항목 점수에 들어갑니다)</span>
       </div>
       <div style={S.body}>
         <div style={S.reg}>
-          원문 — 최근 1년 이내 <b>분양개시한 타아파트</b>{wantOfficetel ? '(오피스텔 분양보증이면 오피스텔)' : ''}를 기준으로 하고,
-          없으면 <b>분양 진행중</b>인 아파트의 <b>초기분양률(6개월 이내)</b>을 조사해 급간에 따라 평가.
-          다수면 <b>위치 · 세대수 · 브랜드</b>가 비슷한 수준을 우선 적용(비슷한 것이 여럿이면 <b>평균분양률</b>).
-          적용 아파트가 없으면 <b>최하위 기준배점</b>.<br />
-          <b>거리 규정은 원문에 없습니다</b> — 「인근」 이라고만 적혀 있어 반경은 직접 고릅니다.
-          분양가 적정성(제16조)과 <b>선정기준이 다릅니다</b> — 준공 단지를 쓰지 않고, 유사도를 브랜드로 봅니다.
-          그래서 <b>비교사업장 탭의 목록을 그대로 쓰지 않고</b> 따로 찾습니다.
+          <b>인근아파트 선정 방법</b> (가이드북 원문) —
+          ① 거리 <b>{rLabel(radius)}</b> 이내 (2km · 수도권·광역시 1km) ·
+          ② 최근 1년 이내 <b>분양 개시</b> → 없으면 <b>분양 진행 중</b> (준공 단지는 쓰지 않음) ·
+          ③ <b>주택유형이 일치</b>하는 사업장({typeLabel})<br />
+          여럿이면 <b>주택유형 · 단지규모 · 시공능력평가순위 · 택지유형</b>이 가장 많이 일치하는 곳
+          (가장 많이 일치하는 곳이 여럿이면 <b>평균값</b>). 해당 사업장이 없으면 <b>최하위 배점</b>.<br />
+          분양가 비교 사업장과는 기준이 다릅니다 — 준공 단지를 쓰지 않고, 2개 일치 요건 없이 가장 많이 일치하는 곳을 고르며,
+          못 찾아도 반경을 넓히지 않습니다. 그래서 비교사업장 탭의 목록을 그대로 쓰지 않고 따로 찾습니다.
+        </div>
+
+        {/*
+          비고2 의 4개 항목은 **비교사업장 탭의 [본건 제원] 과 같은 값**이다.
+          여기서 고쳐도 그쪽이 같이 바뀐다 — 한 값을 두 곳에서 따로 들고 있으면 조용히 갈린다.
+        */}
+        <div style={S.siteRow}>
+          <span style={S.lab}>본건 제원</span>
+          {SITE_FIELDS.map(([k, label, opts]) => (
+            <label key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: T.ink2 }}>
+              {label}
+              <select style={S.siteSel(!site[k])} value={site[k] ?? ''}
+                onChange={e => onSite?.({ [k]: e.target.value || null })}>
+                <option value="">선택</option>
+                {opts.map(x => <option key={x} value={x}>{x}</option>)}
+              </select>
+            </label>
+          ))}
+          <span style={S.hit}>
+            {siteLeft.length
+              ? `${siteLeft.join('·')} 을(를) 고르면 일치 항목을 셉니다 · 비교사업장 탭 [본건 제원] 과 같은 값입니다`
+              : '비교사업장 탭 [본건 제원] 과 같은 값입니다'}
+          </span>
         </div>
 
         <div style={S.bar}>
-          <span style={S.lab}>반경</span>
-          <span style={S.seg}>
-            {RADII.map(r => (
-              <button key={r} style={S.segBtn(radius === r)} onClick={() => set({ radius: r })}>{rLabel(r)}</button>
-            ))}
-          </span>
-          {data && data.radius === radius
+          <span style={S.lab}>거리</span>
+          <span style={S.step}>{rLabel(radius)} 이내 <span style={{ fontWeight: 400, color: T.muted }}>(규정)</span></span>
+          {collected
             ? <button style={S.done} onClick={collect}>✓ 수집 완료 — 다시 찾기</button>
             : <button style={S.run(busy)} disabled={busy || !coord} onClick={collect}>
                 {busy ? '찾는 중…' : `반경 ${rLabel(radius)} 인근 단지 찾기`}
               </button>}
           {!coord && <span style={S.pend}>사업지 주소를 먼저 확정하세요</span>}
+          {data && !collected && (
+            <span style={S.pend}>전에 {rLabel(data.radius)} 로 받은 목록입니다 — 규정 거리로 다시 찾으세요</span>
+          )}
         </div>
 
         {err && <div style={S.err}>{err}</div>}
@@ -214,39 +236,49 @@ export default function NearbyPresale({
               </span>
             )}
             <span style={S.arrow}>›</span>
-            <span style={S.step}>{wantOfficetel ? '오피스텔·도시형' : '아파트'} {funnel.sale.length}건</span>
+            <span style={S.step}>주택유형 일치({officetel ? '오피스텔·도시형' : '아파트'}) {funnel.sale.length}건</span>
             <span style={S.arrow}>›</span>
             <span style={funnel.stage === 'fresh' ? S.stepOn : S.step}>1년 이내 분양개시 {funnel.fresh.length}건</span>
             <span style={S.arrow}>›</span>
             <span style={funnel.stage === 'ongoing' ? S.stepOn : S.step}>분양 진행중 {funnel.ongoing.length}건</span>
             {funnel.done.length > 0 && (
               <span style={{ ...S.hit, marginLeft: 4 }}>
-                (준공 {funnel.done.length}건은 초기분양률이 없어 제외)
+                (준공 {funnel.done.length}건은 대상이 아니어서 제외)
               </span>
             )}
           </div>
 
           {funnel.stage === 'none' ? (
             <div style={S.none}>
-              <b>적용할 인근 아파트가 없습니다</b> — 반경 {rLabel(data.radius)} 안에 1년 이내 분양개시했거나
-              분양 진행중인 {wantOfficetel ? '오피스텔·도시형생활주택' : '아파트'}가 없습니다.
-              원문은 이때 <b>최하위 기준배점</b>을 적용하라고 합니다(반경을 넓히라는 문구는 없습니다).
+              <b>적용할 인근 아파트가 없습니다</b> — {rLabel(data.radius)} 안에 1년 이내 분양개시했거나
+              분양 진행중인 {typeLabel}가 없습니다.
+              원문 비고1 에 따라 <b>최하위 배점</b>을 적용합니다(반경을 넓히지 않습니다).
               <button style={S.apply} onClick={() => set({ special: 'none' })}>
-                최하위 기준배점 2점 적용
+                최하위 배점 2점 적용
               </button>
             </div>
           ) : (<>
+            <div style={{ ...S.bar, marginBottom: 8 }}>
+              <span style={S.hit}>
+                {rows.length === 1
+                  ? '대상이 1곳입니다 — 그 단지의 초기분양률을 조사합니다(사례 EX1).'
+                  : `대상 ${rows.length}곳 — 4개 항목이 가장 많이 일치하는 곳을 고릅니다(비고2).`}
+              </span>
+              <button style={{ ...S.pick, marginLeft: 'auto' }} onClick={autoPick}>규정대로 선정</button>
+              {autoMsg && <div style={S.autoMsg}>{autoMsg}</div>}
+            </div>
             <table style={S.tbl}>
               <thead>
                 <tr>
-                  {['조사', '#', '단지명', '거리', '분양개시일', '시기', '세대수', '시공사', '유사도', '초기분양률(%)']
+                  {['조사', '#', '단지명', '거리', '분양개시일', '시기', '세대수', '시공사', '일치 항목', '초기분양률(%)']
                     .map(c => <th key={c} style={S.th}>{c}</th>)}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((a, i) => {
                   const on = a.manageNo in picked;
-                  const blank = on && !(Number(picked[a.manageNo]) >= 0);
+                  const blank = on && !(Number(picked[a.manageNo]) >= 0 && picked[a.manageNo] !== '');
+                  const top = best.ids.includes(a.manageNo);
                   return (
                     <tr key={a.manageNo} style={on ? { background: '#f4f8ff' } : null}>
                       <td style={S.td}>
@@ -261,10 +293,10 @@ export default function NearbyPresale({
                         <span style={S.badge(a.timing === '1년 이내 분양개시' ? 'ok' : 'none')}>{a.timing}</span>
                       </td>
                       <td style={S.td}>{a.totalHouseholds?.toLocaleString('ko-KR') ?? '-'}</td>
-                      <td style={S.tdL}>{a.builder ?? '-'}</td>
+                      <td style={S.tdL}>{a.builder ?? '-'}{a.builderRank ? ` (${a.builderRank}위)` : ''}</td>
                       <td style={S.td}>
-                        <span style={S.badge(a.sim.n >= 2 ? 'ok' : 'none')}>{a.sim.n}개 비슷</span>
-                        <div style={S.hit}>{a.sim.hit.join(' · ') || '비슷한 항목 없음'}</div>
+                        <span style={S.badge(top ? 'ok' : 'none')}>{a.sim.n}개 일치{top ? ' · 최다' : ''}</span>
+                        <div style={S.hit}>{a.sim.hit.join(' · ') || '일치 항목 없음'}</div>
                       </td>
                       <td style={S.td}>
                         <input style={blank ? S.need : S.rate} type="number" min="0" max="100" step="any"
@@ -280,7 +312,7 @@ export default function NearbyPresale({
             <p style={S.note}>
               {data.source?.citation}<br />
               목록은 <b>청약홈 분양정보</b>에서 왔지만 <b>초기분양률(6개월 이내)은 어느 공개 원천에도 없습니다</b> —
-              단지별 분양률은 조사해 넣는 값입니다(HUG 가 주는 것은 시도 평균 분기값뿐입니다).
+              단지별 분양률은 조사해 넣는 값입니다. 택지유형은 원천에 없어 상대 단지는 「미상」 으로 셉니다.
               거리는 <b>{data.distance?.from ?? '대표지번 중심'}</b> ↔{' '}
               <b>{data.distance?.to ?? '상대 단지 대표지번'}</b> 의 <b>최단거리</b>입니다
               {data.distance?.parcelCount > 0 && (
