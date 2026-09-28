@@ -115,9 +115,10 @@ export function manualSummary({ sheetInput = {}, data = null, facilities = null,
   */
   const nb = sheetInput.인근초기분양률 ?? {};
   const survey = nearbySurvey(nb);
-  const nearby = (survey.pending && !nb.special)
+  const special = nearbySpecial(nb, manual?.['사업지구']);
+  const nearby = (survey.pending && !special)
     ? { pending: true, max: 10, text: survey.pending }
-    : scoreNearbyPresale(survey.value, nb.special || null);
+    : scoreNearbyPresale(survey.value, special);
   const formed = [
     { id: '규모 및 배치', max: 5, kind: 'form', sc: scale, score: num(scale), why: scale?.pending ? scale.text : `가중평균 ${scale?.avg} · ${scale?.label}` },
     { id: '평형구성', max: 5, kind: 'form', sc: mix, score: num(mix), why: mix?.pending ? mix.text : `가중평균 ${mix?.value} · ${mix?.label}` },
@@ -176,6 +177,22 @@ export function manualSummary({ sheetInput = {}, data = null, facilities = null,
  * 고른 단지가 없으면 직접 넣은 값(`rate`)을 쓴다 — 조사표를 안 쓰고 손으로 넣는 길은 남긴다.
  * 고른 단지가 있으면 **전부 채워졌을 때만** 평균을 낸다(원문: 비슷한 수준이 다수면 평균분양률).
  */
+/**
+ * 인근아파트 초기분양률에 **실제로 걸리는 특례**.
+ *
+ * 「수용·환지 사업지구 내 최초 분양사업 = 4점」 은 두 답이 **둘 다 예**일 때만 선다(사용자 확정 2026-09-28
+ * 「최초 아니다/맞다를 선택하면 되겠네」).
+ *   ① 사업지구 안인가 — 주소 아래 질문(`manual['사업지구'].status`)
+ *   ② 그 지구의 최초 분양인가 — 초기분양률 칸의 질문(`nb.first`)
+ * ① 이 「아니오」 로 바뀌면 ② 의 답이 남아 있어도 특례는 풀린다 — 한쪽만 보고 걸면 앞뒤가 안 맞는다.
+ * 「적용 아파트 없음(최하위)」 은 조사 결과라 그대로 둔다.
+ */
+export function nearbySpecial(nb = {}, district = null) {
+  if (district?.status === 'yes' && nb.first === true) return 'firstInDistrict';
+  if (nb.special === 'none') return 'none';
+  return null;
+}
+
 export function nearbySurvey(nb = {}) {
   const picked = nb.picked ?? {};
   const ids = Object.keys(picked);

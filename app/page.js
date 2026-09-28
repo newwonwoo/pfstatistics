@@ -566,6 +566,14 @@ export default function Home() {
     put(allPoi, '반경시설 수집 (3종)', '교통환경',
       '교통환경 · 주거편의 · 교육환경 점수가 여기서 매겨집니다',
       '자료수집 단계로 →');
+    /* 사업지구 안이면 「그 지구의 최초 분양인가」 도 답해야 인근아파트 초기분양률 특례를 걸지 정해진다 */
+    if (manual['사업지구']?.status === 'yes' && sheetInput?.인근초기분양률?.first == null) {
+      need.push({
+        label: '인근아파트 초기분양률 — 지구 내 최초 분양 여부를 고르지 않음', tab: '초기예상분양률',
+        go: `${tabLabel('초기예상분양률')} 탭으로 →`,
+        why: '사업지구 안의 최초 분양이면 조사 없이 4점입니다 — 인근아파트 초기 분양률 칸의 「특례」 줄에서 예 / 아니오를 고르세요',
+      });
+    }
     /* 사업지구 — 고르지 않으면 특례(등급 하한)를 적용할지 알 수 없다. 해당 없음도 하나의 답이다 */
     const dist = manual['사업지구'];
     put(dist?.status === 'no' || (dist?.status === 'yes' && Number(dist.area) > 0),
@@ -637,7 +645,7 @@ export default function Home() {
         : '고른 단지의 평균과 본건 분양가를 견주어 분양가경쟁력 점수를 냅니다');
 
     return { need, done, blocked: need.length > 0 };
-  }, [data, allPoi, mSum.provisional, mSum.needInflow, mSum.excl, mSum.rows, compare, cmpSum, manual]);
+  }, [data, allPoi, mSum.provisional, mSum.needInflow, mSum.excl, mSum.rows, compare, cmpSum, manual, sheetInput]);
 
   const done = [
     ...(fixed ? ['input'] : []),
@@ -1215,6 +1223,7 @@ export default function Home() {
                   compare={compare} onCompare={setCompare} excl={mSum.excl} manualSum={mSum} sheetInput={sheetInput}
                   onSheetInput={(patch) => setSheetInput(x => ({ ...(x ?? {}), ...patch }))}
                   value={rate} onChange={setRate} onJump={setTab}
+                  district={manual['사업지구']}
                 />
               )
               : s.kind === 'comp'

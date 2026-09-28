@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { T, mono } from './theme';
 import { fetchJson } from './fetchJson';
 import RadiusMap from './RadiusMap';
-import { nearbyTable, nearbySurvey } from '../src/lib/manual';
+import { nearbyTable, nearbySurvey, nearbySpecial } from '../src/lib/manual';
 import { scoreNearbyPresale } from '../src/lib/scoring';
 import {
   baseRadius, presaleCandidates, pickPresale, HOUSE_TYPES, SIZE_BANDS, RANK_BANDS, LAND_TYPES,
@@ -73,6 +73,8 @@ const S = {
   none: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 10,
           padding: '11px 14px', borderRadius: 6, background: T.warnSoft, border: `1px solid #f0dcb4`, fontSize: 12.5, color: T.ink2 },
   apply: { padding: '6px 13px', borderRadius: 5, border: 0, background: T.warn, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' },
+  firstNeed: { padding: '8px 10px', borderRadius: 7, border: '2px solid #d98324', background: '#fffaf2' },
+  must: { padding: '1px 6px', borderRadius: 3, fontSize: 10, fontWeight: 800, background: '#fdecd8', color: '#8a5008' },
   chip: (on) => ({ padding: '5px 11px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', borderRadius: 5,
     border: `1px solid ${on ? T.accent : T.line}`, background: on ? T.accentSoft : '#fff', color: on ? T.accent : T.ink2 }),
   err: { marginTop: 10, padding: '9px 13px', background: T.warnSoft, border: `1px solid #f0dcb4`, borderRadius: 6, fontSize: 12, color: T.warn },
@@ -98,7 +100,7 @@ const SITE_FIELDS = [
 
 export default function NearbyPresale({
   region, addr, coord, polygon, radiusBasis, series = '주택',
-  site = {}, onSite, value, onChange,
+  site = {}, onSite, value, onChange, district = null,
 }) {
   const v = value ?? {};
   const set = (patch) => onChange?.({ ...v, ...patch });
@@ -149,9 +151,13 @@ export default function NearbyPresale({
   };
 
   const survey = nearbySurvey(v);
-  const sc = (survey.pending && !v.special)
+  /* 특례는 두 답(사업지구 안 · 최초 분양)이 모두 예일 때만 — 판정은 manual.js 한 곳 */
+  const special = nearbySpecial(v, district);
+  const sc = (survey.pending && !special)
     ? { pending: true, text: survey.pending }
-    : scoreNearbyPresale(survey.value, v.special || null);
+    : scoreNearbyPresale(survey.value, special);
+  const inDistrict = district?.status === 'yes';
+  const firstNeed = inDistrict && v.first == null;
 
   const markers = useMemo(() => rows.map((a, i) => ({
     no: i + 1, lat: a.y, lng: a.x, distance: a.distance, name: a.name,
@@ -340,24 +346,35 @@ export default function NearbyPresale({
         <div style={{ ...S.bar, marginTop: 14 }}>
           <span style={S.lab}>직접 입력</span>
           <input style={S.rate} type="number" min="0" max="100" step="any" placeholder="%"
-            disabled={!!v.special || Object.keys(picked).length > 0}
+            disabled={!!special || Object.keys(picked).length > 0}
             value={v.rate ?? ''} onChange={e => set({ rate: e.target.value })} />
           <span style={S.hit}>
             {Object.keys(picked).length > 0
               ? '위에서 고른 단지의 평균을 씁니다 — 직접 입력은 고른 단지를 모두 풀어야 쓸 수 있습니다'
-              : v.special ? '특례가 선택되어 있습니다' : '조사표를 쓰지 않고 조사값을 바로 넣을 때'}
+              : special ? '특례가 적용되어 있습니다' : '조사표를 쓰지 않고 조사값을 바로 넣을 때'}
           </span>
         </div>
 
-        <div style={{ ...S.bar, marginBottom: 0 }}>
+        {/*
+          **「수용·환지 사업지구 내 최초 분양사업 = 4점」 은 묻는 말로 받는다**(사용자 확정 2026-09-28
+          「최초 아니다/맞다를 선택하면 되겠네」). 앞 조건(사업지구 안인가)은 주소 아래 질문의 답을 그대로 쓴다 —
+          여기서 다시 묻지 않는다. 사업지구 밖이면 이 질문 자체가 성립하지 않는다.
+        */}
+        <div style={{ ...S.bar, marginBottom: 0, ...(firstNeed ? S.firstNeed : null) }}>
           <span style={S.lab}>특례</span>
-          {t?.special?.map(sp => (
-            <button key={sp.id} style={S.chip(v.special === sp.id)}
-              title={sp.text}
-              onClick={() => set({ special: v.special === sp.id ? null : sp.id })}>
-              {sp.label} = {sp.score}점
-            </button>
-          ))}
+          {inDistrict ? (<>
+            <span style={{ fontSize: 12, color: T.ink2 }}>
+              <b>{district.name || '이 사업지구'}</b> 안의 <b>최초 분양</b>입니까?
+            </span>
+            {firstNeed && <span style={S.must}>필수</span>}
+            <button style={S.chip(v.first === false)} onClick={() => set({ first: false })}>아니오 — 조사합니다</button>
+            <button style={S.chip(v.first === true)} onClick={() => set({ first: true })}>예 — 최초 분양 (4점)</button>
+          </>) : (
+            <span style={S.hit}>
+              수용·환지 사업지구 내 최초 분양 = 4점 —{' '}
+              {district?.status === 'no' ? '사업지가 사업지구 밖이라 해당하지 않습니다' : '주소 아래 「수용·환지 방식 사업지구 안에 있습니까?」 에 먼저 답하세요'}
+            </span>
+          )}
         </div>
 
         <div style={S.out}>

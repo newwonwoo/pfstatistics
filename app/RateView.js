@@ -80,7 +80,7 @@ const SERIES = [
 
 export default function RateView({ region, addr, coord, polygon, radiusBasis, company,
   facilities, compare, onCompare, excl: exclProp = null, manualSum = null,
-  sheetInput = null, onSheetInput, value, onChange, onJump }) {
+  sheetInput = null, onSheetInput, value, onChange, onJump, district = null }) {
   const v = value ?? {};
   const series = v.series ?? '주택';
   /*
@@ -226,6 +226,7 @@ export default function RateView({ region, addr, coord, polygon, radiusBasis, co
         onSite={(patch) => onCompare?.({ ...(compare ?? {}), site: { ...(compare?.site ?? {}), ...patch } })}
         value={sheetInput?.인근초기분양률}
         onChange={(nb) => onSheetInput?.({ 인근초기분양률: nb })}
+        district={district}
       />
 
       <div style={S.box}>

@@ -3,6 +3,7 @@ import {
   scoreFacility, expectedSaleRate, scorePresaleRate, scoreNearbyPresale,
   reviewScore, reviewGrade, districtFloor, scoreAverage,
 } from './scoring.js';
+import { nearbySpecial } from './manual.js';
 
 /**
  * **구간표 골든 재현 검사.**
@@ -83,6 +84,11 @@ export function checkScoringGolden() {
   for (const [area, want] of [[5000000, 5], [4999999, 4], [1000000, 4], [999999, 3], [500000, 3], [499999, 2]]) {
     chk(`사업지구 특례 ${area.toLocaleString('ko-KR')}㎡`, districtFloor({ status: 'yes', area })?.score, want);
   }
+  /* 인근아파트 초기분양률 특례 — 사업지구 안 **이고** 최초 분양일 때만 4점 */
+  chk('최초분양 특례 — 지구 안 · 최초', nearbySpecial({ first: true }, { status: 'yes' }), 'firstInDistrict');
+  chk('최초분양 특례 — 지구 안 · 최초 아님', nearbySpecial({ first: false }, { status: 'yes' }), null);
+  chk('최초분양 특례 — 지구 밖이면 최초라 답했어도 없음', nearbySpecial({ first: true }, { status: 'no' }), null);
+  chk('최초분양 특례 — 적용 아파트 없음은 그대로', nearbySpecial({ special: 'none' }, { status: 'no' }), 'none');
   chk('사업지구 특례 — 해당 없음이면 하한 없음', districtFloor({ status: 'no', area: 9000000 }), null);
   {
     /* 골든 교통환경(지하철역 부재 1 + 6차선 4 → 보통 3점) 을 500만㎡ 지구에 두면 매우양호 5점, 30만㎡ 면 그대로 3점 */
