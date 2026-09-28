@@ -161,7 +161,7 @@ export async function detectDistrict({ x, y }) {
     landUseKind: luKind ?? null,
     pnu: pnu ?? null,
     suggestion,
-    /* 세 원천 모두 비었는가 — 그때만 「해당 없음」 을 권한다 */
+    /* 세 원천 모두 비었는가 — 그때만 「사업지구 밖」 을 권한다 */
     nothing: candidates.length === 0 && !luKind,
     errors,
     source: {

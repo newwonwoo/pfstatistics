@@ -27,7 +27,8 @@ const S = {
   title: { fontSize: 12.5, fontWeight: 800, color: T.ink },
   sub: { fontSize: 11.5, color: T.muted },
   must: { padding: '1px 6px', borderRadius: 3, fontSize: 10, fontWeight: 800, background: '#fdecd8', color: '#8a5008' },
-  chips: { display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 9 },
+  chips: { display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 9, alignItems: 'center' },
+  yes: { fontSize: 11.5, fontWeight: 700, color: T.muted, marginLeft: 8 },
   /* 고른 상태는 옅게(accentSoft + 밑줄) — 실행 버튼과 섞이지 않게 */
   chip: (on) => ({
     padding: '6px 12px', fontSize: 12, fontWeight: on ? 800 : 600, borderRadius: 7, cursor: 'pointer',
@@ -72,12 +73,16 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
   return (
     <div style={S.row(needPick || needArea)} data-district-row>
       <div style={S.head}>
-        <span style={S.title}>사업지구 (수용·환지)</span>
+        {/*
+          **「해당 없음」 이 무엇에 해당하지 않는지 말하지 않았다**(사용자 지적 2026-09-28 「해당이 뭐냐」).
+          줄 제목을 질문으로 바꾸고 답을 [아니오 — 사업지구 밖] / 예 — [이 지구] 로 단다.
+        */}
+        <span style={S.title}>이 사업지가 수용·환지 방식 사업지구 안에 있습니까?</span>
         {(needPick || needArea) && <span style={S.must}>필수</span>}
         {/* 자동으로 골랐다는 표시는 제목 줄에 — 버튼 줄 끝에 두니 버튼으로 보였다 */}
         {v.auto && v.status && <span style={S.tagAuto}>원천에서 자동 선택 — 다르면 바꾸세요</span>}
         <span style={S.sub}>
-          수용·환지 방식으로 개발하는 사업지구 안이면 지구면적에 따라 교통환경·주거편의의 최저 등급이 정해집니다
+          안에 있으면 지구면적에 따라 교통환경·주거편의의 최저 등급이 정해집니다
         </span>
       </div>
 
@@ -92,8 +97,9 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
 
       <div style={S.chips}>
         <button style={S.chip(v.status === 'no')} onClick={() => choose({ status: 'no', pick: 'none', name: null, area: null, areaBasis: null, source: null })}>
-          해당 없음
+          아니오 — 사업지구 밖
         </button>
+        <span style={S.yes}>예 — 이 지구 안 :</span>
         {cands.map(c => (
           <button key={c.id} style={S.chip(v.pick === c.id)} onClick={() => pickCand(c)}
             title={`${c.source} · ${c.areaBasis}`}>
@@ -104,7 +110,7 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
         ))}
         <button style={S.chip(v.pick === 'custom')}
           onClick={() => choose({ status: 'yes', pick: 'custom', name: v.pick === 'custom' ? v.name : '', area: v.pick === 'custom' ? v.area : null, areaBasis: '직접 입력', source: '실무자 입력' })}>
-          직접 입력
+          {cands.length ? '목록에 없음 · 직접 입력' : '직접 입력'}
         </button>
       </div>
 
@@ -166,7 +172,7 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
 /**
  * 원천 결과로 **처음 값**을 정한다 — 이미 사람이 고른 값이 있으면 건드리지 않는다.
  *   · 이름이 수용·환지 법(택지개발·공공주택·도시개발…)을 말하는 사업지구 → 그것을 미리 고른다
- *   · 원천 세 곳 모두 아무것도 없으면 → 「해당 없음」 을 미리 고른다
+ *   · 원천 세 곳 모두 아무것도 없으면 → 「아니오 — 사업지구 밖」 을 미리 고른다
  *   · 지구단위계획만 있으면 → **고르지 않는다**(개발방식과 무관 — 사람이 판단)
  */
 export function initialDistrict(scan, key) {
@@ -189,7 +195,7 @@ export function initialDistrict(scan, key) {
 /** 접힌 요약 줄·다른 단계에서 쓰는 한 줄 표기 */
 export function districtLabel(v) {
   if (!v || v.status == null) return null;
-  if (v.status === 'no') return '사업지구 해당 없음';
+  if (v.status === 'no') return '수용·환지 사업지구 밖';
   const fl = districtFloor(v);
   return `${v.name || '사업지구'} ${fmt(v.area) || '?'}㎡${fl ? ` · 최저 ${fl.floor}` : ''}`;
 }
