@@ -213,6 +213,29 @@ export default function NearbyPresale({
           </span>
         </div>
 
+        {/*
+          **「수용·환지 사업지구 내 최초 분양사업 = 4점」 은 묻는 말로 받는다** — **인근 단지를 찾기 전에** 묻는다
+          (예면 조사가 필요 없다 · 일의 순서대로).(사용자 확정 2026-09-28
+          「최초 아니다/맞다를 선택하면 되겠네」). 앞 조건(사업지구 안인가)은 주소 아래 질문의 답을 그대로 쓴다 —
+          여기서 다시 묻지 않는다. 사업지구 밖이면 이 질문 자체가 성립하지 않는다.
+        */}
+        <div style={{ ...S.bar, ...(firstNeed ? S.firstNeed : null) }}>
+          <span style={S.lab}>특례</span>
+          {inDistrict ? (<>
+            <span style={{ fontSize: 12, color: T.ink2 }}>
+              <b>{district.name || '이 사업지구'}</b> 안의 <b>최초 분양</b>입니까?
+            </span>
+            {firstNeed && <span style={S.must}>필수</span>}
+            <button style={S.chip(v.first === false)} onClick={() => set({ first: false })}>아니오 — 조사합니다</button>
+            <button style={S.chip(v.first === true)} onClick={() => set({ first: true })}>예 — 최초 분양 (4점)</button>
+          </>) : (
+            <span style={S.hit}>
+              수용·환지 사업지구 내 최초 분양 = 4점 —{' '}
+              {district?.status === 'no' ? '사업지가 사업지구 밖이라 해당하지 않습니다' : '주소 아래 「수용·환지 방식 사업지구 안에 있습니까?」 에 먼저 답하세요'}
+            </span>
+          )}
+        </div>
+
         <div style={S.bar}>
           <span style={S.lab}>거리</span>
           <span style={S.step}>{rLabel(radius)} 이내 <span style={{ fontWeight: 400, color: T.muted }}>(규정)</span></span>
@@ -222,6 +245,7 @@ export default function NearbyPresale({
                 {busy ? '찾는 중…' : `반경 ${rLabel(radius)} 인근 단지 찾기`}
               </button>}
           {!coord && <span style={S.pend}>사업지 주소를 먼저 확정하세요</span>}
+          {special === 'firstInDistrict' && <span style={S.hit}>최초 분양 특례(4점)가 적용되어 인근 단지는 조사하지 않아도 됩니다</span>}
           {data && !collected && (
             <span style={S.pend}>전에 {rLabel(data.radius)} 로 받은 목록입니다 — 규정 거리로 다시 찾으세요</span>
           )}
@@ -353,28 +377,6 @@ export default function NearbyPresale({
               ? '위에서 고른 단지의 평균을 씁니다 — 직접 입력은 고른 단지를 모두 풀어야 쓸 수 있습니다'
               : special ? '특례가 적용되어 있습니다' : '조사표를 쓰지 않고 조사값을 바로 넣을 때'}
           </span>
-        </div>
-
-        {/*
-          **「수용·환지 사업지구 내 최초 분양사업 = 4점」 은 묻는 말로 받는다**(사용자 확정 2026-09-28
-          「최초 아니다/맞다를 선택하면 되겠네」). 앞 조건(사업지구 안인가)은 주소 아래 질문의 답을 그대로 쓴다 —
-          여기서 다시 묻지 않는다. 사업지구 밖이면 이 질문 자체가 성립하지 않는다.
-        */}
-        <div style={{ ...S.bar, marginBottom: 0, ...(firstNeed ? S.firstNeed : null) }}>
-          <span style={S.lab}>특례</span>
-          {inDistrict ? (<>
-            <span style={{ fontSize: 12, color: T.ink2 }}>
-              <b>{district.name || '이 사업지구'}</b> 안의 <b>최초 분양</b>입니까?
-            </span>
-            {firstNeed && <span style={S.must}>필수</span>}
-            <button style={S.chip(v.first === false)} onClick={() => set({ first: false })}>아니오 — 조사합니다</button>
-            <button style={S.chip(v.first === true)} onClick={() => set({ first: true })}>예 — 최초 분양 (4점)</button>
-          </>) : (
-            <span style={S.hit}>
-              수용·환지 사업지구 내 최초 분양 = 4점 —{' '}
-              {district?.status === 'no' ? '사업지가 사업지구 밖이라 해당하지 않습니다' : '주소 아래 「수용·환지 방식 사업지구 안에 있습니까?」 에 먼저 답하세요'}
-            </span>
-          )}
         </div>
 
         <div style={S.out}>

@@ -159,7 +159,7 @@ export default function RateView({ region, addr, coord, polygon, radiusBasis, co
         <table style={S.tbl}>
           <tbody>
             <tr>
-              <td style={S.key}>① 분양가격지수 제외 항목 점수 (A)</td>
+              <td style={S.key}>① 분양가격지수 제외 항목 점수</td>
               <td style={{ ...S.num, color: hasExcl ? T.ink : T.muted }}>{hasExcl ? excl : '—'}</td>
               <td style={S.unit}>점</td>
               {/*
@@ -170,7 +170,8 @@ export default function RateView({ region, addr, coord, polygon, radiusBasis, co
                 {hasExcl
                   ? (manualSum?.source === 'override' ? '[수기입력] 탭에서 직접 입력한 값' : '[수기입력] 탭에서 자동 합산')
                   : (<>
-                      A 를 완성해야 합니다{manualSum?.missing?.length ? ` — ${manualSum.missing.length}개 남음` : ''}
+                      {/* 맨 A 로 부르지 않는다(사용자 지적 「A가 먼데?」) */}
+                      이 점수를 완성해야 합니다{manualSum?.missing?.length ? ` — ${manualSum.missing.length}개 남음` : ''}
                       <button style={S.go} onClick={() => onJump?.('수기입력')}>수기입력 탭으로 →</button>
                     </>)}
                 {/*
