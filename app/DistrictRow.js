@@ -169,7 +169,14 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
  */
 export function initialDistrict(scan, key) {
   const base = { scan, key, auto: true };
-  const hit = scan?.suggestion ? scan.candidates.find(c => c.id === scan.suggestion.id && c.kind) : null;
+  /*
+    이름이 수용 법(택지개발·공공주택·도시개발…)을 말하거나, **공공 시행자가 택지정보시스템에 등록한 사업지구**면
+    미리 고른다(부천상동 = 한국토지공사 — 이름엔 「택지개발」 이 없다). 민간·민관 시행은 사람이 고른다.
+  */
+  const publicZone = (c) => c.layer === '사업지구' && c.operator && !/민간/.test(c.operator);
+  const hit = scan?.suggestion
+    ? scan.candidates.find(c => c.id === scan.suggestion.id && (c.kind || publicZone(c)))
+    : null;
   if (hit) {
     return { ...base, status: 'yes', pick: hit.id, name: hit.name, area: hit.area, areaBasis: hit.areaBasis, source: hit.source };
   }
