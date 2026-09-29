@@ -577,7 +577,7 @@ export default function Home() {
         why: '예면 분양가격지수 100 을 적용하고 인근아파트 초기분양률은 4점입니다 — 주소 아래 사업지구 줄(또는 초기예상분양률 탭)에서 예 / 아니오를 고르세요',
       });
     }
-    /* 사업지구 — 고르지 않으면 특례(등급 하한)를 적용할지 알 수 없다. 해당 없음도 하나의 답이다 */
+    /* 사업지구 — 고르지 않으면 등급 하한을 적용할지 알 수 없다. 해당 없음도 하나의 답이다 */
     const dist = manual['사업지구'];
     put(dist?.status === 'no' || (dist?.status === 'yes' && Number(dist.area) > 0),
       `사업지구 (수용·환지)${dist?.status === 'yes' && !(Number(dist.area) > 0) ? ' — 면적 없음' : dist?.status == null ? ' — 고르지 않음' : ''}`,

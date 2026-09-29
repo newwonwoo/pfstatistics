@@ -234,7 +234,7 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
           {facilities?.matched && facilities.matched !== facilities.address && (
             <span style={{ color: T.muted }}> · 좌표매칭 {facilities.matched}</span>
           )}
-          {/* 사업지구 특례가 걸리는 시트는 무엇을 근거로 하한이 섰는지 머리에 적는다 — 엑셀도 같은 줄을 쓴다 */}
+          {/* 지구면적 단서가 걸리는 시트는 무엇을 근거로 하한이 섰는지 머리에 적는다 — 엑셀도 같은 줄을 쓴다 */}
           {DISTRICT_SHEETS.includes(sheetId) && districtLabel(manual?.['사업지구']) && (
             <span style={{ color: T.muted }}> · {districtLabel(manual['사업지구'])}</span>
           )}

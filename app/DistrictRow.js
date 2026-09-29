@@ -237,7 +237,7 @@ export function initialDistrict(scan, key) {
   return { ...base, status: null, pick: null, auto: false };
 }
 
-/** 지구면적 단서가 붙는 시트 — config 「사업지구특례」.applies 와 같다(가이드북 p.46~47) */
+/** 지구면적 단서가 붙는 시트 — config 「지구면적하한」.applies 와 같다(가이드북 p.46~47) */
 export const DISTRICT_SHEETS = ['교통환경', '주거편의', '교육환경'];
 
 /** 교육환경처럼 등급 한 줄로 끝나는 칸에 붙이는 하한 표기 */

@@ -346,14 +346,14 @@ function groupText(sheetId, groupLabel, facilities) {
 }
 
 /**
- * **수용·환지 사업지구 특례** — 지구면적별 등급 하한 (`config/scoring.json` 「사업지구특례」).
+ * **수용·환지 사업지구 지구면적 단서** — 지구면적별 등급 하한 (`config/scoring.json` 「지구면적하한」).
  *
  * 입력은 주소 확정 때 고른 `manual['사업지구']` 다 — `{ status: 'yes'|'no'|null, name, area }`.
- *   status 'yes' 이고 면적이 있어야 하한이 선다. 'no' 는 특례 없음, null 은 **아직 안 고름**.
+ *   status 'yes' 이고 면적이 있어야 하한이 선다. 'no' 는 하한 없음, null 은 **아직 안 고름**.
  * @returns {{ score, floor, text, area, name } | null}
  */
 export function districtFloor(district) {
-  const t = TABLE['사업지구특례'];
+  const t = TABLE['지구면적하한'];
   if (!t || district?.status !== 'yes') return null;
   const area = Number(district.area);
   if (!Number.isFinite(area) || area <= 0) return null;
@@ -366,7 +366,7 @@ export function districtFloor(district) {
  * 등급이 하한보다 낮을 때만 올리고, 무엇을 무엇으로 올렸는지 근거 글을 돌려준다.
  */
 function liftByDistrict(sheetId, band, manual) {
-  const fl = (TABLE['사업지구특례']?.applies ?? []).includes(sheetId) ? districtFloor(manual?.['사업지구']) : null;
+  const fl = (TABLE['지구면적하한']?.applies ?? []).includes(sheetId) ? districtFloor(manual?.['사업지구']) : null;
   const lifted = !!(fl && band?.score != null && fl.score > band.score);
   return {
     score: lifted ? fl.score : band?.score ?? null,
@@ -416,7 +416,7 @@ export function scoreAverage(sheetId, { facilities, manual } = {}) {
   const avg = parts.reduce((t, p) => t + p.sc.score, 0) / parts.length;
   const band = gradeOf(avg);
   /*
-    **사업지구 특례** — 반경 안 시설로 낸 등급이 지구면적의 하한보다 낮으면 하한을 쓴다.
+    **지구면적 단서** — 반경 안 시설로 낸 등급이 지구면적의 하한보다 낮으면 하한을 쓴다.
     평균은 그대로 적고(검산할 수 있어야 한다) 등급·대표점수만 끌어올린다.
   */
   const lf = liftByDistrict(sheetId, band, manual);

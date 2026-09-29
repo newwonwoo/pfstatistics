@@ -153,7 +153,7 @@ export default function NearbyPresale({
   };
 
   const survey = nearbySurvey(v);
-  /* 특례는 두 답(사업지구 안 · 최초 분양)이 모두 예일 때만 — 판정은 manual.js 한 곳 */
+  /* 4점은 두 답(사업지구 안 · 최초 분양)이 모두 예일 때만 — 판정은 manual.js 한 곳 */
   const special = nearbySpecial(v, district);
   const sc = (survey.pending && !special)
     ? { pending: true, text: survey.pending }
@@ -247,7 +247,7 @@ export default function NearbyPresale({
           <span style={S.step}>{rLabel(radius)} 이내 <span style={{ fontWeight: 400, color: T.muted }}>(규정)</span></span>
           {collected
             ? <button style={S.done} onClick={collect}>✓ 수집 완료 — 다시 찾기</button>
-            /* 특례로 조사가 필요 없으면 진한 실행 버튼으로 두지 않는다 — 주버튼은 지금 할 일에만 */
+            /* 최초 분양 4점으로 조사가 필요 없으면 진한 실행 버튼으로 두지 않는다 — 주버튼은 지금 할 일에만 */
             : <button style={special === 'firstInDistrict' ? S.quiet : S.run(busy)} disabled={busy || !coord} onClick={collect}>
                 {busy ? '찾는 중…' : `반경 ${rLabel(radius)} 인근 단지 찾기`}
               </button>}
