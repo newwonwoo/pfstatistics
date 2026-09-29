@@ -131,11 +131,11 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
           {c.detail.law && <> · {c.detail.law}</>}
           {c.detail.newtown && <> · {c.detail.newtown}</>}
           {c.detail.stage && <> · {c.detail.stage}</>}
+          {c.operator && <span style={{ color: T.muted }}> · 시행 {c.operator}</span>}
           <span style={S.dates}>
             지구지정 {c.detail.designated ?? '—'} · 개발계획 {c.detail.devPlan ?? '—'} · 실시계획 {c.detail.execPlan ?? '—'} ·{' '}
             <b style={{ color: T.ink }}>준공{c.detail.stage === '준공' ? '' : '(예정)'} {c.detail.completed ?? '—'}</b>
           </span>
-          {c.operator && <span style={{ color: T.muted }}> · 시행 {c.operator}</span>}
         </div>
       ))}
 
