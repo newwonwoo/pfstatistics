@@ -65,27 +65,30 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
   const [draft, setDraft] = useState(null);   // 면적 입력 중인 글자 (쉼표 포함)
 
   const choose = (patch) => onChange({ ...v, auto: false, ...patch });
+  /* 다른 지구로 바꾸면 「최초 분양인가」 답은 그 지구 얘기가 아니게 된다 — 비운다 */
   const pickCand = (c) => choose({
     status: 'yes', pick: c.id, name: c.name, area: c.area, areaBasis: c.areaBasis, source: c.source,
+    first: v.pick === c.id ? v.first : null,
   });
   const fl = districtFloor(v);
   const needPick = v.status == null;
   const needArea = v.status === 'yes' && !(Number(v.area) > 0);
+  const needFirst = v.status === 'yes' && typeof v.first !== 'boolean';
   const cur = cands.find(c => c.id === v.pick);
 
   return (
-    <div style={S.row(needPick || needArea)} data-district-row>
+    <div style={S.row(needPick || needArea || needFirst)} data-district-row>
       <div style={S.head}>
         {/*
           **「해당 없음」 이 무엇에 해당하지 않는지 말하지 않았다**(사용자 지적 2026-09-28 「해당이 뭐냐」).
           줄 제목을 질문으로 바꾸고 답을 [아니오 — 사업지구 밖] / 예 — [이 지구] 로 단다.
         */}
         <span style={S.title}>이 사업지가 수용·환지 방식 사업지구 안에 있습니까?</span>
-        {(needPick || needArea) && <span style={S.must}>필수</span>}
+        {(needPick || needArea || needFirst) && <span style={S.must}>필수</span>}
         {/* 자동으로 골랐다는 표시는 제목 줄에 — 버튼 줄 끝에 두니 버튼으로 보였다 */}
         {v.auto && v.status && <span style={S.tagAuto}>원천에서 자동 선택 — 다르면 바꾸세요</span>}
         <span style={S.sub}>
-          안에 있으면 지구면적에 따라 교통환경·주거편의의 최저 등급이 정해집니다
+          안에 있으면 지구면적에 따라 교통환경·주거편의·교육환경의 최저 등급이 정해집니다
         </span>
       </div>
 
@@ -99,7 +102,7 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
       )}
 
       <div style={S.chips}>
-        <button style={S.chip(v.status === 'no')} onClick={() => choose({ status: 'no', pick: 'none', name: null, area: null, areaBasis: null, source: null })}>
+        <button style={S.chip(v.status === 'no')} onClick={() => choose({ status: 'no', pick: 'none', name: null, area: null, areaBasis: null, source: null, first: null })}>
           아니오 — 사업지구 밖
         </button>
         <span style={S.yes}>예 — 이 지구 안 :</span>
@@ -116,7 +119,7 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
           </button>
         ))}
         <button style={S.chip(v.pick === 'custom')}
-          onClick={() => choose({ status: 'yes', pick: 'custom', name: v.pick === 'custom' ? v.name : '', area: v.pick === 'custom' ? v.area : null, areaBasis: '직접 입력', source: '실무자 입력' })}>
+          onClick={() => choose({ status: 'yes', pick: 'custom', name: v.pick === 'custom' ? v.name : '', area: v.pick === 'custom' ? v.area : null, areaBasis: '직접 입력', source: '실무자 입력', first: v.pick === 'custom' ? v.first : null })}>
           {cands.length ? '목록에 없음 · 직접 입력' : '직접 입력'}
         </button>
       </div>
@@ -161,9 +164,31 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
           <span style={S.lab}>㎡</span>
           {fl ? (
             <span style={S.floor(fl.score >= 4)}>
-              교통환경·주거편의 최저 등급 : {fl.floor}{fl.score < 5 ? ' 이상' : ''} ({fl.score}점)
+              교통환경·주거편의·교육환경 최저 등급 : {fl.floor}{fl.score < 5 ? ' 이상' : ''} ({fl.score}점)
             </span>
           ) : needArea ? <span style={{ ...S.sub, color: '#8a5008' }}>면적을 넣으면 최저 등급이 정해집니다</span> : null}
+        </div>
+      )}
+
+      {/*
+        **「그 지구 안의 최초 분양사업인가」 는 두 항목에 쓰인다**(가이드북 원문 2026-09-29 수령) —
+        분양가경쟁력 「분양가격지수 100 적용」 · 인근아파트 초기분양률 「4점(열악) 부여」.
+        처음엔 초기분양률 칸에서만 물었는데, 분양가경쟁력(비교사업장)이 그보다 먼저 쓰므로 지구를 고르는 이 자리에서 묻는다.
+        원천(청약홈 2020-02~)은 「최초」 를 말하지 못한다 — 사람이 답한다.
+      */}
+      {v.status === 'yes' && (
+        <div style={S.line2}>
+          <span style={{ fontSize: 12, color: T.ink2 }}>
+            이 사업이 <b>{v.name || '이 사업지구'}</b> 안의 <b>최초 분양사업</b>입니까?
+          </span>
+          {needFirst && <span style={S.must}>필수</span>}
+          <button style={S.chip(v.first === false)} onClick={() => choose({ first: false })}>아니오</button>
+          <button style={S.chip(v.first === true)} onClick={() => choose({ first: true })}>예 — 최초 분양</button>
+          <span style={S.sub}>
+            {v.first === true
+              ? '분양가격지수 100 적용 · 인근아파트 초기분양률 4점(열악) — 인근 단지 조사 없이 정해집니다'
+              : '예면 분양가격지수 100 을 적용하고 인근아파트 초기분양률은 4점(열악)입니다'}
+          </span>
         </div>
       )}
 
@@ -212,11 +237,24 @@ export function initialDistrict(scan, key) {
   return { ...base, status: null, pick: null, auto: false };
 }
 
+/** 지구면적 단서가 붙는 시트 — config 「사업지구특례」.applies 와 같다(가이드북 p.46~47) */
+export const DISTRICT_SHEETS = ['교통환경', '주거편의', '교육환경'];
+
+/** 교육환경처럼 등급 한 줄로 끝나는 칸에 붙이는 하한 표기 */
+export function floorNote(sc) {
+  if (!sc?.floor) return '';
+  const f = sc.floor;
+  return f.lifted
+    ? ` (지구면적 ${fmt(f.area)}㎡ — ${f.floor} 이상이라 올림)`
+    : ` (지구면적 ${fmt(f.area)}㎡ — 최저 ${f.floor} 이상 충족)`;
+}
+
 /** 접힌 요약 줄·다른 단계에서 쓰는 한 줄 표기 */
 export function districtLabel(v) {
   if (!v || v.status == null) return null;
   if (v.status === 'no') return '수용·환지 사업지구 밖';
   const fl = districtFloor(v);
   const done = v.scan?.candidates?.find(c => c.id === v.pick)?.detail?.completed;
-  return `${v.name || '사업지구'} ${fmt(v.area) || '?'}㎡${done ? ` (준공 ${done})` : ''}${fl ? ` · 최저 ${fl.floor}` : ''}`;
+  return `${v.name || '사업지구'} ${fmt(v.area) || '?'}㎡${done ? ` (준공 ${done})` : ''}${fl ? ` · 최저 ${fl.floor}` : ''}`
+    + (v.first === true ? ' · 지구 내 최초 분양' : v.first === false ? ' · 최초 분양 아님' : '');
 }

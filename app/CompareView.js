@@ -204,7 +204,7 @@ const KIND_ORDER = ['아파트', '민간임대', '오피스텔', '도시형생�
 const rLabel = (r) => `${r / 1000}km`;
 
 
-export default function CompareView({ addr, coord, region, polygon, radiusBasis, company, companyRank, excl = null, manualSum = null, district = null, value, onChange }) {
+export default function CompareView({ addr, coord, region, polygon, radiusBasis, company, companyRank, excl = null, manualSum = null, district = null, firstInDistrict = false, value, onChange }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [autoMsg, setAutoMsg] = useState(null);   // [규정대로 자동선택] 이 무엇을 했는지
@@ -359,7 +359,9 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
 
   /* 본건 ㎡당 분양가 — ㎡ 또는 평 어느 쪽으로 넣어도 된다 */
   const sitePrice = Number(site.unitPrice) || null;
-  const index = sitePrice && avg ? (sitePrice / avg) * 100 : null;
+  const measured = sitePrice && avg ? (sitePrice / avg) * 100 : null;
+  /* 지구 내 최초 분양사업이면 원문대로 100 — 판정은 src/lib/compare.js 와 같은 규칙(두 곳이 갈리면 안 된다) */
+  const index = firstInDistrict ? 100 : measured;
   /* A 는 **수기입력 탭**이 단일 지점으로 만든다 — 두 곳에서 받으면 조용히 갈린다 */
   const sc = scoreMatrix('분양가경쟁력', index ?? NaN, excl == null ? NaN : Number(excl));
 
@@ -647,6 +649,12 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
         {index != null && (<>
           <span style={{ ...S.sumUnit, marginLeft: 10 }}>분양가격지수</span>
           <span style={{ ...S.sumNum, fontSize: 22 }}>{index.toFixed(2)}</span>
+          {firstInDistrict && (
+            <span style={{ ...S.sumUnit, color: T.ok, fontWeight: 700 }}>
+              수용·환지 사업지구 내 최초 분양사업 — 원문대로 100 적용
+              {measured != null && <span style={{ color: T.muted, fontWeight: 400 }}> (실측 {measured.toFixed(2)}는 쓰지 않음)</span>}
+            </span>
+          )}
         </>)}
         <span style={S.sumNote}>
           {avg != null && <>평당 약 {won(avg * PY)} 원<br /></>}

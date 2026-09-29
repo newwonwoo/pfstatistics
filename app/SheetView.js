@@ -7,7 +7,7 @@ import EvidenceCard from './EvidenceCard';
 import RadiusMap from './RadiusMap';
 import RoadPicker, { shownSet } from './RoadPicker';
 import { INFLOW_CHOICES, inflowOn } from './inflow';
-import { districtLabel } from './DistrictRow';
+import { districtLabel, DISTRICT_SHEETS, floorNote } from './DistrictRow';
 
 const S = {
   /* 시설 행 지우기 — 도로 후보 목록과 같은 모양이어야 같은 동작으로 읽힌다 */
@@ -235,7 +235,7 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
             <span style={{ color: T.muted }}> · 좌표매칭 {facilities.matched}</span>
           )}
           {/* 사업지구 특례가 걸리는 시트는 무엇을 근거로 하한이 섰는지 머리에 적는다 — 엑셀도 같은 줄을 쓴다 */}
-          {(sheetId === '교통환경' || sheetId === '주거편의') && districtLabel(manual?.['사업지구']) && (
+          {DISTRICT_SHEETS.includes(sheetId) && districtLabel(manual?.['사업지구']) && (
             <span style={{ color: T.muted }}> · {districtLabel(manual['사업지구'])}</span>
           )}
         </p>
@@ -410,14 +410,14 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                   );
                 })}
                 {spec.summaryRow && (() => {
-                  const sc = facilities ? scoreSheet(sheetId, facilities) : null;
+                  const sc = facilities ? scoreSheet(sheetId, facilities, manual) : null;
                   return (
                     <tr>
                       <td style={S.tdL} colSpan={3}>{spec.summaryRow}</td>
                       {sc
                         ? (<>
                             <td style={S.tdVal}>{sc.score}</td>
-                            <td style={S.td}>{sc.score}점 · {sc.label}</td>
+                            <td style={S.td}>{sc.score}점 · {sc.label}{floorNote(sc)}</td>
                           </>)
                         : (<><td style={S.blank} /><td style={S.blank} /></>)}
                     </tr>

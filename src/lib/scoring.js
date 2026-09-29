@@ -73,19 +73,18 @@ function matches(rule, facilities, members) {
  * 시트 단위 점수 (교육환경처럼 시설 조합으로 판정하는 것)
  * @returns {{score:number,label:string,rule:object|null}|null} 구간표가 없으면 null
  */
-export function scoreSheet(sheetId, facilities) {
+export function scoreSheet(sheetId, facilities, manual = null) {
   const t = TABLE[sheetId];
   if (!t || t.scope !== 'sheet' || !facilities) return null;
   if (!sheetGathered(facilities, sheetId)) return NOT_GATHERED(sheetId);
   /* **무엇이 몇 m 라서 이 구간인지** 같이 적는다 — 구간 이름만으로는 검산이 안 된다(사용자 지적) */
   const measured = measuredOf(facilities, t);
-  for (const rule of t.rules) {
-    if (matches(rule, facilities)) {
-      return { score: rule.score, label: rule.label, text: [measured, rule.text].filter(Boolean).join(' → '), measured, rule };
-    }
-  }
-  return { score: t.base.score, label: t.base.label,
-           text: [measured, t.base.text].filter(Boolean).join(' → '), measured, rule: null };
+  const rule = t.rules.find(r => matches(r, facilities)) ?? null;
+  const band = rule ? { score: rule.score, label: rule.label, text: rule.text } : { ...t.base };
+  /* 교육환경에도 교통환경·주거편의와 같은 지구면적 단서가 붙어 있다(가이드북 p.47 원문 2026-09-29) */
+  const f = liftByDistrict(sheetId, band, manual);
+  return { score: f.score, label: f.label, text: [measured, band.text].filter(Boolean).join(' → ') + f.text,
+           measured, rule, floor: f.floor };
 }
 
 /** 그 구간표가 보는 시설들의 실제 거리 — "초등학교 343m · 중학교 780m" */
@@ -362,6 +361,24 @@ export function districtFloor(district) {
   return rule ? { score: rule.score, floor: rule.floor, text: rule.text, area, name: district.name ?? '' } : null;
 }
 
+/**
+ * 지구면적 단서를 한 등급 결과에 건다 — 교통환경·주거편의(평균 등급)와 교육환경(조합 등급)이 같이 쓴다.
+ * 등급이 하한보다 낮을 때만 올리고, 무엇을 무엇으로 올렸는지 근거 글을 돌려준다.
+ */
+function liftByDistrict(sheetId, band, manual) {
+  const fl = (TABLE['사업지구특례']?.applies ?? []).includes(sheetId) ? districtFloor(manual?.['사업지구']) : null;
+  const lifted = !!(fl && band?.score != null && fl.score > band.score);
+  return {
+    score: lifted ? fl.score : band?.score ?? null,
+    label: lifted ? fl.floor : band?.label ?? '',
+    floor: fl ? { ...fl, lifted } : null,
+    text: fl
+      ? `　·　수용·환지 사업지구 지구면적 : ${fl.name ? `${fl.name} ` : ''}${Math.round(fl.area).toLocaleString('ko-KR')}㎡ — ${fl.text}`
+        + (lifted ? ` → ${band?.label ?? ''} ${band?.score ?? '?'}점을 ${fl.floor} ${fl.score}점으로 올림` : ' (최저 등급 이상이라 그대로)')
+      : '',
+  };
+}
+
 export function scoreAverage(sheetId, { facilities, manual } = {}) {
   let parts = null;
   /* **실측치를 같이 들고 간다** — "지하철역 5" 만 적으면 몇 m 라서 5점인지 검산이 안 된다(사용자 지적) */
@@ -402,23 +419,18 @@ export function scoreAverage(sheetId, { facilities, manual } = {}) {
     **사업지구 특례** — 반경 안 시설로 낸 등급이 지구면적의 하한보다 낮으면 하한을 쓴다.
     평균은 그대로 적고(검산할 수 있어야 한다) 등급·대표점수만 끌어올린다.
   */
-  const fl = (TABLE['사업지구특례']?.applies ?? []).includes(sheetId) ? districtFloor(manual?.['사업지구']) : null;
-  const lifted = fl && band?.score != null && fl.score > band.score;
-  const score = lifted ? fl.score : band?.score ?? null;
-  const label = lifted ? fl.floor : band?.label ?? '';
+  const lf = liftByDistrict(sheetId, band, manual);
+  const { score, label } = lf;
   /* 수기 입력을 아직 안 한 항목은 점수가 나와도 "확정" 이 아니다 — 평균 옆에 적어 둔다 */
   /* 하한이 만점(5)이면 무엇을 넣어도 결과가 같다 — 그때는 미입력이 판정을 흔들지 않는다 */
-  const unset = fl?.score >= 5 ? []
+  const unset = lf.floor?.score >= 5 ? []
     : parts.filter(p => p.sc.reason === '도로 미선택' || p.sc.reason === '차선 수 미입력');
-  const floorText = fl
-    ? `　·　수용·환지 사업지구 지구면적 : ${fl.name ? `${fl.name} ` : ''}${Math.round(fl.area).toLocaleString('ko-KR')}㎡ — ${fl.text}`
-      + (lifted ? ` → ${band?.label ?? ''} ${band?.score ?? '?'}점을 ${fl.floor} ${fl.score}점으로 올림` : ' (최저 등급 이상이라 그대로)')
-    : '';
+  const floorText = lf.text;
   return {
     avg: Number(avg.toFixed(2)),      // 평균점수 — 평가표의 "평균점수" 칸
     score,                            // 평가점수 — **등급 대표점수**이지 평균이 아니다
     label,
-    floor: fl ? { ...fl, lifted } : null,
+    floor: lf.floor,
     /*
      * **산술평균을 (a + b) / 2 꼴로 적는다**(사용자 요청 2026-09-17).
      * 전에는 "지하철역 5 + 6차선 왕복도로 4 ÷ 2" 라 괄호가 없어

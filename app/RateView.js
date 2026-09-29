@@ -80,7 +80,7 @@ const SERIES = [
 
 export default function RateView({ region, addr, coord, polygon, radiusBasis, company,
   facilities, compare, onCompare, excl: exclProp = null, manualSum = null,
-  sheetInput = null, onSheetInput, value, onChange, onJump, district = null }) {
+  sheetInput = null, onSheetInput, value, onChange, onJump, district = null, onDistrict = null }) {
   const v = value ?? {};
   const series = v.series ?? '주택';
   /*
@@ -92,7 +92,7 @@ export default function RateView({ region, addr, coord, polygon, radiusBasis, co
 
   /* 산식은 src/lib/compare.js 한 곳에만 둔다 — 심사평점표 탭과 같은 숫자를 써야 한다 */
   const { cmp, compScore, excl, total, res } =
-    useMemo(() => expectedRateOf(compare, { series }, exclProp, sheetInput), [compare, series, exclProp, sheetInput]);
+    useMemo(() => expectedRateOf(compare, { series }, exclProp, sheetInput, district), [compare, series, exclProp, sheetInput, district]);
   const hasExcl = excl != null;
 
   const t = tableOf('초기예상분양률');
@@ -228,6 +228,7 @@ export default function RateView({ region, addr, coord, polygon, radiusBasis, co
         value={sheetInput?.인근초기분양률}
         onChange={(nb) => onSheetInput?.({ 인근초기분양률: nb })}
         district={district}
+        onDistrict={onDistrict}
       />
 
       <div style={S.box}>

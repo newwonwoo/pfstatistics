@@ -7,7 +7,7 @@ import { fetchJson } from './fetchJson';
 import Steps from './Steps';
 import SheetTabs from './SheetTabs';
 import { expectedRateOf } from '../src/lib/compare';
-import { manualSummary } from '../src/lib/manual';
+import { manualSummary, isFirstInDistrict, firstAnswered } from '../src/lib/manual';
 import { reviewScore, applyHidden } from '../src/lib/scoring';
 import CompareView from './CompareView';
 import RateView from './RateView';
@@ -514,7 +514,7 @@ export default function Home() {
 
   const mSum = useMemo(() => manualSummary({ sheetInput: sheetInput ?? {}, data, facilities: view, manual }),
     [sheetInput, data, view, manual]);
-  const rateRes = useMemo(() => expectedRateOf(compare, rate, mSum.excl, sheetInput), [compare, rate, mSum.excl, sheetInput]);
+  const rateRes = useMemo(() => expectedRateOf(compare, rate, mSum.excl, sheetInput, manual['사업지구']), [compare, rate, mSum.excl, sheetInput, manual]);
   const cmpSum = rateRes.cmp;
   const ratePct = rateRes.res && !rateRes.res.pending ? rateRes.res.rate : null;
   /*
@@ -566,12 +566,15 @@ export default function Home() {
     put(allPoi, '반경시설 수집 (3종)', '교통환경',
       '교통환경 · 주거편의 · 교육환경 점수가 여기서 매겨집니다',
       '자료수집 단계로 →');
-    /* 사업지구 안이면 「그 지구의 최초 분양인가」 도 답해야 인근아파트 초기분양률 특례를 걸지 정해진다 */
-    if (manual['사업지구']?.status === 'yes' && sheetInput?.인근초기분양률?.first == null) {
+    /*
+      사업지구 안이면 「그 지구의 최초 분양사업인가」 도 답해야 한다 — 가이드북 원문상 두 항목이 이 답을 쓴다
+      (분양가경쟁력 : 분양가격지수 100 · 인근아파트 초기분양률 : 4점).
+    */
+    if (manual['사업지구']?.status === 'yes' && !firstAnswered(manual['사업지구'], sheetInput?.인근초기분양률)) {
       need.push({
-        label: '인근아파트 초기분양률 — 지구 내 최초 분양 여부를 고르지 않음', tab: '초기예상분양률',
-        go: `${tabLabel('초기예상분양률')} 탭으로 →`,
-        why: '사업지구 안의 최초 분양이면 조사 없이 4점입니다 — 초기예상분양률 탭 인근아파트 초기 분양률 칸의 「수용·환지 지구」 줄에서 예 / 아니오를 고르세요',
+        label: '사업지구 — 지구 내 최초 분양사업인지 고르지 않음', tab: '교통환경',
+        go: '자료수집 단계로 →',
+        why: '예면 분양가격지수 100 을 적용하고 인근아파트 초기분양률은 4점입니다 — 주소 아래 사업지구 줄(또는 초기예상분양률 탭)에서 예 / 아니오를 고르세요',
       });
     }
     /* 사업지구 — 고르지 않으면 특례(등급 하한)를 적용할지 알 수 없다. 해당 없음도 하나의 답이다 */
@@ -579,7 +582,7 @@ export default function Home() {
     put(dist?.status === 'no' || (dist?.status === 'yes' && Number(dist.area) > 0),
       `사업지구 (수용·환지)${dist?.status === 'yes' && !(Number(dist.area) > 0) ? ' — 면적 없음' : dist?.status == null ? ' — 고르지 않음' : ''}`,
       '교통환경',
-      '주소 아래 「사업지구」 줄에서 해당 여부와 지구면적을 정하세요 — 교통환경 · 주거편의 등급 하한이 여기서 정해집니다',
+      '주소 아래 「사업지구」 줄에서 해당 여부와 지구면적을 정하세요 — 교통환경 · 주거편의 · 교육환경 최저 등급이 여기서 정해집니다',
       '자료수집 단계로 →');
 
     /* 판정을 안 한 항목 — 비어 있는 것이 아니라 기본점수가 들어가 있어 더 위험하다 */
@@ -635,12 +638,21 @@ export default function Home() {
     }
 
     /* 비교사업장 — 세 가지를 한 탭에서 하므로 한 줄로 묶고, 남은 것만 순서대로 적는다 */
+    /*
+      지구 내 최초 분양사업이면 분양가격지수는 원문대로 100 이라 비교단지 없이 분양가경쟁력 점수가 난다 —
+      관문이 「비교할 단지 선택」 을 계속 요구하면 할 필요 없는 일을 막는 셈이다.
+      (적정분양가 제16조는 여전히 비교단지로 내지만, 그 값은 수기입력 사업수익률에 사람이 반영한다)
+    */
     const cmpLeft = [];
-    if (!compare?.data) cmpLeft.push('반경 안 분양단지 수집');
-    if (cmpSum?.avg == null) cmpLeft.push('비교할 단지 선택');
-    if (!(Number(compare?.site?.unitPrice) > 0)) cmpLeft.push('본건 예정분양가 입력');
+    const firstIn = cmpSum?.indexBasis === 'firstInDistrict';
+    if (!firstIn) {
+      if (!compare?.data) cmpLeft.push('반경 안 분양단지 수집');
+      if (cmpSum?.avg == null) cmpLeft.push('비교할 단지 선택');
+      if (!(Number(compare?.site?.unitPrice) > 0)) cmpLeft.push('본건 예정분양가 입력');
+    }
     put(cmpLeft.length === 0, '비교사업장 · 분양가', '비교사업장',
-      cmpLeft.length
+      firstIn ? '지구 내 최초 분양사업이라 분양가격지수 100 으로 분양가경쟁력 점수를 냅니다'
+      : cmpLeft.length
         ? `${cmpLeft.join(' → ')} — 고른 단지의 평균과 본건 분양가를 견주어 분양가경쟁력 점수를 냅니다`
         : '고른 단지의 평균과 본건 분양가를 견주어 분양가경쟁력 점수를 냅니다');
 
@@ -1211,6 +1223,7 @@ export default function Home() {
                 <ReviewView
                   region={region} addr={addr} data={data} facilities={view}
                   compare={compare} rate={rate} excl={mSum.excl} sheetInput={sheetInput}
+                  district={manual['사업지구']}
                   gate={gate}
                   value={review} onChange={setReview} onJump={setTab}
                 />
@@ -1224,6 +1237,7 @@ export default function Home() {
                   onSheetInput={(patch) => setSheetInput(x => ({ ...(x ?? {}), ...patch }))}
                   value={rate} onChange={setRate} onJump={setTab}
                   district={manual['사업지구']}
+                  onDistrict={(d) => setManual(m => ({ ...m, 사업지구: d }))}
                 />
               )
               : s.kind === 'comp'
@@ -1235,6 +1249,7 @@ export default function Home() {
                   /* 시공능력평가순위는 이미 수집돼 있다 — 본건 유사도 판정에 참고로 보여준다 */
                   companyRank={(data?.results ?? []).find(r => r.indicatorId === 'construction_capability_rank' && r.ok)?.value ?? null}
                   excl={mSum.excl} manualSum={mSum} district={manual['사업지구']}
+                  firstInDistrict={isFirstInDistrict(manual['사업지구'], sheetInput?.인근초기분양률)}
                   value={compare} onChange={setCompare}
                 />
               )

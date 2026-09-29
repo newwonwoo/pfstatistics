@@ -200,6 +200,10 @@ export default function ManualView({ region, addr, data, facilities, manual, val
         <div style={S.head}><span>평형구성</span><span style={S.headNote}>배점 5 · 작을수록 좋다</span></div>
         <div style={S.body}>
           <div style={S.formula}>{mixT?.formula}</div>
+          {/* 가이드북 p.49 원문 — 정비사업은 조합원분을 빼고 일반분양분으로만 구성비를 낸다(분모도 일반분양 세대수) */}
+          <div style={{ ...S.sub, marginBottom: 6 }}>
+            재개발 · 재건축 · 주거환경개선사업(도시정비법)이면 평형별 <b>일반분양 세대수</b>만 넣습니다 — 구성비도 일반분양 세대수 합으로 나눕니다.
+          </div>
           {/*
             예산 줄 — 넣을 수 있는 남은 세대수를 먼저 보여준다.
             총세대수를 아직 안 넣었으면 어디에 넣는 값인지 알려준다(그 칸은 바로 위 상자다).

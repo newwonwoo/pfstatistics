@@ -75,7 +75,7 @@ export function manualSummary({ sheetInput = {}, data = null, facilities = null,
   const auto = [
     { id: '교통환경', max: 5, sc: facilities ? scoreAverage('교통환경', { facilities, manual }) : null },
     { id: '주거편의', max: 5, sc: facilities ? scoreAverage('주거편의', { facilities, manual }) : null },
-    { id: '교육환경', max: 5, sc: facilities ? scoreSheet('교육환경', facilities) : null },
+    { id: '교육환경', max: 5, sc: facilities ? scoreSheet('교육환경', facilities, manual) : null },
     { id: '브랜드경쟁력', max: 5, sc: rank == null ? null : scoreRank('브랜드경쟁력', rank) },
     { id: '주택담보대출금리', max: 5, sc: loan },
     { id: '지역경쟁력', max: 5, sc: kb == null ? null : scoreBand('지역경쟁력', kb) },
@@ -188,9 +188,26 @@ export function manualSummary({ sheetInput = {}, data = null, facilities = null,
  * 「적용 아파트 없음(최하위)」 은 조사 결과라 그대로 둔다.
  */
 export function nearbySpecial(nb = {}, district = null) {
-  if (district?.status === 'yes' && nb.first === true) return 'firstInDistrict';
+  if (isFirstInDistrict(district, nb)) return 'firstInDistrict';
   if (nb.special === 'none') return 'none';
   return null;
+}
+
+/**
+ * 「수용·환지 사업지구 내 최초 분양사업」 인가 — 두 항목이 같은 답을 쓴다(가이드북 원문 2026-09-29).
+ *   분양가경쟁력 : 분양가격지수 100 적용
+ *   인근아파트 초기분양률 : 4점(열악) 부여
+ * 답은 주소 아래 사업지구 줄(`district.first`)에서 받는다. 그 전 보관본은 초기분양률 칸(`nb.first`)에 있어 물려 읽는다.
+ */
+export function isFirstInDistrict(district = null, nb = {}) {
+  if (district?.status !== 'yes') return false;
+  const first = typeof district.first === 'boolean' ? district.first : nb?.first;
+  return first === true;
+}
+
+/** 답을 했는가(예/아니오 어느 쪽이든) — 관문·필수 표시용 */
+export function firstAnswered(district = null, nb = {}) {
+  return typeof district?.first === 'boolean' || typeof nb?.first === 'boolean';
 }
 
 export function nearbySurvey(nb = {}) {

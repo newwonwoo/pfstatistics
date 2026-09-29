@@ -1,9 +1,10 @@
 import {
   scoreBand, scoreRank, scoreCount, scoreRegionDemand, gradeOf, scoreMatrix,
   scoreFacility, expectedSaleRate, scorePresaleRate, scoreNearbyPresale,
-  reviewScore, reviewGrade, districtFloor, scoreAverage,
+  reviewScore, reviewGrade, districtFloor, scoreAverage, scoreSheet,
 } from './scoring.js';
-import { nearbySpecial } from './manual.js';
+import { nearbySpecial, isFirstInDistrict } from './manual.js';
+import { compareSummary } from './compare.js';
 
 /**
  * **구간표 골든 재현 검사.**
@@ -98,6 +99,33 @@ export function checkScoringGolden() {
       scoreAverage('교통환경', { facilities, manual: { ...road, 사업지구: { status: 'yes', area: 5000000 } } })?.score, 5);
     chk('사업지구 특례 교통환경 30만㎡ → 그대로',
       scoreAverage('교통환경', { facilities, manual: { ...road, 사업지구: { status: 'yes', area: 300000 } } })?.score, 3);
+  }
+
+  {
+    /* 교육환경에도 같은 단서가 있다(가이드북 p.47 원문 2026-09-29) — 1km 안 초등학교만 = 매우열악 1점 */
+    const f = (d) => (d == null
+      ? { sheet: '교육환경', items: [], nearest: null, count: 0 }
+      : { sheet: '교육환경', items: [{ distance: d }], nearest: { distance: d }, count: 1 });
+    const facilities = { facilities: { 초등학교: f(300), 중학교: f(null), 고등학교: f(null) } };
+    chk('지구면적 교육환경 — 사업지구 밖 그대로', scoreSheet('교육환경', facilities, {})?.score, 1);
+    chk('지구면적 교육환경 100만㎡ → 양호 4점으로 올림',
+      scoreSheet('교육환경', facilities, { 사업지구: { status: 'yes', area: 1000000 } })?.score, 4);
+    chk('지구면적 교육환경 30만㎡ → 열악 2점으로 올림',
+      scoreSheet('교육환경', facilities, { 사업지구: { status: 'yes', area: 300000 } })?.score, 2);
+  }
+  {
+    /*
+      분양가경쟁력 원문(2026-09-29) — 「사업지구내 최초 분양사업인 경우에는 분양가격지수 100을 적용」.
+      본건 9,000,000 ÷ 비교 6,000,000 = 150(110↑) → A 56 이면 3점. 최초 분양이면 100(100~105) → 9점.
+    */
+    const cmp = { site: { unitPrice: 9000000 }, picked: ['a'],
+      data: { items: [{ manageNo: 'a', kind: '아파트', weightedSupply: 6000000 }] } };
+    chk('분양가격지수 실측 150 → 3점', compareSummary(cmp, 56)?.sc?.score, 3);
+    chk('분양가격지수 지구 내 최초 분양 → 100', compareSummary(cmp, 56, { firstInDistrict: true })?.index, 100);
+    chk('분양가격지수 100 · A 56 → 9점', compareSummary(cmp, 56, { firstInDistrict: true })?.sc?.score, 9);
+    chk('최초 분양 답 — 주소 아래 답이 우선', isFirstInDistrict({ status: 'yes', first: false }, { first: true }), false);
+    chk('최초 분양 답 — 옛 보관본(초기분양률 칸) 물려 읽기', isFirstInDistrict({ status: 'yes' }, { first: true }), true);
+    chk('최초 분양 답 — 지구 밖이면 없음', isFirstInDistrict({ status: 'no', first: true }, {}), false);
   }
 
   for (const [t2, want] of [[96, 100], [95, 100], [90, 90], [85, 90], [80, 80], [75, 80],

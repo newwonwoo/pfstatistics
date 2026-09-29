@@ -102,7 +102,7 @@ const SITE_FIELDS = [
 
 export default function NearbyPresale({
   region, addr, coord, polygon, radiusBasis, series = '주택',
-  site = {}, onSite, value, onChange, district = null,
+  site = {}, onSite, value, onChange, district = null, onDistrict = null,
 }) {
   const v = value ?? {};
   const set = (patch) => onChange?.({ ...v, ...patch });
@@ -159,7 +159,10 @@ export default function NearbyPresale({
     ? { pending: true, text: survey.pending }
     : scoreNearbyPresale(survey.value, special);
   const inDistrict = district?.status === 'yes';
-  const firstNeed = inDistrict && v.first == null;
+  /* 답은 주소 아래 사업지구 줄과 **같은 값**이다(district.first) — 분양가격지수 100 에도 쓰인다. 옛 보관본은 v.first */
+  const firstAns = typeof district?.first === 'boolean' ? district.first : v.first;
+  const firstNeed = inDistrict && typeof firstAns !== 'boolean';
+  const answerFirst = (f) => onDistrict ? onDistrict({ ...district, first: f }) : set({ first: f });
 
   const markers = useMemo(() => rows.map((a, i) => ({
     no: i + 1, lat: a.y, lng: a.x, distance: a.distance, name: a.name,
@@ -228,8 +231,9 @@ export default function NearbyPresale({
               <b>{district.name || '이 사업지구'}</b> 안의 <b>최초 분양</b>입니까?
             </span>
             {firstNeed && <span style={S.must}>필수</span>}
-            <button style={S.chip(v.first === false)} onClick={() => set({ first: false })}>아니오 — 조사합니다</button>
-            <button style={S.chip(v.first === true)} onClick={() => set({ first: true })}>예 — 최초 분양 (4점)</button>
+            <button style={S.chip(firstAns === false)} onClick={() => answerFirst(false)}>아니오 — 조사합니다</button>
+            <button style={S.chip(firstAns === true)} onClick={() => answerFirst(true)}>예 — 최초 분양 (4점)</button>
+            <span style={S.hit}>주소 아래 사업지구 줄과 같은 답입니다 — 예면 분양가격지수도 100 입니다</span>
           </>) : (
             <span style={S.hit}>
               수용·환지 사업지구 내 최초 분양 = 4점 —{' '}

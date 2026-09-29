@@ -23,9 +23,9 @@ const MARK_FILL = 'FFFFFDF0';
 const BORDER = { style: 'thin', color: { argb: 'FF9AA5B1' } };
 const box = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
 
-import { districtLabel } from './DistrictRow';
+import { districtLabel, DISTRICT_SHEETS, floorNote } from './DistrictRow';
 import { scoreSheet, scoreGroup, scoreFacility, scorePoi, scoreMatrix, scoreAverage, expectedSaleRate, reviewScore, tableOf } from '../src/lib/scoring';
-import { compareSummary, expectedRateOf } from '../src/lib/compare';
+import { expectedRateOf, firstOpts } from '../src/lib/compare';
 import { manualSummary } from '../src/lib/manual';
 import { guaranteeSetOf, PRIORITY_YEARS } from '../src/lib/similar';
 
@@ -228,7 +228,10 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
     });
 
     const sitePrice = Number(site.unitPrice) || null;
-    const index = sitePrice && avg ? (sitePrice / avg) * 100 : null;
+    /* 지구 내 최초 분양사업이면 분양가격지수 100(가이드북 원문) — 화면과 같은 판정 */
+    const { firstInDistrict } = firstOpts(manual?.['사업지구'], sheetInput);
+    const measured = sitePrice && avg ? (sitePrice / avg) * 100 : null;
+    const index = firstInDistrict ? 100 : measured;
     const sc = scoreMatrix('분양가경쟁력', index ?? NaN, excl == null ? NaN : Number(excl));
 
     cw.getCell(cur.nextRow, 2).value =
@@ -239,12 +242,15 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
       + ` · 표시 종류 ${kinds.join('·')}`;
     cw.getCell(cur.nextRow, 2).font = { bold: true, size: 11 };
     // 분양가격지수와 배점 — 화면에 보이는 것과 같은 값을 적는다
-    cw.getCell(cur.nextRow + 1, 2).value = sitePrice
+    cw.getCell(cur.nextRow + 1, 2).value = firstInDistrict
+      ? `분양가격지수 100 — 수용·환지 사업지구 내 최초 분양사업이라 원문대로 100 적용${measured != null ? ` (실측 ${measured.toFixed(2)}는 쓰지 않음)` : ''}`
+        + (sc && !sc.pending ? ` · ${sc.score}점 ${sc.label} (${sc.text})` : ` · ${sc?.text ?? ''}`)
+      : sitePrice
       ? `본건 ${Math.round(sitePrice).toLocaleString('ko-KR')} 원/㎡ (평당 ${Math.round(sitePrice * PY).toLocaleString('ko-KR')})`
         + (index == null ? '' : ` · 분양가격지수 ${index.toFixed(2)}`)
         + (sc && !sc.pending ? ` · ${sc.score}점 ${sc.label} (${sc.text})` : ` · ${sc?.text ?? ''}`)
       : '* 본건 ㎡당 분양가를 입력하면 분양가격지수와 배점이 채워집니다';
-    cw.getCell(cur.nextRow + 1, 2).font = { bold: Boolean(sitePrice), size: 10 };
+    cw.getCell(cur.nextRow + 1, 2).font = { bold: Boolean(sitePrice) || firstInDistrict, size: 10 };
 
     /*
      * 적정분양가 산정 — 화면과 **같은 규칙**을 쓴다.
@@ -321,13 +327,11 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
   */
   {
     onProgress?.('초기예상분양률');
-    const cmp = compareSummary(compare, excl);
-    const compScore = cmp.sc && !cmp.sc.pending ? cmp.sc.score : null;
+    /* 화면(page · RateView)과 같은 함수로 낸다 — 여기서 산식을 다시 쓰면 지구 내 최초 분양(지수 100) 같은 단서가 한쪽에만 걸린다 */
+    const { cmp, compScore, total, res } = expectedRateOf(compare, rate, excl, sheetInput, manual?.['사업지구']);
     const hasExcl = excl != null;
-    const total = hasExcl && compScore != null ? excl + compScore : null;
     const series = rate?.series ?? '주택';
     const hh = sheetInput?.규모및배치?.총세대수 ?? '';
-    const res = expectedSaleRate(total ?? NaN, { series, households: hh });
 
     const rw = wb.addWorksheet('초기예상분양률', { views: [{ showGridLines: false }] });
     let r = writeTable(rw, 2, {
@@ -338,7 +342,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
         ['① 분양가격지수 제외 항목 점수 (A)', hasExcl ? excl : '', '점',
          hasExcl ? (manualSum?.source === 'override' ? '수기입력 탭 · 직접 입력' : '수기입력 탭 자동 합산') : '미입력'],
         ['② 분양가경쟁력', compScore ?? '', '점',
-         compScore != null ? `분양가격지수 ${cmp.index.toFixed(2)} · ${cmp.sc.label}` : (cmp.sc?.text ?? '미산출')],
+         compScore != null ? `분양가격지수 ${cmp.index.toFixed(2)}${cmp.indexBasis === 'firstInDistrict' ? ' (지구 내 최초 분양 — 100 적용)' : ''} · ${cmp.sc.label}` : (cmp.sc?.text ?? '미산출')],
         ['⇒ 종합평가 점수', total ?? '', '점', total != null ? res.band : ''],
         ['⇒ 초기예상분양률', total != null && !res.pending ? `${res.rate}%` : '', '',
          total != null && !res.pending
@@ -401,7 +405,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
   */
   {
     onProgress?.('심사평점표');
-    const { total: rateTotal, res } = expectedRateOf(compare, rate, excl, sheetInput);
+    const { total: rateTotal, res } = expectedRateOf(compare, rate, excl, sheetInput, manual?.['사업지구']);
     const pct = res && !res.pending ? res.rate : null;
     const rv = reviewScore({ manual: review ?? {}, rate: pct ?? NaN });
     const t = tableOf('심사평점표');
@@ -540,8 +544,8 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
         }
         if (spec.summaryRow) {
           // 교육환경은 시트 단위로 점수가 난다 — 계 행에 넣는다
-          const sc = facilities ? scoreSheet(s.id, facilities) : null;
-          rows.push([spec.summaryRow, '', '', sc ? sc.score : '', sc ? `${sc.score}점 · ${sc.label}` : '']);
+          const sc = facilities ? scoreSheet(s.id, facilities, manual) : null;
+          rows.push([spec.summaryRow, '', '', sc ? sc.score : '', sc ? `${sc.score}점 · ${sc.label}${floorNote(sc)}` : '']);
         }
       } else {
         for (const f of spec.facilities) {
@@ -560,7 +564,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
       cursor = writeTable(ws, 2, {
         title: spec.title,
         subtitle: `▶ 사업지 : ${facilities?.address ?? spec.subject}`
-          + ((s.id === '교통환경' || s.id === '주거편의') && districtLabel(manual?.['사업지구']) ? ` · ${districtLabel(manual['사업지구'])}` : ''),
+          + (DISTRICT_SHEETS.includes(s.id) && districtLabel(manual?.['사업지구']) ? ` · ${districtLabel(manual['사업지구'])}` : ''),
         columns: spec.columns,
         rows,
       });
