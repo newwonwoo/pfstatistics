@@ -290,10 +290,15 @@ export default function NearbyPresale({
             <div style={S.none}>
               <b>적용할 인근 아파트가 없습니다</b> — {rLabel(data.radius)} 안에 1년 이내 분양개시했거나
               분양 진행중인 {typeLabel}가 없습니다.
-              원문 비고1 에 따라 <b>최하위 배점</b>을 적용합니다(반경을 넓히지 않습니다).
-              <button style={S.apply} onClick={() => set({ special: 'none' })}>
-                최하위 배점 2점 적용
-              </button>
+              {/* 지구 내 최초 분양이면 4점이 이미 정해져 있다 — 2점 버튼을 두면 두 규칙이 부딪혀 보인다 */}
+              {special === 'firstInDistrict'
+                ? <> 사업지구 내 최초 분양이라 <b>4점(열악)</b>이 적용되어 있습니다.</>
+                : (<>
+                    원문 비고1 에 따라 <b>최하위 배점</b>을 적용합니다(반경을 넓히지 않습니다).
+                    <button style={S.apply} onClick={() => set({ special: 'none' })}>
+                      최하위 배점 2점 적용
+                    </button>
+                  </>)}
             </div>
           ) : (<>
             <div style={{ ...S.bar, marginBottom: 8 }}>
