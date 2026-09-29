@@ -15,7 +15,7 @@ export const maxDuration = 60;
  *   /api/probe?url=...&key=VWORLD_API_KEY&keyParam=key
  *   /api/probe?url=...&key=DATA_GO_KR_KEY               (keyParam 기본값 serviceKey)
  *
- * **열린 프록시가 되면 안 되므로 호스트를 허용목록으로 막는다.** GET 만, 20초, 200KB.
+ * **열린 프록시가 되면 안 되므로 호스트를 허용목록으로 막는다.** GET(과 본문 없는 POST), 20초, 200KB.
  * 응답에 키가 섞여 나가지 않도록 URL 도 본문도 마스킹한다 — 증빙에 키가 박혀 나간 전례가 있다.
  */
 const ALLOW = new Set([
@@ -28,6 +28,7 @@ const ALLOW = new Set([
   'www.law.go.kr',          // 법령
   'business.juso.go.kr',    // 도로명주소
   'www.juso.go.kr',
+  'openapi.jigu.go.kr',     // 택지정보시스템(국토교통부·LX) — 지구정보 CSV 는 POST 로만 내려준다
 ]);
 
 const MAXB = 200 * 1024;
@@ -67,7 +68,9 @@ export async function GET(req) {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 20000);
   try {
-    const r = await fetch(u, { signal: ctl.signal, headers: { 'User-Agent': 'pfstatistics-probe' } });
+    /* 택지정보시스템 파일 내려받기는 폼 POST 다(`/openApi/down.do`). 본문 없는 POST 만 허용한다 */
+    const method = q.get('method') === 'POST' ? 'POST' : 'GET';
+    const r = await fetch(u, { method, signal: ctl.signal, headers: { 'User-Agent': 'Mozilla/5.0 pfstatistics-probe' } });
     const text = (await r.text()).slice(0, MAXB);
     return NextResponse.json({
       url: mask(u.toString()), status: r.status,
