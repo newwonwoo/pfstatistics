@@ -175,7 +175,7 @@ export function scoreMatrix(key, index, excl) {
   const t = TABLE[key];
   if (!t || t.scope !== 'matrix') return null;
   if (!Number.isFinite(index)) return { pending: true, text: '본건 분양가와 비교사업장 평균이 있어야 지수를 냅니다' };
-  if (!Number.isFinite(excl)) return { pending: true, text: '분양가격지수 제외 항목 점수(A) 를 입력하세요' };
+  if (!Number.isFinite(excl)) return { pending: true, text: '분양가격지수 제외 항목 점수가 아직 없습니다 — [수기입력] 탭에서 완성하세요' };
 
   const inBand = (b, v) =>
     (b.gte == null || v >= b.gte) && (b.lt == null || v < b.lt);

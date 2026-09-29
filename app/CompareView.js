@@ -490,14 +490,17 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
         <div style={S.siteHead}>
           <span style={S.siteTitle}>본건 제원</span>
           <span style={S.siteSub}>유사도 판정과 분양가격지수에 씁니다</span>
-          <span style={S.reqTag(reqLeft === 0)}>
-            {reqLeft === 0 ? '✓ 필수 입력 완료' : `필수 ${REQ.length - reqLeft} / ${REQ.length} — ${reqLeft}개 남음`}
+          {/* 지구 내 최초 분양이면 분양가격지수가 100 으로 정해져 이 칸들이 점수를 좌우하지 않는다 — 필수로 세우지 않는다 */}
+          <span style={S.reqTag(reqLeft === 0 || firstInDistrict)}>
+            {firstInDistrict
+              ? '지구 내 최초 분양 — 분양가격지수 100 이라 필수 아님 (적정분양가를 내려면 입력)'
+              : reqLeft === 0 ? '✓ 필수 입력 완료' : `필수 ${REQ.length - reqLeft} / ${REQ.length} — ${reqLeft}개 남음`}
           </span>
         </div>
         <div style={S.grid}>
           <label style={S.field}>
-            <span style={S.label}>본건 ㎡당 분양가 (원){!site.unitPrice && <span style={S.must}>필수</span>}</span>
-            <input style={{ ...S.input, ...S.needs(!site.unitPrice) }} inputMode="numeric" value={site.unitPrice ?? ''}
+            <span style={S.label}>본건 ㎡당 분양가 (원){!site.unitPrice && !firstInDistrict && <span style={S.must}>필수</span>}</span>
+            <input style={{ ...S.input, ...S.needs(!site.unitPrice && !firstInDistrict) }} inputMode="numeric" value={site.unitPrice ?? ''}
               placeholder="입력"
               onChange={e => setSite({ unitPrice: e.target.value.replace(/[^\d]/g, '') })} />
           </label>
@@ -524,25 +527,25 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
             </span>
           </label>
           <label style={S.field}>
-            <span style={S.label}>가. 주택유형{!site.houseType && <span style={S.must}>필수</span>}</span>
-            <select style={{ ...S.select, ...S.needs(!site.houseType) }} value={site.houseType ?? ''} onChange={e => setSite({ houseType: e.target.value })}>
+            <span style={S.label}>가. 주택유형{!site.houseType && !firstInDistrict && <span style={S.must}>필수</span>}</span>
+            <select style={{ ...S.select, ...S.needs(!site.houseType && !firstInDistrict) }} value={site.houseType ?? ''} onChange={e => setSite({ houseType: e.target.value })}>
               <option value="">선택</option>
               {HOUSE_TYPES.map(x => <option key={x} value={x}>{x}</option>)}
             </select>
           </label>
           <label style={S.field}>
-            <span style={S.label}>나. 단지규모{!site.sizeBand && <span style={S.must}>필수</span>}</span>
-            <select style={{ ...S.select, ...S.needs(!site.sizeBand) }} value={site.sizeBand ?? ''} onChange={e => setSite({ sizeBand: e.target.value })}>
+            <span style={S.label}>나. 단지규모{!site.sizeBand && !firstInDistrict && <span style={S.must}>필수</span>}</span>
+            <select style={{ ...S.select, ...S.needs(!site.sizeBand && !firstInDistrict) }} value={site.sizeBand ?? ''} onChange={e => setSite({ sizeBand: e.target.value })}>
               <option value="">선택</option>
               {SIZE_BANDS.map(x => <option key={x} value={x}>{x}</option>)}
             </select>
           </label>
           <label style={S.field}>
             <span style={S.label}>
-              다. 시공능력평가순위{!site.rankBand && <span style={S.must}>필수</span>}
+              다. 시공능력평가순위{!site.rankBand && !firstInDistrict && <span style={S.must}>필수</span>}
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <select style={{ ...S.select, ...S.needs(!site.rankBand) }} value={site.rankBand ?? ''}
+              <select style={{ ...S.select, ...S.needs(!site.rankBand && !firstInDistrict) }} value={site.rankBand ?? ''}
                 onChange={e => setSite({ rankBand: e.target.value, rankAuto: false })}>
                 <option value="">선택</option>
                 {RANK_BANDS.map(x => <option key={x} value={x}>{x}</option>)}
