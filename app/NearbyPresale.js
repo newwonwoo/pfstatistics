@@ -222,7 +222,7 @@ export default function NearbyPresale({
           여기서 다시 묻지 않는다. 사업지구 밖이면 이 질문 자체가 성립하지 않는다.
         */}
         <div style={{ ...S.bar, ...(firstNeed ? S.firstNeed : null) }}>
-          <span style={S.lab}>특례</span>
+          <span style={S.lab}>수용·환지 지구</span>
           {inDistrict ? (<>
             <span style={{ fontSize: 12, color: T.ink2 }}>
               <b>{district.name || '이 사업지구'}</b> 안의 <b>최초 분양</b>입니까?
@@ -248,7 +248,7 @@ export default function NearbyPresale({
                 {busy ? '찾는 중…' : `반경 ${rLabel(radius)} 인근 단지 찾기`}
               </button>}
           {!coord && <span style={S.pend}>사업지 주소를 먼저 확정하세요</span>}
-          {special === 'firstInDistrict' && <span style={S.hit}>최초 분양 특례(4점)가 적용되어 인근 단지는 조사하지 않아도 됩니다</span>}
+          {special === 'firstInDistrict' && <span style={S.hit}>사업지구 내 최초 분양이라 4점(열악)입니다 — 인근 단지는 조사하지 않아도 됩니다</span>}
           {data && !collected && (
             <span style={S.pend}>전에 {rLabel(data.radius)} 로 받은 목록입니다 — 규정 거리로 다시 찾으세요</span>
           )}
@@ -319,7 +319,10 @@ export default function NearbyPresale({
                           title="조사 대상으로 고릅니다 — 고른 단지의 평균분양률을 씁니다" />
                       </td>
                       <td style={S.td}>{i + 1}</td>
-                      <td style={S.tdL}>{a.name}</td>
+                      <td style={S.tdL}>
+                        {a.name}
+                        {a.landFlags?.length > 0 && <div style={{ fontSize: 10.5, color: T.muted }}>청약홈 : {a.landFlags.join(' · ')}</div>}
+                      </td>
                       <td style={S.td}>{a.distance}m</td>
                       <td style={S.td}>{a.saleStart ?? '-'}</td>
                       <td style={S.td}>
@@ -345,7 +348,7 @@ export default function NearbyPresale({
             <p style={S.note}>
               {data.source?.citation}<br />
               목록은 <b>청약홈 분양정보</b>에서 왔지만 <b>초기분양률(6개월 이내)은 어느 공개 원천에도 없습니다</b> —
-              단지별 분양률은 조사해 넣는 값입니다. 택지유형은 원천에 없어 상대 단지는 「미상」 으로 셉니다.
+              단지별 분양률은 조사해 넣는 값입니다. 상대 단지 택지유형은 청약홈 공공택지 표시가 있을 때만 「공공택지」, 없으면 「미상」 으로 셉니다.
               거리는 <b>{data.distance?.from ?? '대표지번 중심'}</b> ↔{' '}
               <b>{data.distance?.to ?? '상대 단지 대표지번'}</b> 의 <b>최단거리</b>입니다
               {data.distance?.parcelCount > 0 && (
@@ -378,7 +381,7 @@ export default function NearbyPresale({
           <span style={S.hit}>
             {Object.keys(picked).length > 0
               ? '위에서 고른 단지의 평균을 씁니다 — 직접 입력은 고른 단지를 모두 풀어야 쓸 수 있습니다'
-              : special ? '특례가 적용되어 있습니다' : '조사표를 쓰지 않고 조사값을 바로 넣을 때'}
+              : special ? '사업지구 내 최초 분양이라 조사값을 쓰지 않습니다' : '조사표를 쓰지 않고 조사값을 바로 넣을 때'}
           </span>
         </div>
 

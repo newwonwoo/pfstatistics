@@ -411,7 +411,7 @@ export function scoreAverage(sheetId, { facilities, manual } = {}) {
   const unset = fl?.score >= 5 ? []
     : parts.filter(p => p.sc.reason === '도로 미선택' || p.sc.reason === '차선 수 미입력');
   const floorText = fl
-    ? `　·　사업지구 특례 : ${fl.name ? `${fl.name} ` : ''}${Math.round(fl.area).toLocaleString('ko-KR')}㎡ — ${fl.text}`
+    ? `　·　수용·환지 사업지구 지구면적 : ${fl.name ? `${fl.name} ` : ''}${Math.round(fl.area).toLocaleString('ko-KR')}㎡ — ${fl.text}`
       + (lifted ? ` → ${band?.label ?? ''} ${band?.score ?? '?'}점을 ${fl.floor} ${fl.score}점으로 올림` : ' (최저 등급 이상이라 그대로)')
     : '';
   return {

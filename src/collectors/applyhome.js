@@ -344,6 +344,32 @@ export function rankBand(rank) {
   return '300위 밖';
 }
 
+/**
+ * 라. 택지유형 — 청약홈 APT 공고의 Y/N 표시에서 **공공택지일 때만** 정한다(실측 2026-09-29 · 경기 915건).
+ *   PUBLIC_HOUSE_EARTH_AT        공공주택지구            Y 184
+ *   LRSCL_BLDLND_AT              대규모 택지개발지구      Y 325
+ *   NPLN_PRVOPR_PUBLIC_HOUSE_AT  수도권 내 민영 공공주택지구 Y 43
+ * 셋 다 주택법 제2조 제24호 공공택지(택지개발사업 · 공공주택지구조성사업)에 든다.
+ * **전부 N 이라고 민간택지가 아니다** — 도시개발구역·산업단지 같은 다른 공공택지는 표시 칸이 없다.
+ * 그래서 그때는 비워 두고(유사도 「미상」) 「공공 표시 없음」 이라는 사실만 적는다.
+ * 오피스텔·도시형 공고(getUrbtyOfctl…)에는 이 칸이 아예 없다.
+ * 「신도시」 는 어느 칸으로도 가려지지 않는다(대규모 택지개발지구 ≠ 신도시).
+ */
+const LAND_FLAGS = [
+  ['PUBLIC_HOUSE_EARTH_AT', '공공주택지구'],
+  ['LRSCL_BLDLND_AT', '대규모 택지개발지구'],
+  ['NPLN_PRVOPR_PUBLIC_HOUSE_AT', '수도권 내 민영 공공주택지구'],
+];
+export function landOf(r, src = 'apt') {
+  if (src === 'urbty' || !LAND_FLAGS.some(([k]) => r?.[k] === 'Y' || r?.[k] === 'N')) {
+    return { landType: null, landFlags: null, landNote: '청약홈 표시 없음' };
+  }
+  const flags = LAND_FLAGS.filter(([k]) => r[k] === 'Y').map(([, name]) => name);
+  return flags.length
+    ? { landType: '공공택지', landFlags: flags, landNote: null }
+    : { landType: null, landFlags: [], landNote: '청약홈 공공택지 표시 없음' };
+}
+
 /* 시공사 이름이 같으면 명부를 다시 뒤질 이유가 없다 */
 const rankCache = new Map();
 function builderRankOf(name) {
@@ -928,8 +954,9 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
       builderRank: rank,
       developer: r.BSNS_MBY_NM,
       totalHouseholds: hh,
-      // ③ 유사도 4항목 중 자동으로 알 수 있는 것 (택지유형은 원천에 없어 수기다)
+      // ③ 유사도 4항목 중 자동으로 알 수 있는 것
       sizeBand: sizeBand(hh),
+      ...landOf(r, src),
       rankBand: rankBand(rank),
       houseType: kind === '아파트' ? '아파트' : '기타',
       // 비고2 — 공공분양은 평균가격을 왜곡하므로 제외 대상으로 표시한다

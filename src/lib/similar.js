@@ -42,14 +42,19 @@ const isSale = (a) => a.priceKind !== 'deposit';
  */
 export function similarityOf(site = {}, a = {}) {
   const hit = [], miss = [];
-  const cmp = (name, mine, theirs) => {
-    if (!mine || !theirs) { miss.push(`${name}(미상)`); return; }
+  const cmp = (name, mine, theirs, note) => {
+    if (!mine || !theirs) { miss.push(`${name}(${!theirs && note ? note : '미상'})`); return; }
     if (mine === theirs) hit.push(name); else miss.push(`${name}(${theirs})`);
   };
   cmp('주택유형', site.houseType, a.houseType);
   cmp('단지규모', site.sizeBand, a.sizeBand);
   cmp('시공순위', site.rankBand, a.rankBand);
-  cmp('택지유형', site.landType, a.landType);
+  /*
+    상대 단지 택지유형은 청약홈 공공택지 표시에서 온다(collectors/applyhome.js landOf).
+    표시가 없으면 민간택지로 단정하지 않고 미상 — 본건이 「신도시」 면 공공택지 표시로는 신도시인지 못 가려 역시 미상이다.
+  */
+  if (site.landType === '신도시' && a.landType === '공공택지') miss.push('택지유형(공공택지 · 신도시 여부 미상)');
+  else cmp('택지유형', site.landType, a.landType, a.landNote);
   return { n: hit.length, hit, miss };
 }
 

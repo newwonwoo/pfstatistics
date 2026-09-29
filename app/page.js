@@ -571,7 +571,7 @@ export default function Home() {
       need.push({
         label: '인근아파트 초기분양률 — 지구 내 최초 분양 여부를 고르지 않음', tab: '초기예상분양률',
         go: `${tabLabel('초기예상분양률')} 탭으로 →`,
-        why: '사업지구 안의 최초 분양이면 조사 없이 4점입니다 — 인근아파트 초기 분양률 칸의 「특례」 줄에서 예 / 아니오를 고르세요',
+        why: '사업지구 안의 최초 분양이면 조사 없이 4점입니다 — 초기예상분양률 탭 인근아파트 초기 분양률 칸의 「수용·환지 지구」 줄에서 예 / 아니오를 고르세요',
       });
     }
     /* 사업지구 — 고르지 않으면 특례(등급 하한)를 적용할지 알 수 없다. 해당 없음도 하나의 답이다 */
@@ -1234,7 +1234,7 @@ export default function Home() {
                   company={data?.company}
                   /* 시공능력평가순위는 이미 수집돼 있다 — 본건 유사도 판정에 참고로 보여준다 */
                   companyRank={(data?.results ?? []).find(r => r.indicatorId === 'construction_capability_rank' && r.ok)?.value ?? null}
-                  excl={mSum.excl} manualSum={mSum}
+                  excl={mSum.excl} manualSum={mSum} district={manual['사업지구']}
                   value={compare} onChange={setCompare}
                 />
               )

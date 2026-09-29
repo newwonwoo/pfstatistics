@@ -160,6 +160,7 @@ const S = {
               borderRadius: 7, fontSize: 12.5, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' },
   baseNum: { fontSize: 17, fontWeight: 800, ...mono },
   simHit: { fontSize: 10.5, color: T.ok ?? '#1a7f4b', marginTop: 3, lineHeight: 1.4, whiteSpace: 'normal', maxWidth: 150 },
+  landSrc: { fontSize: 10.5, color: T.muted },
   simMiss: { fontSize: 10.5, color: T.muted, lineHeight: 1.4, whiteSpace: 'normal', maxWidth: 150 },
   link: { color: T.accent, textDecoration: 'none' },
   kind: { fontSize: 11, color: T.muted, background: '#f1f3f5', padding: '2px 7px', borderRadius: 4 },
@@ -203,7 +204,7 @@ const KIND_ORDER = ['아파트', '민간임대', '오피스텔', '도시형생�
 const rLabel = (r) => `${r / 1000}km`;
 
 
-export default function CompareView({ addr, coord, region, polygon, radiusBasis, company, companyRank, excl = null, manualSum = null, value, onChange }) {
+export default function CompareView({ addr, coord, region, polygon, radiusBasis, company, companyRank, excl = null, manualSum = null, district = null, value, onChange }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [autoMsg, setAutoMsg] = useState(null);   // [규정대로 자동선택] 이 무엇을 했는지
@@ -260,13 +261,13 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
 
   /**
    * ③ 유사도 — 본건과 몇 개 항목이 일치하는가.
-   * 택지유형은 원천에 없어 본건·상대 모두 수기다(상대는 아직 못 받으므로 판정에서 뺀다).
+   * 택지유형 : 본건은 수기(채우지 않는다 — 사용자 지시), 상대는 청약홈 공공택지 표시가 있을 때만.
    */
   /*
     **필수 칸이 필수로 보이지 않았다**(사용자 지적 2026-09-25).
     분양가격지수의 분자(본건 분양가)와 유사도 3항목이 없으면 이 탭은 아무 결론도 못 낸다 —
     그런데 다른 칸과 똑같이 생겨서 「채워도 되고 말아도 되는 것」 으로 읽혔다.
-    택지유형은 뺀다 — **상대 단지 값을 원천이 주지 않아** 채워도 유사도 일치에 쓰이지 않는다.
+    택지유형은 필수로 두지 않는다 — 상대 단지는 공공택지 표시가 있는 것만 알 수 있어 모르는 칸이 많다.
   */
   const REQ = [
     ['unitPrice', '본건 ㎡당 분양가'],
@@ -566,8 +567,13 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
           </label>
         </div>
         <div style={{ ...S.note, marginTop: 8 }}>
-          택지유형은 청약홈이 주지 않습니다 — 본건만 입력받고 <b>상대 단지는 판정에서 「미상」으로 둡니다</b>.
-          추정해서 일치시키면 유사도가 부풀려집니다.
+          상대 단지 택지유형은 <b>청약홈 공고의 공공주택지구·대규모 택지개발지구 표시</b>가 있을 때만 「공공택지」 로 셉니다.
+          표시가 없다고 민간택지인 것은 아니라서(도시개발구역 등은 표시 칸이 없다) 그때는 「미상」 입니다.
+          오피스텔·도시형 공고에는 이 표시가 없습니다.
+          {district?.status === 'yes' && district.name && (
+            <><br />참고 — 주소 아래에서 고른 사업지구 : <b>{district.name}</b>{district.law ? ` (${district.law})` : ''}</>
+          )}
+          {district?.status === 'no' && <><br />참고 — 주소 아래에서 「수용·환지 사업지구 밖」 으로 골랐습니다</>}
         </div>
       </div>
 
@@ -867,6 +873,8 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
                       {a.isSite && <><br /><span style={S.badge('ok')} title="사업지와 같은 지번입니다 — 자기 자신은 비교사업장이 될 수 없습니다">
                         본건 (심사대상) — 비교에서 제외
                       </span></>}
+                      {/* 택지유형은 청약홈 공고의 공공택지 표시에서 온다 — 어느 표시인지 줄에서 말한다 */}
+                      {a.landFlags?.length > 0 && <><br /><span style={S.landSrc}>청약홈 : {a.landFlags.join(' · ')}</span></>}
                       {drop && <><br /><span style={S.badge('warn')}>
                         {a.publicSale ? '공공분양 — 제외 권고' : '분양개시 10년 경과 — 제외 권고'}
                       </span></>}

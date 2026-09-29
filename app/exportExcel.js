@@ -210,7 +210,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
         + ` · 거리 기준 : ${c.distance?.from ?? (c.basis === 'polygon' ? '사업지 경계' : '대표지번 중심')}`
         + ` ↔ ${c.distance?.to ?? '상대 단지 대표지번'} 최단거리`
         + (c.distance?.parcelCount ? ` (필지 경계 ${c.distance.parcelCount}곳${c.distance.pointCount ? ` · 대표지번 점 ${c.distance.pointCount}곳` : ''})` : ''),
-      columns: ['선택', '#', '종류', '단지명', '시공사', '주소', '거리', '분양개시일', '시기', '공급세대', '면적(㎡)', '분양가(원/㎡)', '유사도'],
+      columns: ['선택', '#', '종류', '단지명', '시공사', '주소', '거리', '분양개시일', '시기', '공급세대', '면적(㎡)', '분양가(원/㎡)', '택지 (청약홈 표시)', '유사도'],
       rows: shown.map((a, i) => [
         picked.includes(a.manageNo) ? '■' : '',
         i + 1, a.kind ?? '아파트', a.name,
@@ -221,6 +221,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
           ? (a.supplyMin ? `${a.supplyMin.toFixed(2)}~${a.supplyMax.toFixed(2)}` : '')
           : (a.areaMin ? `${a.areaMin.toFixed(2)}~${a.areaMax.toFixed(2)}` : ''),
         priceOf(a) == null ? '' : (isSale(a) ? Math.round(priceOf(a)) : `(임대보증금) ${Math.round(priceOf(a)).toLocaleString('ko-KR')}`),
+        a.landFlags?.length ? `공공택지 — ${a.landFlags.join(' · ')}` : (a.landNote ?? ''),
         a.publicSale ? '공공분양 — 제외 권고' : (a.years > 10 ? '10년 경과 — 제외 권고' : ''),
       ]),
       markCell: [0, 11],
