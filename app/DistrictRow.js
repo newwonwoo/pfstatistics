@@ -153,6 +153,13 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
           {cur.status && <> · {cur.status}</>}
         </div>
       )}
+      {/* 준공 지구라서 「아니오」 로 미리 골랐으면 왜 그런지 말한다 — 안 그러면 「지구 안인데 왜 밖이냐」 가 된다 */}
+      {v.status === 'no' && v.doneZone && (
+        <div style={S.basis}>
+          지도상으로는 <b>{v.doneZone}</b> 경계 안이지만 <b>준공된 지구</b>라 특례 대상으로 보지 않았습니다 —
+          특례는 수용·환지로 <b>조성 중인</b> 지구에 적용됩니다. 조성 중이라면 [예] 를 고르세요.
+        </div>
+      )}
       {/* 사업지구경계에는 없는데 필지 토지이용계획이 사업지구라고 하면 — 면적은 원천에 없으니 직접 넣게 한다 */}
       {scan && cands.length === 0 && scan.landUseKind && (
         <div style={S.warn}>
@@ -174,7 +181,8 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
 
 /**
  * 원천 결과로 **처음 값**을 정한다 — 이미 사람이 고른 값이 있으면 건드리지 않는다.
- *   · 이름이 수용·환지 법(택지개발·공공주택·도시개발…)을 말하는 사업지구 → 그것을 미리 고른다
+ *   · 이름이 수용·환지 법(택지개발·공공주택·도시개발…)을 말하는 **조성 중인** 사업지구 → 그것을 미리 고른다
+ *   · 잡힌 사업지구가 모두 **준공**이면 → 「아니오」 를 미리 고르고 까닭을 적는다
  *   · 원천 세 곳 모두 아무것도 없으면 → 「아니오 — 사업지구 밖」 을 미리 고른다
  *   · 토지이용계획만 사업지구라고 하면(경계 원천에 없는 도시개발구역 등) → **고르지 않는다** — 면적을 사람이 넣는다
  */
@@ -185,11 +193,24 @@ export function initialDistrict(scan, key) {
     미리 고른다(부천상동 = 한국토지공사 — 이름엔 「택지개발」 이 없다). 민간·민관 시행은 사람이 고른다.
   */
   const publicZone = (c) => c.layer === '사업지구' && c.operator && !/민간/.test(c.operator);
+  /*
+    **준공된 지구는 「예」 로 미리 고르지 않는다**(사용자 지적 2026-09-29 — 부천 상동 540-1 은 민간부지인데 왜 묻나).
+    상동 540-1 은 지도상 1990년대 한국토지공사가 조성해 **준공된** 「부천상동」 택지지구 경계 안이라 원천이 그 지구를 준다.
+    그런데 규정은 「수용·환지 방식으로 **개발·조성되는** 사업지구」 다 — 조성 중인 지구의 기반시설을 미리 인정하는 특례라
+    조성이 끝난 지구에는 맞지 않는다(그 기반시설은 이미 반경시설 조사에 잡힌다).
+    시행자가 공공인지 민간인지는 기준이 아니다 — 조성 중인 공공택지에 민간이 짓는 단지(동탄2 등)는 대상이다.
+  */
+  const cands = scan?.candidates ?? [];
+  const ongoing = cands.filter(c => c.status !== '준공');
   const hit = scan?.suggestion
-    ? scan.candidates.find(c => c.id === scan.suggestion.id && (c.kind || publicZone(c)))
+    ? ongoing.find(c => c.id === scan.suggestion.id && (c.kind || publicZone(c)))
+      ?? ongoing.find(c => c.kind || publicZone(c))
     : null;
   if (hit) {
     return { ...base, status: 'yes', pick: hit.id, name: hit.name, area: hit.area, areaBasis: hit.areaBasis, source: hit.source };
+  }
+  if (cands.length && !ongoing.length) {
+    return { ...base, status: 'no', pick: 'none', doneZone: cands.map(c => c.name).join(' · ') };
   }
   if (scan?.nothing) return { ...base, status: 'no', pick: 'none' };
   return { ...base, status: null, pick: null, auto: false };
