@@ -38,6 +38,8 @@ const S = {
     display: 'inline-flex', gap: 6, alignItems: 'baseline',
   }),
   area: { ...mono, fontWeight: 800 },
+  facts: { fontSize: 12, color: T.ink2, marginTop: 8, lineHeight: 1.7 },
+  dates: { display: 'block', ...mono, color: T.ink2 },
   tagAuto: { fontSize: 10, fontWeight: 800, color: T.ok, background: T.okSoft, padding: '1px 6px', borderRadius: 3 },
   line2: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 10, fontSize: 12 },
   lab: { fontSize: 11, fontWeight: 700, color: T.muted },
@@ -106,7 +108,11 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
             title={`${c.source} · ${c.areaBasis}`}>
             <span>{c.name}</span>
             <span style={S.area}>{fmt(c.area)}㎡</span>
-            {c.status && <span style={{ fontSize: 10.5, color: T.muted, fontWeight: 600 }}>{c.status}</span>}
+            {(c.detail?.completed || c.status) && (
+              <span style={{ fontSize: 10.5, color: T.muted, fontWeight: 600 }}>
+                {c.detail?.completed ? `준공${c.status === '준공' ? '' : '(예정)'} ${c.detail.completed}` : c.status}
+              </span>
+            )}
           </button>
         ))}
         <button style={S.chip(v.pick === 'custom')}
@@ -114,6 +120,24 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
           {cands.length ? '목록에 없음 · 직접 입력' : '직접 입력'}
         </button>
       </div>
+
+      {/*
+        **판정하지 않고 사실만 보여 준다**(사용자 지시 2026-09-29 「준공여부로 따지지 말고 그냥 정보 있으면 보여줘.
+        언제 땅 시행 완료시기만 보여줘 그럼 판단할수있어」). 고르기 전에 읽혀야 하므로 칩 바로 아래, 지구마다 한 줄.
+      */}
+      {cands.map(c => c.detail && (
+        <div key={c.id} style={S.facts}>
+          <b>{c.name}</b>
+          {c.detail.law && <> · {c.detail.law}</>}
+          {c.detail.newtown && <> · {c.detail.newtown}</>}
+          {c.detail.stage && <> · {c.detail.stage}</>}
+          <span style={S.dates}>
+            지구지정 {c.detail.designated ?? '—'} · 개발계획 {c.detail.devPlan ?? '—'} · 실시계획 {c.detail.execPlan ?? '—'} ·{' '}
+            <b style={{ color: T.ink }}>준공{c.detail.stage === '준공' ? '' : '(예정)'} {c.detail.completed ?? '—'}</b>
+          </span>
+          {c.operator && <span style={{ color: T.muted }}> · 시행 {c.operator}</span>}
+        </div>
+      ))}
 
       {v.status === 'yes' && (
         <div style={S.line2}>
@@ -148,16 +172,7 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
         <div style={S.basis}>
           {/* 레이어 ID(lt_c_…)는 화면에 쓰지 않는다 — 괄호 앞 이름만 */}
           {String(cur.source).replace(/\(.*\)$/, '')} · 면적은 {v.areaBasis ?? cur.areaBasis}
-          {cur.kind && <> · {cur.kind}({cur.law}) — {cur.method} 방식</>}
-          {cur.operator && <> · 시행 {cur.operator}</>}
-          {cur.status && <> · {cur.status}</>}
-        </div>
-      )}
-      {/* 준공 지구라서 「아니오」 로 미리 골랐으면 왜 그런지 말한다 — 안 그러면 「지구 안인데 왜 밖이냐」 가 된다 */}
-      {v.status === 'no' && v.doneZone && (
-        <div style={S.basis}>
-          지도상으로는 <b>{v.doneZone}</b> 경계 안이지만 <b>준공된 지구</b>라 특례 대상으로 보지 않았습니다 —
-          특례는 수용·환지로 <b>조성 중인</b> 지구에 적용됩니다. 조성 중이라면 [예] 를 고르세요.
+          {cur.law && cur.method && <> · {cur.law} — {cur.method} 방식</>}
         </div>
       )}
       {/* 사업지구경계에는 없는데 필지 토지이용계획이 사업지구라고 하면 — 면적은 원천에 없으니 직접 넣게 한다 */}
@@ -181,37 +196,18 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
 
 /**
  * 원천 결과로 **처음 값**을 정한다 — 이미 사람이 고른 값이 있으면 건드리지 않는다.
- *   · 이름이 수용·환지 법(택지개발·공공주택·도시개발…)을 말하는 **조성 중인** 사업지구 → 그것을 미리 고른다
- *   · 잡힌 사업지구가 모두 **준공**이면 → 「아니오」 를 미리 고르고 까닭을 적는다
+ *   · 사업지구가 잡히면 → **고르지 않는다** — 지정일~준공(예정)일을 보여 주고 실무자가 고른다
  *   · 원천 세 곳 모두 아무것도 없으면 → 「아니오 — 사업지구 밖」 을 미리 고른다
  *   · 토지이용계획만 사업지구라고 하면(경계 원천에 없는 도시개발구역 등) → **고르지 않는다** — 면적을 사람이 넣는다
  */
 export function initialDistrict(scan, key) {
   const base = { scan, key, auto: true };
   /*
-    이름이 수용 법(택지개발·공공주택·도시개발…)을 말하거나, **공공 시행자가 택지정보시스템에 등록한 사업지구**면
-    미리 고른다(부천상동 = 한국토지공사 — 이름엔 「택지개발」 이 없다). 민간·민관 시행은 사람이 고른다.
+    **사업지구가 잡히면 미리 고르지 않는다**(사용자 지시 2026-09-29 「준공여부로 따지지 말고 그냥 정보 있으면 보여줘」).
+    전에는 「공공 시행자면 예」 · 「준공이면 아니오」 를 미리 골랐는데 둘 다 규정 원문 없이 만든 규칙이었다.
+    지정일~준공(예정)일을 칩 아래에 보여 주고 실무자가 고른다.
+    원천 어디에도 사업지구가 없을 때만 「아니오 — 사업지구 밖」 을 미리 고른다(판단할 거리가 없다).
   */
-  const publicZone = (c) => c.layer === '사업지구' && c.operator && !/민간/.test(c.operator);
-  /*
-    **준공된 지구는 「예」 로 미리 고르지 않는다**(사용자 지적 2026-09-29 — 부천 상동 540-1 은 민간부지인데 왜 묻나).
-    상동 540-1 은 지도상 1990년대 한국토지공사가 조성해 **준공된** 「부천상동」 택지지구 경계 안이라 원천이 그 지구를 준다.
-    그런데 규정은 「수용·환지 방식으로 **개발·조성되는** 사업지구」 다 — 조성 중인 지구의 기반시설을 미리 인정하는 특례라
-    조성이 끝난 지구에는 맞지 않는다(그 기반시설은 이미 반경시설 조사에 잡힌다).
-    시행자가 공공인지 민간인지는 기준이 아니다 — 조성 중인 공공택지에 민간이 짓는 단지(동탄2 등)는 대상이다.
-  */
-  const cands = scan?.candidates ?? [];
-  const ongoing = cands.filter(c => c.status !== '준공');
-  const hit = scan?.suggestion
-    ? ongoing.find(c => c.id === scan.suggestion.id && (c.kind || publicZone(c)))
-      ?? ongoing.find(c => c.kind || publicZone(c))
-    : null;
-  if (hit) {
-    return { ...base, status: 'yes', pick: hit.id, name: hit.name, area: hit.area, areaBasis: hit.areaBasis, source: hit.source };
-  }
-  if (cands.length && !ongoing.length) {
-    return { ...base, status: 'no', pick: 'none', doneZone: cands.map(c => c.name).join(' · ') };
-  }
   if (scan?.nothing) return { ...base, status: 'no', pick: 'none' };
   return { ...base, status: null, pick: null, auto: false };
 }
@@ -221,5 +217,6 @@ export function districtLabel(v) {
   if (!v || v.status == null) return null;
   if (v.status === 'no') return '수용·환지 사업지구 밖';
   const fl = districtFloor(v);
-  return `${v.name || '사업지구'} ${fmt(v.area) || '?'}㎡${fl ? ` · 최저 ${fl.floor}` : ''}`;
+  const done = v.scan?.candidates?.find(c => c.id === v.pick)?.detail?.completed;
+  return `${v.name || '사업지구'} ${fmt(v.area) || '?'}㎡${done ? ` (준공 ${done})` : ''}${fl ? ` · 최저 ${fl.floor}` : ''}`;
 }

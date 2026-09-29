@@ -44,6 +44,7 @@ export const OPERATORS = {
 const KINDS = [
   { re: /택지개발/, kind: '택지개발사업', law: '택지개발촉진법', method: '수용' },
   { re: /공공주택|보금자리|국민임대/, kind: '공공주택지구', law: '공공주택 특별법', method: '수용' },
+  { re: /산업입지/, kind: '산업단지', law: '산업입지법', method: '수용' },
   { re: /도시개발/, kind: '도시개발구역', law: '도시개발법', method: '수용·환지·혼용 중 하나' },
   { re: /혁신도시/, kind: '혁신도시', law: '혁신도시법', method: '수용' },
   { re: /기업도시/, kind: '기업도시', law: '기업도시법', method: '수용' },
@@ -52,6 +53,60 @@ const KINDS = [
   { re: /산업단지|산단/, kind: '산업단지', law: '산업입지법', method: '수용' },
 ];
 export const kindOf = (name) => KINDS.find(k => k.re.test(String(name ?? ''))) ?? null;
+
+/**
+ * **택지정보시스템 지구 상세** — 시행 시기를 사람이 보고 판단하게 한다(사용자 지시 2026-09-29
+ * 「준공여부로 따지지 말고 그냥 정보 있으면 보여줘. 언제 땅 시행 완료시기만 보여줘 그럼 판단할수있어」).
+ *
+ *   POST map.jigu.go.kr/dstrc/dstrcInfo.do   dstrcAppnNo=<지구번호>&gubun=detailInfo
+ *   → HTML 안 `<input id="dstrcInfo" value="{dstrcNm=…, lawordNm=…, stepNm=…, competDe=…}">`
+ *
+ * 지구번호는 브이월드 사업지구경계의 `zonecode` 와 같은 체계라 그대로 넘긴다(실측 동탄2 41590MX2008001 ·
+ * 부천상동 41195KL1994001). 같은 사이트의 CSV 내려받기(`openApi/down.do`)는 어디서 불러도 406 이라 못 쓴다
+ * — 지도 서비스가 지구를 누를 때 부르는 이 창구를 쓴다(키 불필요).
+ * 실패해도 사업지구 판정은 멈추지 않는다 — 상세 없이 경계·면적만 보여 준다.
+ */
+const JIGU_INFO = 'https://map.jigu.go.kr/dstrc/dstrcInfo.do';
+function parseInfo(html) {
+  const m = String(html).match(/id="dstrcInfo"\s+value="\{([\s\S]*?)\}"/);
+  if (!m) return null;
+  /* 값에 쉼표가 섞여 있다(위치·면적) — 「, 영문키=」 에서만 자른다 */
+  const o = {};
+  for (const part of m[1].split(/, (?=[A-Za-z0-9]+=)/)) {
+    const i = part.indexOf('=');
+    /* 빈 칸을 글자 「null」 로 준다(실측 부천상동 newtownNm=null) — 빈 값으로 본다 */
+    if (i > 0) { const v = part.slice(i + 1).trim(); o[part.slice(0, i).trim()] = v === 'null' || v === '' ? null : v; }
+  }
+  const d = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v ?? '') ? v : null);
+  const ar = Number(String(o.ar ?? '').replace(/,/g, ''));
+  return {
+    name: o.dstrcNm || null,
+    law: o.lawordNm || null,
+    stage: o.stepNm || null,
+    newtown: o.newtownNm || null,
+    period: o.bsnsOpertnDe || null,
+    designated: d(o.dstrcAppnDe),
+    devPlan: d(o.devlopPlanConfmDe),
+    execPlan: d(o.oprtnPlanConfmDe),
+    completed: d(o.competDe),
+    operators: [o.opertnProfsNm1, o.opertnProfsNm2].filter(Boolean),
+    area: ar > 0 ? ar : null,
+    updated: o.registDt || null,
+  };
+}
+async function jiguDetail(code) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 10000);
+  try {
+    const r = await fetch(JIGU_INFO, {
+      method: 'POST', signal: ctl.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest' },
+      body: new URLSearchParams({ dstrcAppnNo: code, gubun: 'detailInfo' }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return parseInfo(await r.text());
+  } finally { clearTimeout(t); }
+}
 
 /** MultiPolygon/Polygon → [[외곽, 구멍…], …] ({lat,lng}) */
 function polys(geom) {
@@ -97,6 +152,7 @@ export async function detectDistrict({ x, y }) {
     const p = f.properties ?? {};
     const code = String(p.zonecode ?? '');
     const k = kindOf(p.zonename);
+    const boundaryArea = areaOf(parts);
     candidates.push({
       id: `zone:${code}`,
       layer: '사업지구',
@@ -105,11 +161,28 @@ export async function detectDistrict({ x, y }) {
       operator: OPERATORS[code.slice(5, 7)] ?? null,
       status: p.cat_nam ?? null,
       kind: k?.kind ?? null, law: k?.law ?? null, method: k?.method ?? null,
-      area: areaOf(parts),
+      area: boundaryArea,
       areaBasis: '사업지구 경계에서 계산',
       source: '택지정보시스템 사업지구경계(브이월드 lt_c_lhzone)',
     });
   }
+
+  /* 지구 상세(근거법·단계·지정~준공 날짜·공식 면적) — 있으면 경계 계산값·이름 추정을 대신한다 */
+  await Promise.all(candidates.map(async (c) => {
+    try {
+      const d = await jiguDetail(c.code);
+      if (!d) return;
+      c.detail = d;
+      if (d.area) { c.area = Math.round(d.area); c.areaBasis = '택지정보시스템 고시 면적'; }
+      if (d.law) {
+        const k = kindOf(d.law) ?? kindOf(d.name) ?? null;
+        c.law = d.law;
+        if (k) { c.kind = k.kind; c.method = k.method; }
+      }
+      if (d.operators.length) c.operator = d.operators.join(' · ');
+      if (d.stage) c.status = d.stage;
+    } catch (e) { errors.push(`택지정보시스템 지구상세(${c.code}): ${e.message}`); }
+  }));
   /*
     **지구단위계획은 사업지구 후보에서 뺀다**(사용자 지적 2026-09-28 「지구단위계획은 분양단지랑 같은게 아냐」).
     지구단위계획구역은 도시관리계획상의 **계획 구역**이지 수용·환지로 조성하는 사업지구가 아니다 —
