@@ -199,7 +199,8 @@ export default function NearbyPresale({
           비고2 의 4개 항목은 **비교사업장 탭의 [본건 제원] 과 같은 값**이다.
           여기서 고쳐도 그쪽이 같이 바뀐다 — 한 값을 두 곳에서 따로 들고 있으면 조용히 갈린다.
         */}
-        <div style={S.siteRow}>
+        {/* 지구 내 최초 분양이면 4점이 정해져 조사할 단지를 고를 일이 없다 — 고르는 칸을 치운다 */}
+        {special !== 'firstInDistrict' && <div style={S.siteRow}>
           <span style={S.lab}>본건 제원</span>
           {SITE_FIELDS.map(([k, label, opts]) => (
             <label key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: T.ink2 }}>
@@ -216,7 +217,7 @@ export default function NearbyPresale({
               ? `${siteLeft.join('·')} 을(를) 고르면 일치 항목을 셉니다 · 비교사업장 탭 [본건 제원] 과 같은 값입니다`
               : '비교사업장 탭 [본건 제원] 과 같은 값입니다'}
           </span>
-        </div>
+        </div>}
 
         {/*
           **「수용·환지 사업지구 내 최초 분양사업 = 4점」 은 묻는 말로 받는다** — **인근 단지를 찾기 전에** 묻는다
@@ -377,7 +378,7 @@ export default function NearbyPresale({
         </>)}
 
         {/* 조사표를 쓰지 않고 손으로 넣는 길 — 내부망에서 이미 조사해 온 값이 있을 때 */}
-        <div style={{ ...S.bar, marginTop: 14 }}>
+        {special !== 'firstInDistrict' && <div style={{ ...S.bar, marginTop: 14 }}>
           <span style={S.lab}>직접 입력</span>
           <input style={S.rate} type="number" min="0" max="100" step="any" placeholder="%"
             disabled={!!special || Object.keys(picked).length > 0}
@@ -385,9 +386,9 @@ export default function NearbyPresale({
           <span style={S.hit}>
             {Object.keys(picked).length > 0
               ? '위에서 고른 단지의 평균을 씁니다 — 직접 입력은 고른 단지를 모두 풀어야 쓸 수 있습니다'
-              : special ? '사업지구 내 최초 분양이라 조사값을 쓰지 않습니다' : '조사표를 쓰지 않고 조사값을 바로 넣을 때'}
+              : special ? '적용할 인근 아파트가 없어 최하위 배점을 씁니다' : '조사표를 쓰지 않고 조사값을 바로 넣을 때'}
           </span>
-        </div>
+        </div>}
 
         <div style={S.out}>
           {sc?.pending

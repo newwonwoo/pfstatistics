@@ -122,7 +122,7 @@ const S = {
     background: '#eef2f7', color: '#5a6472', fontSize: 9.5, fontWeight: 800, letterSpacing: '.04em',
   },
   hint: (st) => ({
-    marginTop: 3, fontSize: 10.5, lineHeight: 1.45,
+    marginTop: 3, fontSize: 10.5, lineHeight: 1.45, wordBreak: 'keep-all',
     color: st === 'todo' ? '#a2a9b4' : T.muted,
   }),
 };

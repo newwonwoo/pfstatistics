@@ -294,7 +294,7 @@ export default function ManualView({ region, addr, data, facilities, manual, val
       {/* ── A 합산 ─────────────────────────────────────── */}
       <div style={S.box}>
         <div style={S.head}>
-          <span>분양가격지수 제외 항목 점수 (A)</span>
+          <span>분양가격지수 제외 항목 점수</span>
           <span style={S.headNote}>초기예상분양률 · 분양가경쟁력이 이 값을 씁니다</span>
         </div>
         {/*
@@ -358,7 +358,7 @@ export default function ManualView({ region, addr, data, facilities, manual, val
               </tr>
             ))}
             <tr>
-              <td style={{ ...S.tdL, ...S.final, textAlign: 'left' }}>합계 = A</td>
+              <td style={{ ...S.tdL, ...S.final, textAlign: 'left' }}>합계</td>
               <td style={S.final}>—</td>
               {/*
                 **「자동 합산」 이라면서 다 차기 전에는 「—」 만 보였다**(사용자 지적 2026-09-24).
@@ -390,7 +390,7 @@ export default function ManualView({ region, addr, data, facilities, manual, val
         <div style={S.body}>
           <div style={S.grid}>
             <div style={S.field}>
-              <span style={S.lab}>A 직접 입력 <span style={{ fontWeight: 400, color: T.muted }}>(선택)</span></span>
+              <span style={S.lab}>합계 직접 입력 <span style={{ fontWeight: 400, color: T.muted }}>(선택)</span></span>
               <input style={S.input} type="number" min="0" step="any" placeholder="직접 입력"
                 value={v.exclOverride ?? ''} onChange={e => set({ exclOverride: e.target.value })} />
               <span style={S.sub}>내부망 평가표 값을 그대로 쓰고 싶을 때</span>

@@ -339,7 +339,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
       subtitle: `▶ 사업지 : ${facilities?.address ?? data.region}`,
       columns: ['구분', '값', '단위', '근거'],
       rows: [
-        ['① 분양가격지수 제외 항목 점수 (A)', hasExcl ? excl : '', '점',
+        ['① 분양가격지수 제외 항목 점수', hasExcl ? excl : '', '점',
          hasExcl ? (manualSum?.source === 'override' ? '수기입력 탭 · 직접 입력' : '수기입력 탭 자동 합산') : '미입력'],
         ['② 분양가경쟁력', compScore ?? '', '점',
          compScore != null ? `분양가격지수 ${cmp.index.toFixed(2)}${cmp.indexBasis === 'firstInDistrict' ? ' (지구 내 최초 분양 — 100 적용)' : ''} · ${cmp.sc.label}` : (cmp.sc?.text ?? '미산출')],
@@ -377,12 +377,12 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
     const mw = wb.addWorksheet('수기입력', { views: [{ showGridLines: false }] });
     const KIND = { auto: '자동', form: '값→점수', typed: '점수 직접' };
     let r = writeTable(mw, 2, {
-      title: '수기입력 — 분양가격지수 제외 항목 점수(A) 산출근거',
+      title: '수기입력 — 분양가격지수 제외 항목 점수 산출근거',
       subtitle: `▶ 사업지 : ${facilities?.address ?? data.region}`,
       columns: ['평가항목', '구분', '배점', '점수', '근거'],
       rows: [
         ...ms.rows.map(x => [x.id, x.kindText ?? KIND[x.kind], x.max ?? '', x.score ?? '', x.why ?? '']),
-        ['합계 = A', '', '', ms.excl ?? '',
+        ['합계', '', '', ms.excl ?? '',
           ms.override != null
             ? `직접 입력한 ${ms.override} 적용 (자동 합계 ${ms.missing.length ? '산출 불가' : ms.sum})`
             : ms.missing.length

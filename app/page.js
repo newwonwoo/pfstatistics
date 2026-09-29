@@ -39,12 +39,14 @@ const S = {
    * 회색 글씨 + 흰 버튼이라 [엑셀 다운로드]·[사업지 바꾸기] 가 배경에 묻혔다.
    * 이 줄은 어느 단계에서나 늘 떠 있는 유일한 조작 자리다 — 눈에 들어와야 한다.
    */
-  summary: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12,
+  summary: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'nowrap', marginBottom: 12,
              padding: '10px 14px', background: '#fff', border: `1px solid ${T.line}`,
              borderLeft: `4px solid ${T.accent}`, borderRadius: 7,
              boxShadow: '0 1px 3px rgba(16,24,40,.06)' },
-  summaryMain: { fontSize: 16, fontWeight: 800, color: T.ink, letterSpacing: '-.01em' },
-  summaryMeta: { fontSize: 12, color: T.muted, ...mono },
+  summaryMain: { fontSize: 16, fontWeight: 800, color: T.ink, letterSpacing: '-.01em', whiteSpace: 'nowrap', flexShrink: 0 },
+  summaryMeta: { fontSize: 12, color: T.muted, ...mono, flex: '1 1 auto', minWidth: 0 },
+  /* 버튼 셋은 한 묶음으로 오른쪽에 붙는다 — 설명이 길어지면 글자만 줄바꿈된다(단계마다 버튼 자리가 바뀌던 결함) */
+  summaryBtns: { display: 'flex', gap: 8, flexShrink: 0, marginLeft: 'auto', alignItems: 'center' },
   summaryBtn: {
     marginLeft: 'auto', padding: '8px 16px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
     border: `1px solid ${T.line}`, borderRadius: 6, background: '#fff', color: T.ink,
@@ -792,19 +794,21 @@ export default function Home() {
               {districtLabel(manual['사업지구']) ? ` · ${districtLabel(manual['사업지구'])}` : ''}
             </span>
             {/* 내보내기는 어느 단계에서나 쓴다 — 요약 줄에 붙여 한 줄을 아낀다 */}
-            {data && (
-              <>
-                <button style={{ ...S.summaryBtn, marginLeft: 'auto' }} onClick={saveRecord} disabled={!!busy}>
-                  이 조회 보관
-                </button>
-                <button style={S.summaryBtnMain} onClick={exportXlsx} disabled={!!busy}>
-                  {busy === 'xlsx' ? '생성 중…' : '⬇ 엑셀 다운로드'}
-                </button>
-              </>
-            )}
-            <button style={{ ...S.summaryBtn, marginLeft: data ? 0 : 'auto' }} onClick={() => setPanelOpenManual(true)}>
-              사업지 바꾸기
-            </button>
+            <span style={S.summaryBtns}>
+              {data && (
+                <>
+                  <button style={{ ...S.summaryBtn, marginLeft: 0 }} onClick={saveRecord} disabled={!!busy}>
+                    이 조회 보관
+                  </button>
+                  <button style={S.summaryBtnMain} onClick={exportXlsx} disabled={!!busy}>
+                    {busy === 'xlsx' ? '생성 중…' : '⬇ 엑셀 다운로드'}
+                  </button>
+                </>
+              )}
+              <button style={{ ...S.summaryBtn, marginLeft: 0 }} onClick={() => setPanelOpenManual(true)}>
+                사업지 바꾸기
+              </button>
+            </span>
           </div>
         )}
 
@@ -928,6 +932,7 @@ export default function Home() {
             error={distErr}
             onRetry={() => { setManual(m => { const { 사업지구: _d, ...rest } = m; return rest; }); setDistTry(t => t + 1); }}
             onChange={(v) => setManual(m => ({ ...m, 사업지구: { ...v, key: distKey ?? v.key } }))}
+            compact={!!data}
           />
         )}
 

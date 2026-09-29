@@ -58,7 +58,7 @@ const S = {
 
 const fmt = (n) => (Number.isFinite(Number(n)) && Number(n) > 0 ? Math.round(Number(n)).toLocaleString('ko-KR') : '');
 
-export default function DistrictRow({ value, loading, error, onChange, onRetry }) {
+export default function DistrictRow({ value, loading, error, onChange, onRetry, compact = false }) {
   const v = value ?? {};
   const scan = v.scan ?? null;
   const cands = scan?.candidates ?? [];
@@ -75,6 +75,22 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry }
   const needArea = v.status === 'yes' && !(Number(v.area) > 0);
   const needFirst = v.status === 'yes' && typeof v.first !== 'boolean';
   const cur = cands.find(c => c.id === v.pick);
+  const [open, setOpen] = useState(false);
+
+  /*
+    **다 답했고 다음 단계로 넘어갔으면 한 줄로 접는다**(UI/UX 점검 2026-09-29 —「끝난 단계의 도구는 접는다」).
+    답을 고른 그 순간에는 접지 않는다(방금 누른 것이 사라지면 무엇이 됐는지 모른다) — 통계 수집을 시작한 뒤에 접는다.
+  */
+  const complete = v.status === 'no' || (v.status === 'yes' && Number(v.area) > 0 && typeof v.first === 'boolean');
+  if (compact && complete && !open && !loading) {
+    return (
+      <div style={{ ...S.row(false), padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }} data-district-row>
+        <span style={{ ...S.lab, fontSize: 11.5 }}>수용·환지 사업지구</span>
+        <span style={{ fontSize: 12.5, color: T.ink }}>{districtLabel(v)}</span>
+        <button style={S.chip(false)} onClick={() => setOpen(true)}>바꾸기</button>
+      </div>
+    );
+  }
 
   return (
     <div style={S.row(needPick || needArea || needFirst)} data-district-row>

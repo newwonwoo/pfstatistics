@@ -372,10 +372,15 @@ function liftByDistrict(sheetId, band, manual) {
     score: lifted ? fl.score : band?.score ?? null,
     label: lifted ? fl.floor : band?.label ?? '',
     floor: fl ? { ...fl, lifted } : null,
-    text: fl
-      ? `　·　수용·환지 사업지구 지구면적 : ${fl.name ? `${fl.name} ` : ''}${Math.round(fl.area).toLocaleString('ko-KR')}㎡ — ${fl.text}`
-        + (lifted ? ` → ${band?.label ?? ''} ${band?.score ?? '?'}점을 ${fl.floor} ${fl.score}점으로 올림` : ' (최저 등급 이상이라 그대로)')
-      : '',
+    /*
+      올렸을 때만 까닭을 다 적는다. 이미 하한 이상이면 한 토막으로 끝낸다 —
+      같은 긴 문장이 교통·주거·교육 세 행에 되풀이되어 근거 칸을 덮었다(UI/UX 점검 2026-09-29).
+    */
+    text: !fl ? ''
+      : lifted
+        ? `　·　${fl.name ? `${fl.name} ` : ''}지구면적 ${Math.round(fl.area).toLocaleString('ko-KR')}㎡ — 최저 ${fl.floor}${fl.score < 5 ? ' 이상' : ''}`
+          + ` → ${band?.label ?? ''} ${band?.score ?? '?'}점을 ${fl.floor} ${fl.score}점으로 올림`
+        : `　·　지구면적 최저 ${fl.floor}${fl.score < 5 ? ' 이상' : ''} 충족`,
   };
 }
 
