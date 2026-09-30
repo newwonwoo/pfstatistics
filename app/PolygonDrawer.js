@@ -42,8 +42,9 @@ const S = {
   }),
 };
 
-export default function PolygonDrawer({ center, polygon, onChange, busy, autoDraw = false, pendingSheet,
+export default function PolygonDrawer({ center, polygon, onChange, busy, autoDraw = false, pendingSheet, basisMode = 'polygon',
   onCollect = null, onConfirm = null, onRedraw = null, done = false, doneHint = null }) {
+  const active = basisMode === 'polygon';
   const el = useRef(null);
   const state = useRef({ map: null, poly: null, dots: [] });
   const [pts, setPts] = useState(polygon ?? []);
@@ -83,6 +84,8 @@ export default function PolygonDrawer({ center, polygon, onChange, busy, autoDra
     el.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [autoDraw]);
 
+  useEffect(() => { if (!active) setDrawing(false); }, [active]);
+
   // 꼭짓점이 바뀔 때마다 다시 그린다
   useEffect(() => {
     const { map, kakao } = state.current;
@@ -113,17 +116,18 @@ export default function PolygonDrawer({ center, polygon, onChange, busy, autoDra
     <div style={S.box}>
       <div style={S.bar}>
         <span style={S.name}>사업지 경계</span>
-        <button style={S.btn(drawing)} onClick={() => setDrawing(d => !d)}>
+        {active && <button style={S.btn(drawing)} onClick={() => setDrawing(d => !d)}>
           {drawing ? '그리기 중 — 지도 클릭' : '그리기 시작'}
-        </button>
-        <button style={S.btn(false)} onClick={() => setPts(p => p.slice(0, -1))} disabled={!pts.length}>
+        </button>}
+        {active && <button style={S.btn(false)} onClick={() => setPts(p => p.slice(0, -1))} disabled={!pts.length}>
           한 점 취소
-        </button>
-        <button style={S.btn(false)} onClick={() => { setPts([]); setDrawing(false); }} disabled={!pts.length}>
+        </button>}
+        {active && <button style={S.btn(false)} onClick={() => { setPts([]); setDrawing(false); }} disabled={!pts.length}>
           전체 지우기
-        </button>
+        </button>}
         <span style={S.hint}>
-          {pts.length >= 3 ? `${pts.length}점 — 경계 기준 판정`
+          {!active ? (basisMode === 'point' ? '현재 대표지번 중심 기준으로 판정합니다' : '거리 기준을 선택하세요')
+            : pts.length >= 3 ? `${pts.length}점 — 경계 기준 판정`
             : '3점 이상 찍으면 경계 최단거리로 잽니다 (실측 100m 넘게 차이납니다)'}
         </span>
       </div>
@@ -137,7 +141,10 @@ export default function PolygonDrawer({ center, polygon, onChange, busy, autoDra
       */}
       <div style={S.next}>
         <span style={S.foot2}>
-          {pts.length >= 3
+          {!active ? (basisMode === 'point'
+            ? `현재 중심 기준으로 잽니다${pts.length >= 3 ? ` — 경계 ${pts.length}점은 보관 중` : ''}`
+            : '거리 기준을 선택한 뒤 수집하세요')
+            : pts.length >= 3
             ? `경계 ${pts.length}점 지정됨 — 경계 최단거리로 판정합니다 (사업지 안의 시설은 0m)`
             : drawing
               ? '지도를 클릭해 사업지 모서리를 찍으세요 (3점 이상)'
@@ -161,7 +168,11 @@ export default function PolygonDrawer({ center, polygon, onChange, busy, autoDra
           수집 흐름에서 들어온 경우([반경시설 수집] → 경계)는 그 흐름을 끝내는 버튼이
           [이 경계로 … 수집] 이다 — 그때는 그쪽이 우선이다(버튼을 두 개 세우지 않는다).
         */}
-        {onCollect ? (
+        {!active ? (
+          <span style={S.ready(basisMode === 'point')}>
+            {basisMode === 'point' ? '중심 기준 — 보관된 경계는 거리 판정에 쓰지 않습니다' : '거리 기준 선택 중'}
+          </span>
+        ) : onCollect ? (
           <button style={S.go(pts.length >= 3 && !busy)}
             disabled={pts.length < 3 || !!busy}
             title={pts.length < 3 ? `경계를 ${3 - pts.length}점 더 찍어야 누를 수 있습니다` : ''}
