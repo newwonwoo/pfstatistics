@@ -383,7 +383,18 @@ export default function NearbyPresale({
         </>)}
 
         {/* 조사표를 쓰지 않고 손으로 넣는 길 — 내부망에서 이미 조사해 온 값이 있을 때 */}
-        {special !== 'firstInDistrict' && <div style={{ ...S.bar, marginTop: 14 }}>
+        {/*
+          **입력하는 곳이 두 군데였다**(사용자 지적 2026-09-30) — 표의 단지별 초기분양률 칸과 이 「직접 입력」 칸.
+          직접 입력은 **인근 단지를 찾기 전에만** 둔다(내부망에서 조사해 온 값을 바로 넣는 길).
+          찾은 뒤에는 표의 칸 하나로 모은다 — 앞서 넣은 값이 남아 있으면 무엇을 쓰는지만 한 줄로 말한다.
+        */}
+        {special !== 'firstInDistrict' && collected && v.rate != null && v.rate !== '' && !Object.keys(picked).length && (
+          <div style={{ ...S.bar, marginTop: 14 }}>
+            <span style={S.hit}>찾기 전에 직접 넣은 조사값 <b>{v.rate}%</b> 를 쓰고 있습니다 — 위 표에서 단지를 고르면 그 평균으로 바뀝니다</span>
+            <button style={S.chip(false)} onClick={() => set({ rate: null })}>지우기</button>
+          </div>
+        )}
+        {special !== 'firstInDistrict' && !collected && <div style={{ ...S.bar, marginTop: 14 }}>
           <span style={S.lab}>직접 입력</span>
           <input style={S.rate} type="number" min="0" max="100" step="any" placeholder="%"
             disabled={!!special || Object.keys(picked).length > 0}
@@ -391,7 +402,7 @@ export default function NearbyPresale({
           <span style={S.hit}>
             {Object.keys(picked).length > 0
               ? '위에서 고른 단지의 평균을 씁니다 — 직접 입력은 고른 단지를 모두 풀어야 쓸 수 있습니다'
-              : special ? '적용할 인근 아파트가 없어 최하위 배점을 씁니다' : '조사표를 쓰지 않고 조사값을 바로 넣을 때'}
+              : special ? '적용할 인근 아파트가 없어 최하위 배점을 씁니다' : '이미 조사해 온 값이 있을 때만 — 보통은 위 [인근 단지 찾기] 로 단지를 고르고 표에 넣습니다'}
           </span>
         </div>}
 
