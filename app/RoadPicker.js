@@ -224,7 +224,7 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
               method: src?.method ?? null,
               precision: sel.precision ?? null,
               /* 후보 도로를 적용하면 직접 그린 구간은 판정 근거에서 내려온다 */
-              drawn: null, drawnLength: null,
+              drawn: null, drawnLength: null, from: null,
               shown: cur.includes(sel.name) ? cur : [...cur, sel.name],
               // 도로가 바뀌면 차선 수는 다시 센다 — 앞 도로 값을 물려받으면 판정이 틀린다
               lanes: 0,

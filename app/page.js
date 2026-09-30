@@ -1265,6 +1265,8 @@ export default function Home() {
                 <SheetView
                   sheetId={s.id} data={data} facilities={view}
                   radiusBasis={radiusBasis} onRadiusBasis={setRadiusBasis}
+                  /* 도로 거리는 경계에서 잰다 — 중심으로 수집했어도 경계를 그려 두었으면 그 경계 */
+                  sitePolygon={polygon}
                   manual={manual} sheetInput={sheetInput}
                   onManual={(label, v) => setManual(m => ({ ...m, [label]: v }))}
                   /* 지역수요 시트의 인구유입요인을 그 표에서 바로 고친다 */

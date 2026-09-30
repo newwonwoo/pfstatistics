@@ -203,6 +203,32 @@ export function pointInRing(point, ring) {
  * @param {{polygon?, center?}} site  경계가 있으면 경계에서, 없으면 대표지번 중심에서
  * @returns {{ distance:number, at:{lat,lng}, length:number } | null}
  */
+/**
+ * 경계 위에서 `point` 에 가장 가까운 점 — 「어디에서 어디까지 쟀는가」 를 지도에 선으로 보이기 위해.
+ * 점이 경계 안이면 그 점 자신(거리 0). 거리 자체는 `distanceToPolygon` 이 정한다 — 이 함수는 자리만 준다.
+ */
+export function nearestOnRing(point, ring) {
+  if (!ring?.length) return null;
+  if (ring.length === 1) return ring[0];
+  const lat0 = ring.reduce((s, q) => s + q.lat, 0) / ring.length;
+  const proj = projector(lat0);
+  const k = Math.cos(rad(lat0));
+  const pts = ring.map(proj);
+  const p = proj(point);
+  if (inside(p, pts)) return point;
+  let best = null;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const a = pts[j], b = pts[i];
+    const vx = b.x - a.x, vy = b.y - a.y;
+    const len2 = vx * vx + vy * vy;
+    const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * vx + (p.y - a.y) * vy) / len2));
+    const q = { x: a.x + t * vx, y: a.y + t * vy };
+    const d = Math.hypot(p.x - q.x, p.y - q.y);
+    if (!best || d < best.d) best = { d, q };
+  }
+  return { lat: best.q.y / R * 180 / Math.PI, lng: best.q.x / (k * R) * 180 / Math.PI };
+}
+
 export function lineToSite(path, { polygon = null, center = null } = {}, step = 5) {
   if (!Array.isArray(path) || path.length < 2) return null;
   const ring = Array.isArray(polygon) && polygon.length >= 3 ? polygon : null;
@@ -221,5 +247,7 @@ export function lineToSite(path, { polygon = null, center = null } = {}, step = 
       if (v != null && v < best) { best = v; at = p; }
     }
   }
-  return Number.isFinite(best) ? { distance: Math.round(best), at, length: Math.round(length) } : null;
+  if (!Number.isFinite(best)) return null;
+  const from = ring ? nearestOnRing(at, ring) : center;
+  return { distance: Math.round(best), at, from, basis: ring ? 'polygon' : 'point', length: Math.round(length) };
 }

@@ -189,6 +189,11 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
       lines.forEach((ln) => {
         const path = (ln.path ?? []).map(p => new kakao.maps.LatLng(p.lat, p.lng));
         if (path.length < 2) return;
+        /* `measure` = 잰 거리 그 자체 — 사업지 경계 최근접점 ~ 도로 최근접점. 도로와 헷갈리지 않게 가는 점선 */
+        if (ln.measure) {
+          new kakao.maps.Polyline({ map, path, strokeWeight: 2.5, strokeColor: '#ad1457', strokeOpacity: 0.95, strokeStyle: 'shortdash' });
+          return;
+        }
         new kakao.maps.Polyline({
           map, path,
           strokeWeight: ln.strong ? 6 : 4,
@@ -468,10 +473,24 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
         content: '<div style="width:10px;height:10px;border-radius:10px;background:#d81b60;border:2px solid #fff;box-shadow:0 0 2px rgba(0,0,0,.45)"></div>',
       }));
     }
-    /* 가벼운 배지 — 사업지에서 이 선까지 가장 가까운 자리에 거리만 */
-    if (sketch.at && sketch.text) {
+    /*
+      잰 거리를 선분으로 보인다 — 사업지 경계에서 가장 가까운 점 ~ 그린 선에서 가장 가까운 점(점선).
+      배지는 그 선분 가운데에 단다 — 「무엇과 무엇 사이」 가 한눈에 읽힌다.
+    */
+    const gap = sketch.from && sketch.at && (Math.abs(sketch.from.lat - sketch.at.lat) + Math.abs(sketch.from.lng - sketch.at.lng)) > 1e-7;
+    if (gap) {
+      sketchOverlays.current.push(new kakao.maps.Polyline({
+        map, path: [LL(sketch.from), LL(sketch.at)], strokeWeight: 2.5, strokeColor: '#ad1457', strokeOpacity: 0.95, strokeStyle: 'shortdash',
+      }));
       sketchOverlays.current.push(new kakao.maps.CustomOverlay({
-        map, position: LL(sketch.at), xAnchor: -0.08, yAnchor: 1.25, zIndex: 6,
+        map, position: LL(sketch.from), xAnchor: 0.5, yAnchor: 0.5, zIndex: 6,
+        content: '<div style="width:8px;height:8px;border-radius:8px;background:#ad1457;border:2px solid #fff"></div>',
+      }));
+    }
+    if (sketch.at && sketch.text) {
+      const mid = gap ? { lat: (sketch.from.lat + sketch.at.lat) / 2, lng: (sketch.from.lng + sketch.at.lng) / 2 } : sketch.at;
+      sketchOverlays.current.push(new kakao.maps.CustomOverlay({
+        map, position: LL(mid), xAnchor: -0.08, yAnchor: 1.25, zIndex: 6,
         content: `<div style="padding:2px 7px;border-radius:10px;background:rgba(255,255,255,.93);border:1px solid #d81b60;color:#ad1457;font:700 11.5px/1.4 Pretendard,sans-serif;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.2)">${sketch.text}</div>`,
       }));
       sketchOverlays.current.push(new kakao.maps.CustomOverlay({

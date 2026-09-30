@@ -273,6 +273,12 @@ export async function composeMap(el, spec = {}) {
       if (path.length < 2) return;
       ctx.beginPath();
       path.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+      /* 잰 거리(경계 ~ 도로) — 화면과 같은 가는 점선 */
+      if (ln.measure) {
+        ctx.strokeStyle = '#ad1457'; ctx.lineWidth = 2.5; ctx.setLineDash([6, 4]); ctx.lineCap = 'butt';
+        ctx.stroke(); ctx.setLineDash([]);
+        return;
+      }
       ctx.strokeStyle = ln.strong ? '#1b4fd8' : '#ff6f00';
       ctx.globalAlpha = ln.strong ? 0.95 : 0.7;
       ctx.lineWidth = ln.strong ? 6 : 4;
