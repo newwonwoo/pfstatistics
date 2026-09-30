@@ -249,12 +249,36 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
      * 이름은 판정에 쓰이지 않는다(거리·차선이 판정한다). 표·엑셀에서 무엇을 그렸는지 읽히게 할 뿐이라 고칠 수 있다.
      */
     const suggestName = (label, pts) => {
-      const rows = roadList[label] ?? [];
+      /*
+        꼭짓점끼리만 견주면 곧은 도로(꼭짓점이 수백 m 간격)에서 바로 옆에 그어도 40m 를 넘었다(실측 송내대로).
+        두 선을 20m 간격으로 잘게 나눠 견준다. 점을 찍을 때 한 번만 부른다(렌더마다 돌리지 않는다).
+      */
+      if (!pts || pts.length < 2) return '';
+      const dense = (line, step) => {
+        const out = [];
+        for (let i = 0; i + 1 < line.length; i++) {
+          const a = line[i], b = line[i + 1];
+          const n = Math.max(1, Math.ceil(haversine(a, b) / step));
+          for (let k = 0; k <= n; k++) out.push({ lat: a.lat + (b.lat - a.lat) * k / n, lng: a.lng + (b.lng - a.lng) * k / n });
+        }
+        return out;
+      };
+      const P = dense(pts, 20);
+      const box = (arr, pad) => {
+        const la = arr.map(p => p.lat), ln = arr.map(p => p.lng);
+        const dLat = pad / 111320, dLng = pad / (111320 * Math.cos(la[0] * Math.PI / 180));
+        return [Math.min(...la) - dLat, Math.max(...la) + dLat, Math.min(...ln) - dLng, Math.max(...ln) + dLng];
+      };
+      const [a0, a1, b0, b1] = box(P, 60);
       let best = null;
-      for (const r of rows) {
+      for (const r of (roadList[label] ?? [])) {
         for (const line of (r.lines ?? [])) {
-          for (const q of line) {
-            for (const p of pts) {
+          if (!line?.length) continue;
+          const [c0, c1, d0, d1] = box(line, 0);
+          if (c1 < a0 || c0 > a1 || d1 < b0 || d0 > b1) continue;   // 멀리 있는 선은 건너뛴다
+          for (const q of dense(line, 20)) {
+            if (q.lat < a0 || q.lat > a1 || q.lng < b0 || q.lng > b1) continue;
+            for (const p of P) {
               const d = haversine(p, q);
               if (!best || d < best.d) best = { d, name: r.name };
             }
@@ -295,7 +319,7 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
           </div>
         );
       }
-      const name = st.name || suggestName(f.label, st.pts);
+      const name = st.name || st.guess || '';
       return (
         <div style={S.drawBar(true)}>
           <span style={S.drawTxt}>
@@ -305,12 +329,12 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
           </span>
           <input style={S.drawName} placeholder="도로명" value={name}
             onChange={(e) => set({ name: e.target.value })} />
-          <button style={S.drawBtn} disabled={!st.pts.length} onClick={() => set({ pts: st.pts.slice(0, -1) })}>한 점 취소</button>
-          <button style={S.drawBtn} disabled={!st.pts.length} onClick={() => set({ pts: [] })}>전체 지우기</button>
+          <button style={S.drawBtn} disabled={!st.pts.length} onClick={() => { const pts = st.pts.slice(0, -1); set({ pts, guess: suggestName(f.label, pts) }); }}>한 점 취소</button>
+          <button style={S.drawBtn} disabled={!st.pts.length} onClick={() => set({ pts: [], guess: '' })}>전체 지우기</button>
           <button style={S.drawGo(st.pts.length >= 2)} disabled={st.pts.length < 2}
             title={st.pts.length < 2 ? '점을 두 개 이상 찍어야 적용할 수 있습니다' : ''}
             onClick={() => {
-              const nm = name || '직접 그린 도로';
+              const nm = name || '도로명 미상';
               onManual?.(f.label, {
                 ...(v ?? {}),
                 name: nm, distance: m.distance, x: m.at.lng, y: m.at.lat,
@@ -690,7 +714,8 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                       drawMode={Boolean(f.manual && roadDraw[f.label]?.on)}
                       onDrawClick={(pt) => setRoadDraw(prev => {
                         const cur = prev[f.label] ?? { on: true, pts: [], name: '' };
-                        return { ...prev, [f.label]: { ...cur, pts: [...cur.pts, pt] } };
+                        const pts = [...cur.pts, pt];
+                        return { ...prev, [f.label]: { ...cur, pts, guess: suggestName(f.label, pts) } };
                       })}
                       sketch={f.manual && roadDraw[f.label]?.on ? (() => {
                         const pts = roadDraw[f.label].pts;
