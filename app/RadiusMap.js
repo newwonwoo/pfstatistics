@@ -64,7 +64,8 @@ const LABEL_MAX = 999;
 
 const levelCapFor = (r) => MAX_LEVEL[r] ?? (r <= 300 ? 3 : r <= 500 ? 4 : r <= 1000 ? 5 : 6);
 
-export default function RadiusMap({ title, center, radius, markers = [], lines = [], polygon = null, labelMax = null, caption, defaultMapType = 'ROADMAP', roadview = false, roadviewOpen = false, roadviewAt = null, radiusBasis }) {
+export default function RadiusMap({ title, center, radius, markers = [], lines = [], polygon = null, labelMax = null, caption, defaultMapType = 'ROADMAP', roadview = false, roadviewOpen = false, roadviewAt = null, radiusBasis,
+  drawMode = false, onDrawClick = null, sketch = null }) {
   const el = useRef(null);
   const mapRef = useRef(null);
   const [err, setErr] = useState(null);
@@ -110,6 +111,14 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
   const rvRef = useRef(null);
   const [rvOn, setRvOn] = useState(false);
   const [rvMsg, setRvMsg] = useState(null);
+
+  /*
+    **도로 위치 그리기**(사용자 요청 2026-09-30) — 그리는 중에는 지도 클릭이 로드뷰 이동 대신 점 찍기가 된다.
+    클릭 리스너는 지도를 만들 때 한 번 붙으므로 최신 모드·콜백을 ref 로 읽는다.
+  */
+  const drawRef = useRef({ on: false, cb: null });
+  drawRef.current = { on: drawMode, cb: onDrawClick };
+  const sketchOverlays = useRef([]);
 
   const mkey = JSON.stringify(markers);
   const lkey = JSON.stringify(lines);
@@ -422,6 +431,10 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
        * 로드뷰로 보면 바로 세진다. 지도를 클릭하면 그 지점 로드뷰로 옮긴다.
        */
       kakao.maps.event.addListener(map, 'click', (e) => {
+        if (drawRef.current.on) {
+          drawRef.current.cb?.({ lat: e.latLng.getLat(), lng: e.latLng.getLng() });
+          return;
+        }
         if (rvRef.current) moveRoadview(kakao, e.latLng);
       });
       setReady(true);
@@ -430,6 +443,49 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
   // markers/polygon 은 렌더마다 새 배열이라 그대로 넣으면 지도가 매번 다시 만들어진다.
   // 내용이 같으면 다시 만들지 않도록 문자열로 비교한다.
   }, [center.lat, center.lng, radius, mkey, lkey, pkey, rkey, defaultMapType, labelMax]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  /*
+    그리는 중인 선 — **지도를 다시 만들지 않고** 선·꼭짓점·거리 배지만 얹었다 뗀다.
+    점 하나 찍을 때마다 지도를 새로 만들면 타일을 다시 받고 확대·위치가 처음으로 돌아간다.
+    적용하면 이 스케치는 사라지고 `lines`·`markers` 로 옮겨 가 캡쳐(엑셀)에 들어간다.
+  */
+  const skey = JSON.stringify(sketch);
+  useEffect(() => {
+    const m = mapRef.current;
+    sketchOverlays.current.forEach(o => o.setMap(null));
+    sketchOverlays.current = [];
+    if (!m || !sketch?.path?.length) return;
+    const { map, kakao } = m;
+    const LL = (p) => new kakao.maps.LatLng(p.lat, p.lng);
+    if (sketch.path.length >= 2) {
+      sketchOverlays.current.push(new kakao.maps.Polyline({
+        map, path: sketch.path.map(LL), strokeWeight: 6, strokeColor: '#d81b60', strokeOpacity: 0.9, strokeStyle: 'solid',
+      }));
+    }
+    for (const p of sketch.path) {
+      sketchOverlays.current.push(new kakao.maps.CustomOverlay({
+        map, position: LL(p), xAnchor: 0.5, yAnchor: 0.5, zIndex: 5,
+        content: '<div style="width:10px;height:10px;border-radius:10px;background:#d81b60;border:2px solid #fff;box-shadow:0 0 2px rgba(0,0,0,.45)"></div>',
+      }));
+    }
+    /* 가벼운 배지 — 사업지에서 이 선까지 가장 가까운 자리에 거리만 */
+    if (sketch.at && sketch.text) {
+      sketchOverlays.current.push(new kakao.maps.CustomOverlay({
+        map, position: LL(sketch.at), xAnchor: -0.08, yAnchor: 1.25, zIndex: 6,
+        content: `<div style="padding:2px 7px;border-radius:10px;background:rgba(255,255,255,.93);border:1px solid #d81b60;color:#ad1457;font:700 11.5px/1.4 Pretendard,sans-serif;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.2)">${sketch.text}</div>`,
+      }));
+      sketchOverlays.current.push(new kakao.maps.CustomOverlay({
+        map, position: LL(sketch.at), xAnchor: 0.5, yAnchor: 0.5, zIndex: 6,
+        content: '<div style="width:8px;height:8px;border-radius:8px;background:#fff;border:2px solid #ad1457"></div>',
+      }));
+    }
+  }, [skey, ready, mkey, lkey, pkey, rkey]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* 그리는 중에는 커서를 십자로 — 지금 클릭이 점 찍기라는 걸 손이 먼저 안다 */
+  useEffect(() => {
+    const m = mapRef.current?.map;
+    try { m?.setCursor?.(drawMode ? 'crosshair' : ''); } catch { /* SDK 에 없으면 그만 */ }
+  }, [drawMode, ready]);
 
   /* [이름표 끄기] — 지도를 다시 그리지 않고 라벨 오버레이만 켜고 끈다 */
   useEffect(() => {

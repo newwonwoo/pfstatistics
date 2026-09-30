@@ -189,3 +189,37 @@ export function polygonArea(rings) {
 export function pointInRing(point, ring) {
   return distanceToPolygon(point, ring) === 0;
 }
+
+/**
+ * **사람이 지도에 그린 선 → 사업지까지 최단거리**(사용자 요청 2026-09-30 「도로위치 그리기」).
+ *
+ * 같은 도로도 구간마다 차선 수가 달라(「같은 경인로여도 각자 다 다른 차선」) 6차선인 곳을
+ * 원천이 자동으로 가려 주지 못한다 — 실무자가 6차선 구간을 선으로 긋고, 그 선까지를 잰다.
+ * 도로 선형 수집기(collectors/vworld.js)와 **같은 방법**이다 — 선을 `step` m 로 잘게 나눠
+ * `distanceToPolygon`(경계) 또는 `haversine`(중심점)으로만 잰다. 반경선이 그 함수를 역산해
+ * 그려지므로 다른 식으로 재면 그림과 판정이 갈린다.
+ *
+ * @param {{lat,lng}[]} path   그린 선의 꼭짓점(2점 이상)
+ * @param {{polygon?, center?}} site  경계가 있으면 경계에서, 없으면 대표지번 중심에서
+ * @returns {{ distance:number, at:{lat,lng}, length:number } | null}
+ */
+export function lineToSite(path, { polygon = null, center = null } = {}, step = 5) {
+  if (!Array.isArray(path) || path.length < 2) return null;
+  const ring = Array.isArray(polygon) && polygon.length >= 3 ? polygon : null;
+  if (!ring && !center) return null;
+  const distOf = (p) => (ring ? distanceToPolygon(p, ring) : haversine(center, p));
+  let best = Infinity, at = null, length = 0;
+  for (let i = 0; i + 1 < path.length; i++) {
+    const a = path[i], b = path[i + 1];
+    const d = haversine(a, b);
+    length += d;
+    const n = Math.max(1, Math.ceil(d / step));
+    for (let k = 0; k <= n; k++) {
+      const t = k / n;
+      const p = { lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t };
+      const v = distOf(p);
+      if (v != null && v < best) { best = v; at = p; }
+    }
+  }
+  return Number.isFinite(best) ? { distance: Math.round(best), at, length: Math.round(length) } : null;
+}

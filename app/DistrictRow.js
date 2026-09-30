@@ -106,6 +106,10 @@ export default function DistrictRow({ value, loading, error, onChange, onRetry, 
         <span style={S.sub}>
           안에 있으면 지구면적에 따라 교통환경·주거편의·교육환경의 최저 등급이 정해집니다
         </span>
+        {/* [바꾸기] 로 편 뒤 다시 접을 길이 없었다(사용자 캡쳐 2026-09-30) — 다 답했으면 접을 수 있게 */}
+        {compact && complete && open && (
+          <button style={{ ...S.chip(false), marginLeft: 'auto' }} onClick={() => setOpen(false)}>접기</button>
+        )}
       </div>
 
       {loading && <div style={S.basis}>택지정보시스템 · 도시계획정보 · 토지이용계획에서 찾는 중…</div>}

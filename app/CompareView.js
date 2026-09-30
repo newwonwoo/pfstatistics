@@ -42,9 +42,19 @@ const REG = {
   좌표를 어디까지 맞춰서 잰 거리인가 — `exact` 는 배지를 달지 않는다(기본이라 조용해야 한다).
   나머지는 근사라서 **반경 판정이 뒤집힐 수 있다**는 걸 표에서 바로 보여야 한다.
 */
-const GEOCODE_LABEL = { name: '단지명 위치', zone: '택지지구 위치', dong: '읍면동 근사', place: '지구 위치', sample: '견본주택 위치' };
+/*
+  **줄여 쓴 배지가 뜻이 안 읽혔다**(사용자 질문 2026-09-30 「단지명위치? 이건 뭐야」).
+  무엇으로 위치를 찾았는지를 문장으로 쓴다 — 공고 주소로 못 찾아 대신 쓴 방법이다.
+*/
+const GEOCODE_LABEL = {
+  name: '주소로 못 찾아 단지명으로 찾은 위치', zone: '주소로 못 찾아 택지지구 중심으로 잼',
+  dong: '주소로 못 찾아 읍면동 중심으로 잼(근사)', place: '주소로 못 찾아 지구명으로 찾은 위치',
+  sample: '주소로 못 찾아 견본주택 위치로 잼',
+};
+/* 지도 이름표에는 짧게 — 긴 문장이 붙으면 지도를 덮는다 */
+const GEOCODE_PIN = { name: '단지명 검색 위치', zone: '택지지구 중심', dong: '읍면동 중심', place: '지구명 검색 위치', sample: '견본주택' };
 const GEOCODE_NOTE = {
-  name: '공고 주소에 지번이 없어 단지명으로 찾은 위치입니다',
+  name: '공고 주소(지번)가 카카오 주소 목록에 없어 단지명으로 검색한 위치입니다 — 재개발로 지번이 바뀐 곳에서 흔합니다',
   zone: '공고 주소에 지번이 없어 택지지구(카카오맵 개발지구) 중심으로 잰 거리입니다',
   dong: '공고 주소에 지번이 없어 읍면동 중심으로 잰 거리입니다 — 수백 m 틀어질 수 있습니다',
   place: '지구명으로만 찾은 위치입니다 — 거리 오차가 가장 큽니다',
@@ -404,7 +414,7 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
   /* 근사 좌표로 찍은 핀은 이름에 그 사실을 적는다 — 지도에서 정확한 핀과 구분이 안 되면 안 된다 */
   const markers = useMemo(() => items.map((a, i) => ({
     no: i + 1, lat: a.y, lng: a.x, distance: a.distance,
-    name: a.geocode && a.geocode !== 'exact' ? `${a.name} (${GEOCODE_LABEL[a.geocode] ?? '근사'})` : a.name,
+    name: a.geocode && a.geocode !== 'exact' ? `${a.name} (${GEOCODE_PIN[a.geocode] ?? '근사'})` : a.name,
   })), [items]);
 
   const basisNote = areaBasis === 'supply' ? '공급면적 기준' : '전용면적 기준';
@@ -906,7 +916,7 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
                         </span></>
                       )}
                       {a.geocode && a.geocode !== 'exact' && (
-                        <><br /><span style={S.badge('warn')} title={GEOCODE_NOTE[a.geocode]}>
+                        <><br /><span style={{ ...S.badge('warn'), whiteSpace: 'normal', display: 'inline-block', maxWidth: 150, lineHeight: 1.35 }} title={GEOCODE_NOTE[a.geocode]}>
                           {GEOCODE_LABEL[a.geocode]}
                         </span></>
                       )}

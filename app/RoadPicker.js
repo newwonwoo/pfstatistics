@@ -223,6 +223,8 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
               source: src?.name ?? null,
               method: src?.method ?? null,
               precision: sel.precision ?? null,
+              /* 후보 도로를 적용하면 직접 그린 구간은 판정 근거에서 내려온다 */
+              drawn: null, drawnLength: null,
               shown: cur.includes(sel.name) ? cur : [...cur, sel.name],
               // 도로가 바뀌면 차선 수는 다시 센다 — 앞 도로 값을 물려받으면 판정이 틀린다
               lanes: 0,
@@ -250,6 +252,7 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
           다만 같은 영 §8②1 단서가 <b>대로↔로, 로↔길을 바꿔 쓸 수 있게</b> 열어두었고
           도로명은 구간 설정 시점 기준이라, <b>이름으로 차로수를 단정할 수 없습니다.</b>
           아래 로드뷰로 세어 차선 수만 넣으면 판정됩니다.
+          <br /><b>같은 도로라도 6차선인 구간이 일부뿐이면</b> 아래 지도 위 <b>[✎ 도로 위치 그리기]</b> 로 그 구간을 직접 그으세요 — 사업지에서 그 선까지 잽니다.
           <br />{src?.method === 'geometry' ? (
             <>
               <b>거리는 {rows?.[0]?.basis === 'polygon' ? '사업지 경계' : '대표지번 중심'}에서

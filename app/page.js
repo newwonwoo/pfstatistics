@@ -920,21 +920,6 @@ export default function Home() {
 
         </>)}
 
-        {/*
-          **사업지구 줄 — 주소 바로 아래**(사용자 지시 2026-09-28 「주소 검색하는 그리드에서」).
-          주소가 정해지는 순간 그 점의 사업지구와 면적이 같이 정해진다. 면적이 원천에 있으면 바로 보이고,
-          없으면 그 자리에서 넣는다. 자료수집 단계에서만 편다 — 뒤 단계에서는 요약 줄이 한 줄로 말한다.
-        */}
-        {fixed && gatherTab && (
-          <DistrictRow
-            value={manual['사업지구']}
-            loading={distBusy}
-            error={distErr}
-            onRetry={() => { setManual(m => { const { 사업지구: _d, ...rest } = m; return rest; }); setDistTry(t => t + 1); }}
-            onChange={(v) => setManual(m => ({ ...m, 사업지구: { ...v, key: distKey ?? v.key } }))}
-            compact={!!data}
-          />
-        )}
 
         {/*
           순서: 사업지 경계 → 통계 수집 → 반경시설 수집.
@@ -1051,6 +1036,22 @@ export default function Home() {
             </>
           )}
         </div>
+
+        {/*
+          **사업지구 줄 — 단계 줄(로드맵) 바로 아래**(2026-09-28 「주소 검색하는 그리드에서」 → 2026-09-30 「로드맵이 상단으로 가야하지 않겠니」).
+          주소가 정해지는 순간 그 점의 사업지구와 면적이 같이 정해진다. 면적이 원천에 있으면 바로 보이고,
+          없으면 그 자리에서 넣는다. 자료수집 단계에서만 편다 — 뒤 단계에서는 요약 줄이 한 줄로 말한다.
+        */}
+        {fixed && gatherTab && (
+          <DistrictRow
+            value={manual['사업지구']}
+            loading={distBusy}
+            error={distErr}
+            onRetry={() => { setManual(m => { const { 사업지구: _d, ...rest } = m; return rest; }); setDistTry(t => t + 1); }}
+            onChange={(v) => setManual(m => ({ ...m, 사업지구: { ...v, key: distKey ?? v.key } }))}
+            compact={!!data}
+          />
+        )}
 
         {/*
           수집 직전 관문. 이걸 지나야 수집이 돈다 —
