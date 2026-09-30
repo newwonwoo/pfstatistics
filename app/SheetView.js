@@ -269,21 +269,25 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
         const dLat = pad / 111320, dLng = pad / (111320 * Math.cos(la[0] * Math.PI / 180));
         return [Math.min(...la) - dLat, Math.max(...la) + dLat, Math.min(...ln) - dLng, Math.max(...ln) + dLng];
       };
+      /*
+        가장 가까운 **한 점**으로 고르면 그은 선과 교차하는 골목(○○번길)이 뽑힌다(실측: 송내대로 옆 10m 에 그었는데 송내대로73번길).
+        그은 선의 점마다 도로까지 거리를 재어 **평균**이 가장 작은 도로를 고른다 — 선을 따라 나란히 가는 도로가 이긴다.
+      */
       const [a0, a1, b0, b1] = box(P, 60);
       let best = null;
       for (const r of (roadList[label] ?? [])) {
+        const Q = [];
         for (const line of (r.lines ?? [])) {
           if (!line?.length) continue;
           const [c0, c1, d0, d1] = box(line, 0);
           if (c1 < a0 || c0 > a1 || d1 < b0 || d0 > b1) continue;   // 멀리 있는 선은 건너뛴다
-          for (const q of dense(line, 20)) {
-            if (q.lat < a0 || q.lat > a1 || q.lng < b0 || q.lng > b1) continue;
-            for (const p of P) {
-              const d = haversine(p, q);
-              if (!best || d < best.d) best = { d, name: r.name };
-            }
-          }
+          for (const q of dense(line, 20)) if (q.lat >= a0 && q.lat <= a1 && q.lng >= b0 && q.lng <= b1) Q.push(q);
         }
+        if (!Q.length) continue;
+        let sum = 0;
+        for (const p of P) { let m = Infinity; for (const q of Q) { const d = haversine(p, q); if (d < m) m = d; } sum += Math.min(m, 200); }
+        const mean = sum / P.length;
+        if (!best || mean < best.d) best = { d: mean, name: r.name };
       }
       return best && best.d <= 40 ? best.name : '';
     };
