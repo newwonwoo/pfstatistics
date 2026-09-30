@@ -1147,10 +1147,11 @@ export default function Home() {
               [이 경계로 … 수집] 으로 흐름을 끝낸 경우 `polyDone` 이 안 서기 때문인데,
               **수집이 끝난 것이 곧 그 경계를 쓴 것**이다. 할 일이 남은 것처럼 읽히면 안 된다.
             */}
-            {(polyDone || allPoi) && polygon?.length >= 3
+            {basisMode === null ? '거리 기준 선택 중 — 경계 또는 중심을 고르세요'
+              : basisMode === 'point' ? '중심 기준 — 대표지번 한 점에서 잽니다'
+              : (polyDone || allPoi) && polygon?.length >= 3
               ? `✓ 경계 ${polygon.length}점 확정됨 — ${data ? '경계 기준으로 잽니다' : '이제 [통계 수집] 을 누르세요'}`
               : polygon?.length >= 3 ? `경계 ${polygon.length}점 지정됨 — [경계 확정] 을 누르세요`
-              : basisMode !== 'polygon' ? '중심 기준 — 대표지번 한 점에서 잽니다'
               : drawNow ? `지도를 클릭해 경계를 찍으세요 — ${polygon?.length ?? 0}점 (3점부터 경계가 됩니다)`
               : '경계 미지정 — [반경시설 수집] 을 누르면 여기서 그립니다'}
           </span>
@@ -1162,6 +1163,7 @@ export default function Home() {
         <PolygonDrawer
           center={{ lat: Number(coord.y), lng: Number(coord.x) }}
           polygon={polygon}
+          basisMode={basisMode}
           onChange={setPolygon}
           autoDraw={drawNow}
           pendingSheet={pending}
