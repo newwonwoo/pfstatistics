@@ -23,6 +23,12 @@ export const baseRadius = (region) =>
 /** 가~라 네 항목의 구분 — 원문 그대로 */
 export const HOUSE_TYPES = ['아파트', '주상복합', '기타'];
 export const SIZE_BANDS = ['500세대 미만', '500~999세대', '1,000세대 이상'];
+/** 총세대수 → 나. 단지규모 구간 */
+export const sizeBandOf = (n) => {
+  const x = Number(n);
+  if (!(x > 0)) return null;
+  return x < 500 ? SIZE_BANDS[0] : x < 1000 ? SIZE_BANDS[1] : SIZE_BANDS[2];
+};
 export const RANK_BANDS = ['50위 이내', '51~100위', '101~200위', '201~300위', '300위 밖'];
 export const LAND_TYPES = ['민간택지', '공공택지', '신도시', '기타'];
 

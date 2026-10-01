@@ -10,6 +10,12 @@ import { INFLOW_CHOICES, inflowOn } from './inflow';
 import { districtLabel, DISTRICT_SHEETS, floorNote } from './DistrictRow';
 import { lineToSite, haversine, nearestOnRing, distanceToPolygon } from '../src/lib/geo';
 
+/** 시도 토막(경기도/경기 · 서울특별시/서울)을 떼고 견준다 — 카카오 매칭 주소는 시도를 줄여 쓴다 */
+const sameAddr = (a, b) => {
+  const tail = (x) => String(x ?? '').trim().split(/\s+/).slice(1).join(' ');
+  return tail(a) === tail(b);
+};
+
 const S = {
   /* 시설 행 지우기 — 도로 후보 목록과 같은 모양이어야 같은 동작으로 읽힌다 */
   del: { border: 0, background: 'none', color: '#b8bec7', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '2px 4px' },
@@ -37,7 +43,7 @@ const S = {
     borderRadius: 7, border: `${on ? 2 : 1}px solid ${on ? '#d81b60' : T.line}`, background: on ? '#fff5f8' : '#fafbfc' }),
   drawTxt: { fontSize: 12, color: T.ink2 },
   drawNum: { fontSize: 13, fontWeight: 800, color: '#ad1457', ...mono },
-  /* 그리기 시작 — 단계 줄의 [도로정보 확인 ↓] 와 같은 문법(파란 테두리 · 흰 바탕)으로 눈에 띄게 */
+  /* 그리기 시작 — 단계 줄의 [교통환경 · 도로 확인 ↓] 와 같은 문법(파란 테두리 · 흰 바탕)으로 눈에 띄게 */
   drawStart: { padding: '6px 13px', fontSize: 12, fontWeight: 800, borderRadius: 6, cursor: 'pointer',
     border: `1px solid ${T.accent}`, background: '#fff', color: T.accent, whiteSpace: 'nowrap' },
   drawWarn: { flexBasis: '100%', fontSize: 11.5, color: T.warn, background: T.warnSoft, border: '1px solid #f0dcb4',
@@ -405,9 +411,9 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
       <div style={S.page}>
         <h2 style={S.h2}>{spec.title}</h2>
         <p style={S.subject}>
-          ▶ 사업지 : {facilities?.address ?? spec.subject}
-          {/* 입력 주소와 실제 매칭 주소가 다르면 증빙에 그대로 드러나야 한다 */}
-          {facilities?.matched && facilities.matched !== facilities.address && (
+          ▶ 사업지 : {facilities?.address || spec.subject || '주소 확정 전'}
+          {/* 입력 주소와 실제 매칭 주소가 다르면 증빙에 그대로 드러나야 한다 — 시도 표기(경기도/경기)만 다르면 같은 주소다 */}
+          {facilities?.matched && sameAddr(facilities.matched, facilities.address) === false && (
             <span style={{ color: T.muted }}> · 좌표매칭 {facilities.matched}</span>
           )}
           {/* 지구면적 단서가 걸리는 시트는 무엇을 근거로 하한이 섰는지 머리에 적는다 — 엑셀도 같은 줄을 쓴다 */}

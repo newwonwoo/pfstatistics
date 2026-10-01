@@ -50,6 +50,7 @@ export default function PolygonDrawer({ center, polygon, onChange, busy, autoDra
   const [pts, setPts] = useState(polygon ?? []);
   const [drawing, setDrawing] = useState(false);
   const [err, setErr] = useState(null);
+  const [retry, setRetry] = useState(0);   // [다시 불러오기] — 지도 생성 effect 를 다시 돌린다
 
   // 지도 1회 생성
   useEffect(() => {
@@ -69,7 +70,7 @@ export default function PolygonDrawer({ center, polygon, onChange, busy, autoDra
       });
     }).catch(e => !dead && setErr(e.message));
     return () => { dead = true; };
-  }, [center.lat, center.lng]);
+  }, [center.lat, center.lng, retry]);
 
   // drawing 플래그를 리스너가 읽을 수 있게 ref 로도 들고 있는다
   useEffect(() => { state.current.drawing = drawing; }, [drawing]);
@@ -170,7 +171,8 @@ export default function PolygonDrawer({ center, polygon, onChange, busy, autoDra
         </span>
       </div>
 
-      {err ? <div style={S.fail}>지도를 불러오지 못했습니다.<br />{err}</div>
+      {err ? <div style={S.fail}>지도를 불러오지 못했습니다.<br />{err}<br />
+               <button style={{ ...S.btn(true), marginTop: 10 }} onClick={() => { setErr(null); setRetry(n => n + 1); }}>다시 불러오기</button></div>
            : <div ref={el} data-map="사업지 경계" style={S.map} />}
 
       <div style={S.next}>

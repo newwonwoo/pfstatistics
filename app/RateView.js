@@ -129,6 +129,8 @@ export default function RateView({ region, addr, coord, polygon, radiusBasis, co
     document.querySelector(`[data-sheet="초기예상분양률"] [data-rate-sec="${id}"]`)
       ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
+  const nbMissing = (manualSum?.missing ?? []).includes('인근아파트 초기 분양률');
+  const otherMissing = (manualSum?.missing ?? []).filter(id => id !== '인근아파트 초기 분양률');
   const provisional = hasExcl && manualSum?.provisional?.length > 0;
   const provTab = provisional ? (manualSum.provisional[0].id === '지역수요' ? '수기입력' : manualSum.provisional[0].id) : null;
 
@@ -216,10 +218,17 @@ export default function RateView({ region, addr, coord, polygon, radiusBasis, co
           <b style={S.basisNum}>{total ?? '—'}</b>
           <span style={S.basisOp}>=</span>
           <span>분양가격지수 제외 항목 <b style={S.basisNum}>{hasExcl ? excl : '—'}</b></span>
-          {!hasExcl && (
+          {/*
+            **인근아파트 초기 분양률은 이 탭 위 ① 에서 넣는다.** 그것만 남았는데 「수기입력 탭으로 (1개 남음)」 을
+            띄웠더니 그 탭은 다시 「초기예상분양률 탭으로」 를 가리켰다 — 제자리를 도는 길이었다(실측 2026-10-01).
+          */}
+          {!hasExcl && otherMissing.length > 0 && (
             <button style={S.go} onClick={() => onJump?.('수기입력')}>
-              수기입력 탭으로{manualSum?.missing?.length ? ` (${manualSum.missing.length}개 남음)` : ''} →
+              수기입력 탭으로 ({otherMissing.length}개 남음) →
             </button>
+          )}
+          {!hasExcl && nbMissing && (
+            <button style={S.go} onClick={() => goSec('input')}>위 ① 인근아파트 초기 분양률 ↑</button>
           )}
           <span style={S.basisOp}>+</span>
           <span>분양가경쟁력 <b style={S.basisNum}>{compScore ?? '—'}</b>

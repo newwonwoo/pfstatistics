@@ -119,11 +119,8 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
       <p style={S.subject}>▶ 사업지 : {facilities?.address ?? addr ?? region}</p>
 
       <div style={S.flow}>
+        {/* 「종합평가 —점 → 초기예상분양률 —」 처럼 빈 값이 글자 사이에 박혀 읽히지 않았다 — 같은 사슬은 아래 그림이 값과 함께 보여 준다 */}
         이 앱이 만든 <b>초기예상분양률</b>이 여기서 점수가 되어 최종 평점으로 들어갑니다.<br />
-        <span style={S.chain}>
-          시트별 항목 점수 → 종합평가 {rateTotal ?? '—'}점 → 초기예상분양률 {pct != null ? `${pct}%` : '—'}
-          {' '}→ 초기분양률 배점 {r.presale?.pending ? '—' : `${r.presale.score}점`} → 종합평점
-        </span><br />
         <span style={{ color: T.muted }}>
           <b>이 표는 결과만 보여줍니다</b> — 사업수익률·누적DSCR·자기자금·신용등급 같은 값은
           사업수지표·신용평가에서 나오므로 <b>[수기입력] 탭</b>에서 받습니다.
@@ -242,7 +239,8 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
             </tr>
             <tr>
               <td style={S.gh} colSpan={2}>종합평점</td>
-              <td style={S.final}>100</td>
+              {/* 배점 칸의 100 을 결론 칸처럼 굵고 크게 그렸더니 「종합평점 100」 으로 읽혔다 */}
+              <td style={S.td}>100</td>
               <td style={S.final} />
               <td style={S.final}>{r.net ?? <span style={S.pend}>—</span>}</td>
               <td style={S.tdWhy}>합계 − 감점</td>

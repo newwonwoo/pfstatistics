@@ -139,6 +139,7 @@ const S = {
   opt: { marginLeft: 5, padding: '1px 5px', borderRadius: 3, fontSize: 9.5, fontWeight: 700,
          background: '#eef1f5', color: T.muted },
   from: { fontSize: 10.5, color: T.ok, fontWeight: 700 },
+  hint: { fontSize: 10.5, color: T.muted },
   siteHead: { display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10, flexWrap: 'wrap' },
   siteTitle: { fontSize: 12.5, fontWeight: 800, color: T.ink },
   siteSub: { fontSize: 11.5, color: T.muted },
@@ -221,7 +222,7 @@ const KIND_ORDER = ['아파트', '민간임대', '오피스텔', '도시형생�
 const rLabel = (r) => `${r / 1000}km`;
 
 
-export default function CompareView({ addr, coord, region, polygon, radiusBasis, company, companyRank, excl = null, manualSum = null, district = null, firstInDistrict = false, value, onChange }) {
+export default function CompareView({ addr, coord, region, polygon, radiusBasis, company, companyRank, excl = null, manualSum = null, district = null, firstInDistrict = false, households = null, value, onChange }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [autoMsg, setAutoMsg] = useState(null);   // [규정대로 자동선택] 이 무엇을 했는지
@@ -427,7 +428,8 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
   const knownOn = v.knownShown ?? [];
   const knownItems = data?.knownApts?.items ?? [];
   const markers = useMemo(() => [
-    ...items.map((a, i) => ({
+    /* **본건은 핀을 달지 않는다** — 경계선이 이미 위치를 말한다(사용자 원칙). 번호는 표의 # 그대로 둔다 */
+    ...items.map((a, i) => ({ a, i })).filter(({ a }) => !a.isSite).map(({ a, i }) => ({
       no: i + 1, lat: a.y, lng: a.x, distance: a.distance,
       name: a.geocode && a.geocode !== 'exact' ? `${a.name} (${GEOCODE_PIN[a.geocode] ?? '근사'})` : a.name,
     })),
@@ -529,14 +531,15 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
         <div style={S.grid}>
           <label style={S.field}>
             <span style={S.label}>본건 ㎡당 분양가 (원){!site.unitPrice && !firstInDistrict && <span style={S.must}>필수</span>}</span>
-            <input style={{ ...S.input, ...S.needs(!site.unitPrice && !firstInDistrict) }} inputMode="numeric" value={site.unitPrice ?? ''}
+            <input style={{ ...S.input, ...S.needs(!site.unitPrice && !firstInDistrict) }} inputMode="numeric"
+              value={site.unitPrice ? Number(site.unitPrice).toLocaleString('ko-KR') : ''}
               placeholder="입력"
               onChange={e => setSite({ unitPrice: e.target.value.replace(/[^\d]/g, '') })} />
           </label>
           <label style={S.field}>
             <span style={S.label}>평당 환산</span>
             <input style={S.input} inputMode="numeric"
-              value={sitePrice ? Math.round(sitePrice * PY) : ''}
+              value={sitePrice ? Math.round(sitePrice * PY).toLocaleString('ko-KR') : ''}
               placeholder="자동 환산"
               onChange={e => {
                 const py = Number(e.target.value.replace(/[^\d]/g, ''));
@@ -564,10 +567,13 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
           </label>
           <label style={S.field}>
             <span style={S.label}>나. 단지규모{!site.sizeBand && !firstInDistrict && <span style={S.must}>필수</span>}</span>
-            <select style={{ ...S.select, ...S.needs(!site.sizeBand && !firstInDistrict) }} value={site.sizeBand ?? ''} onChange={e => setSite({ sizeBand: e.target.value })}>
+            <select style={{ ...S.select, ...S.needs(!site.sizeBand && !firstInDistrict) }} value={site.sizeBand ?? ''} onChange={e => setSite({ sizeBand: e.target.value, sizeAuto: false })}>
               <option value="">선택</option>
               {SIZE_BANDS.map(x => <option key={x} value={x}>{x}</option>)}
             </select>
+            {site.sizeBand && site.sizeAuto && households
+              ? <span style={S.from}>총세대수 {Number(households).toLocaleString('ko-KR')}세대에서 자동</span>
+              : !site.sizeBand && <span style={S.hint}>[수기입력] 총세대수를 넣으면 자동으로 찹니다</span>}
           </label>
           <label style={S.field}>
             <span style={S.label}>
@@ -984,9 +990,10 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
           체크를 눌러놓고 그 결과를 보려면 화면을 한참 내려야 했다.
           **고른 것의 내역은 고르는 자리에 붙어 있어야 한다.**
         */}
-        <div style={S.secTitle}>선택 단지 상세 (면적별)</div>
+        {/* 고른 것이 없을 때 빈 상자가 150px 을 먹어 아래 기축 표를 밀어냈다 — 제목 줄 한 줄로만 남긴다 */}
+        <div style={S.secTitle}>선택 단지 상세 (면적별){chosen.length === 0 && <span style={{ fontWeight: 400, marginLeft: 8 }}>— 위 표에서 단지를 고르면 여기 펼쳐집니다</span>}</div>
         {chosen.length === 0
-          ? <div style={S.empty}>위 표에서 단지를 선택하면 면적별 세대수와 분양가가 여기 표시됩니다.</div>
+          ? null
           : (
             <div style={S.scroll}>
               <table style={S.table}>

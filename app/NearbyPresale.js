@@ -72,9 +72,9 @@ const S = {
          padding: '10px 14px', borderRadius: 6, background: '#fffdf0', border: `1px solid #eadfae` },
   num: { ...mono, fontSize: 17, fontWeight: 800 },
   pend: { color: T.muted, fontStyle: 'italic', fontSize: 12 },
-  none: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 10,
+  none: { marginTop: 10, lineHeight: 1.75,
           padding: '11px 14px', borderRadius: 6, background: T.warnSoft, border: `1px solid #f0dcb4`, fontSize: 12.5, color: T.ink2 },
-  apply: { padding: '6px 13px', borderRadius: 5, border: 0, background: T.warn, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' },
+  apply: { marginLeft: 10, padding: '5px 13px', borderRadius: 5, border: 0, background: T.warn, color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' },
   firstNeed: { padding: '8px 10px', borderRadius: 7, border: '2px solid #d98324', background: '#fffaf2' },
   must: { padding: '1px 6px', borderRadius: 3, fontSize: 10, fontWeight: 800, background: '#fdecd8', color: '#8a5008' },
   chip: (on) => ({ padding: '5px 11px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', borderRadius: 5,
@@ -185,8 +185,13 @@ export default function NearbyPresale({
         <span style={S.headNote}>배점 10 · 조사 항목 (이 점수는 위 분양가격지수 제외 항목 점수에 들어갑니다)</span>
       </div>
       <div style={S.body}>
-        <div style={S.reg}>
-          <b>인근아파트 선정 방법</b> (가이드북 원문) —
+        {/* 매번 읽는 글이 아니다 — 4줄이 늘 고르는 칸을 밀어냈다. 접어 두고 요약만 머리줄에 남긴다(비교사업장 선정기준과 같은 문법) */}
+        <details style={S.reg}>
+          <summary style={{ cursor: 'pointer' }}>
+            <b>인근아파트 선정 방법</b> <span style={{ color: T.muted }}>— {rLabel(radius)} 이내 · 1년 이내 분양개시(없으면 분양 진행중) · 주택유형 일치 · 4개 항목 최다 일치 (펴서 원문 보기)</span>
+          </summary>
+          <div style={{ marginTop: 6 }}>
+          <b>가이드북 원문</b> —
           ① 거리 <b>{rLabel(radius)}</b> 이내 (2km · 수도권·광역시 1km) ·
           ② 최근 1년 이내 <b>분양 개시</b> → 없으면 <b>분양 진행 중</b> (준공 단지는 쓰지 않음) ·
           ③ <b>주택유형이 일치</b>하는 사업장({typeLabel})<br />
@@ -194,7 +199,8 @@ export default function NearbyPresale({
           (가장 많이 일치하는 곳이 여럿이면 <b>평균값</b>). 해당 사업장이 없으면 <b>최하위 배점</b>.<br />
           분양가 비교 사업장과는 기준이 다릅니다 — 준공 단지를 쓰지 않고, 2개 일치 요건 없이 가장 많이 일치하는 곳을 고르며,
           못 찾아도 반경을 넓히지 않습니다. 그래서 비교사업장 탭의 목록을 그대로 쓰지 않고 따로 찾습니다.
-        </div>
+                  </div>
+        </details>
 
         {/*
           비고2 의 4개 항목은 **비교사업장 탭의 [본건 제원] 과 같은 값**이다.
@@ -207,7 +213,7 @@ export default function NearbyPresale({
             <label key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: T.ink2 }}>
               {label}
               <select style={S.siteSel(!site[k])} value={site[k] ?? ''}
-                onChange={e => onSite?.({ [k]: e.target.value || null })}>
+                onChange={e => onSite?.({ [k]: e.target.value || null, ...(k === 'sizeBand' ? { sizeAuto: false } : k === 'rankBand' ? { rankAuto: false } : null) })}>
                 <option value="">선택</option>
                 {opts.map(x => <option key={x} value={x}>{x}</option>)}
               </select>
@@ -290,7 +296,7 @@ export default function NearbyPresale({
           {funnel.stage === 'none' ? (
             <div style={S.none}>
               <b>적용할 인근 아파트가 없습니다</b> — {rLabel(data.radius)} 안에 1년 이내 분양개시했거나
-              분양 진행중인 {typeLabel}가 없습니다.
+              분양 진행중인 {typeLabel}가 없습니다.{' '}
               {/* 지구 내 최초 분양이면 4점이 이미 정해져 있다 — 2점 버튼을 두면 두 규칙이 부딪혀 보인다 */}
               {special === 'firstInDistrict'
                 ? <> 사업지구 내 최초 분양이라 <b>4점(열악)</b>이 적용되어 있습니다.</>
@@ -409,7 +415,9 @@ export default function NearbyPresale({
 
         <div style={S.out}>
           {sc?.pending
-            ? <span style={S.pend}>{sc.text}</span>
+            ? <span style={S.pend}>{data && collected && funnel.stage === 'none' && !special
+                ? '위 [최하위 배점 2점 적용] 을 누르면 점수가 납니다'
+                : sc.text}</span>
             : (<>
                 {survey.from === 'survey' && survey.count > 0 && (
                   <><span style={{ color: T.muted, fontSize: 12 }}>고른 {survey.count}곳 평균</span>

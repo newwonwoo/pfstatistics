@@ -80,6 +80,7 @@ export default function RadiusMap({ title, center, radius, steps = null, markers
   const el = useRef(null);
   const mapRef = useRef(null);
   const [err, setErr] = useState(null);
+  const [retry, setRetry] = useState(0);   // [다시 불러오기]
   const [ready, setReady] = useState(false);
   const [mapType, setMapType] = useState(defaultMapType);
   /*
@@ -506,7 +507,7 @@ export default function RadiusMap({ title, center, radius, steps = null, markers
     return () => { dead = true; };
   // markers/polygon 은 렌더마다 새 배열이라 그대로 넣으면 지도가 매번 다시 만들어진다.
   // 내용이 같으면 다시 만들지 않도록 문자열로 비교한다.
-  }, [center.lat, center.lng, radius, mkey, lkey, pkey, rkey, defaultMapType, labelMax]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [center.lat, center.lng, radius, mkey, lkey, pkey, rkey, defaultMapType, labelMax, retry]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   /*
     그리는 중인 선 — **지도를 다시 만들지 않고** 선·꼭짓점·거리 배지만 얹었다 뗀다.
@@ -740,7 +741,8 @@ export default function RadiusMap({ title, center, radius, steps = null, markers
       </div>
       {err
         ? <div style={S.fallback}>
-            지도를 불러오지 못했습니다.<br />{err}
+            지도를 불러오지 못했습니다.<br />{err}<br />
+            <button style={{ ...S.btn, marginTop: 10 }} onClick={() => { setErr(null); setRetry(n => n + 1); }}>다시 불러오기</button>
           </div>
         : <div ref={el} data-map={title} style={big ? S.mapBig : S.map} />}
       {rvOn && (

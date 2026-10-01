@@ -212,6 +212,15 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
   const visible = showSmall ? kept : kept.filter(r => r.rank <= 1);
   // 지도에 찍히는 것은 큰 도로(대로·로)만 — 길·번길까지 찍으면 핀에 덮인다
   const shown = shownSet(value, rows);
+  /*
+    **목록은 지도에 그린 것만 편다**(실측 2026-10-01 수원 서둔동 — 대로·로 33줄이 1,500px 을 먹어
+    지도·로드뷰·[도로 위치 그리기] 가 그 아래로 밀렸다. 행을 고르고 → 내려가 로드뷰로 세고 → 올라와 차선을 넣는 왕복).
+    기본은 지도에 그린 가까운 5곳, 적용한 뒤에는 그 한 곳 — 나머지는 [펼치기] 로 본다.
+  */
+  const [listOpen, setListOpen] = useState(false);
+  const focus = (r) => shown.has(r.name) || (value?.name === r.name && value?.method !== 'drawn') || sel?.name === r.name;
+  const listed = listOpen ? visible : visible.filter(focus);
+  const hiddenN = visible.length - listed.length;
 
 
   /*
@@ -261,7 +270,7 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
   );
 
   return (
-    /* 단계 줄의 [도로정보 확인 ↓] 가 이 자리로 내려온다 */
+    /* 단계 줄의 [교통환경 · 도로 확인 ↓] 가 이 자리로 내려온다 */
     <div style={S.box} data-road="">
       <div style={S.head}>
         반경 {Math.round(radius * 1.2)}m 도로 후보 — 판정 대상을 고르세요
@@ -273,12 +282,17 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
           </span>
         )}
         <span style={S.note}>
+          행을 누르면 아래 로드뷰가 그 도로로 갑니다 — 차선을 세어 [이 도로로 적용] 후 차선을 확정하세요.
+          {' '}<b>6차선인 구간이 일부뿐이면</b> 아래 <b>[✎ 도로 위치 그리기]</b> 로 사업지 경계에 한 점, 그 구간 위에 한 점을 찍습니다.
+        </span>
+        {/* 법령 해설·거리 재는 법은 매번 읽는 글이 아니다 — 5줄이 늘 목록을 밀어냈다. 접어 둔다 */}
+        <details style={{ ...S.note, marginTop: 2 }}>
+          <summary style={{ cursor: 'pointer' }}>도로 유형 기준 · 거리 재는 법 · 출처</summary>
           법정 도로 유형 기준 (도로명주소법 시행령 §3) — 대로 = 폭 40m↑ <b>또는</b> 왕복 8차로↑ ·
           로 = 폭 12~40m <b>또는</b> 왕복 2~7차로 · 길 = 그 밖의 도로.
           다만 같은 영 §8②1 단서가 <b>대로↔로, 로↔길을 바꿔 쓸 수 있게</b> 열어두었고
           도로명은 구간 설정 시점 기준이라, <b>이름으로 차로수를 단정할 수 없습니다.</b>
           아래 로드뷰로 세어 차선 수만 넣으면 판정됩니다.
-          <br /><b>6차선인 구간이 일부뿐이면</b> 아래 지도 위 <b>[✎ 도로 위치 그리기]</b> 로 사업지 경계에 한 점, 그 6차선 구간 위에 한 점을 찍으세요 — 두 점 사이 거리를 씁니다.
           <br />{src?.method === 'geometry' ? (
             <>
               <b>거리는 {rows?.[0]?.basis === 'polygon' ? '사업지 경계' : '대표지번 중심'}에서
@@ -292,10 +306,11 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
               표본점까지</b>입니다 — 도로 중심선이 아니라 <b>그 도로에 접한 필지</b>입니다.
               큰 필지(골프장·공장·학교)에서는 도로와 크게 어긋날 수 있습니다.
               ± 가 격자 간격, 곧 거리의 오차 한계입니다.
-              {src?.fellBack ? <><br /><b style={{ color: T.warn }}>{src.fellBack}</b></> : null}
             </>
           )}
-        </span>
+        </details>
+        {/* 선형을 못 받아 격자로 물러섰다는 말은 접어 두면 안 된다 — 거리의 뜻이 달라진다 */}
+        {src?.fellBack && <span style={{ ...S.note, color: T.warn, fontWeight: 700 }}>{src.fellBack} — 거리는 도로에 접한 필지까지입니다</span>}
       </div>
 
       {err && <div style={{ ...S.msg, color: T.warn }}>도로명 조회 실패: {err}</div>}
@@ -312,13 +327,13 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
         </button>
         <button style={S.bulkBtn} onClick={() => set({ shown: [] })}>모두 해제</button>
         {smallCount > 0 && (
-          <button style={{ ...S.more, margin: 0 }} onClick={() => setShowSmall(v => !v)}>
+          <button style={{ ...S.more, margin: 0 }} onClick={() => { setShowSmall(v => !v); setListOpen(true); }}>
             {showSmall ? `길·번길 ${smallCount}곳 접기` : `길·번길 ${smallCount}곳 더 보기`}
           </button>
         )}
       </div>
 
-      {visible.map(r => {
+      {listed.map(r => {
         /* 그린 구간은 이름이 후보와 같아도 그 후보를 적용한 것이 아니다 — 차선 칸은 목록 위에 따로 선다 */
         const applied = value?.name === r.name && value?.method !== 'drawn';
         const on = applied || sel?.name === r.name;
@@ -385,6 +400,12 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
         );
       })}
 
+      {(hiddenN > 0 || listOpen) && (
+        <button style={{ ...S.more, display: 'block', margin: '2px 0 6px' }} onClick={() => setListOpen(o => !o)}>
+          {listOpen ? '목록 접기 ▴ — 지도에 그린 도로만' : `나머지 후보 ${hiddenN}곳 펼치기 ▾`}
+        </button>
+      )}
+
       {dismissed.length > 0 && (
         <button style={S.undo} onClick={() => set({ dismissed: [] })}>
           숨긴 도로 {dismissed.length}개 되돌리기
@@ -395,7 +416,7 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
         적용한 도로가 **목록에 안 보일 때**(길·번길을 접어두었거나 나중에 숨겼을 때)만
         아래에 한 벌 남긴다 — 그때 차선 칸까지 사라지면 6차선 판정을 손댈 방법이 없다.
       */}
-      {value?.name && value?.method !== 'drawn' && !visible.some(r => r.name === value.name) && <LaneBar />}
+      {value?.name && value?.method !== 'drawn' && !listed.some(r => r.name === value.name) && <LaneBar />}
 
     </div>
   );

@@ -20,6 +20,7 @@ import SourceHealth from './SourceHealth';
 import PolygonDrawer from './PolygonDrawer';
 import RegionPicker from './RegionPicker';
 import { matchRegion } from '../src/lib/sido';
+import { sizeBandOf } from '../src/lib/similar';
 import CompanyPicker from './CompanyPicker';
 import DistrictRow, { initialDistrict, districtLabel } from './DistrictRow';
 import * as store from './storage';
@@ -75,9 +76,6 @@ const S = {
   check: { fontSize: 11, fontWeight: 800 },
   /* 받긴 했는데 사람이 마무리할 것이 남은 단계 — 초록(완료)도 파랑(실행)도 아닌 주황 */
   btnWarn: { border: `1px solid ${T.warn}`, background: T.warnSoft, color: T.warn },
-  /* 그 일을 하러 가는 작은 길 — 단계 버튼 바로 옆에 붙는다 */
-  miniGo: { padding: '5px 10px', borderRadius: 5, fontSize: 11.5, fontWeight: 800, cursor: 'pointer',
-            border: `1px solid ${T.accent}`, background: '#fff', color: T.accent, whiteSpace: 'nowrap', fontFamily: 'inherit' },
   dim: { color: T.muted },
   /** 수집 전 기준 선택 관문 — 지나칠 수 없게 눈에 띄어야 한다 */
   ask: {
@@ -229,6 +227,22 @@ export default function Home() {
   const [rate, setRate] = useState(null);       // 초기예상분양률 탭 (주택종류·세대수)
   const [review, setReview] = useState(null);   // 심사평점표 탭 (수동입력 평점)
   const [sheetInput, setSheetInput] = useState(null); // 수기입력 탭 (A 를 만드는 값들)
+
+  /*
+    **나. 단지규모를 또 묻고 있었다**(실측 2026-10-01) — 총세대수는 [수기입력] 탭 [규모 및 배치] 가 이미 받는다.
+    시공순위처럼 비어 있거나 앞서 자동으로 채운 것이면 그 값에서 구간을 낸다. 사람이 고른 구간은 건드리지 않는다.
+    비교사업장 탭과 인근 단지 조사가 같은 본건 제원(compare.site)을 쓰므로 여기 한 곳에서 채운다.
+  */
+  const households = sheetInput?.규모및배치?.총세대수;
+  useEffect(() => {
+    const band = sizeBandOf(households);
+    if (!band) return;
+    setCompare(c => {
+      const s = c?.site ?? {};
+      if (s.sizeBand === band || (s.sizeBand && !s.sizeAuto)) return c;
+      return { ...(c ?? {}), site: { ...s, sizeBand: band, sizeAuto: true } };
+    });
+  }, [households]);
   useEffect(() => { if (basisMode) setRadiusBasis(basisMode); }, [basisMode]);
 
   // 경계를 다 그리면 다음에 누를 곳을 알려준다 (수집 버튼은 위 단계 줄에 하나만 둔다)
@@ -412,12 +426,12 @@ export default function Home() {
         수집 완료 문구에서 그 일을 말하고 그 자리로 가는 길을 같이 준다(사용자 요청 2026-10-01).
       */
       const roadLeft = (sheet == null || sheet === '교통환경') && !roadConfirmed(manual['6차선 왕복도로']);
-      /* 그 일로 가는 버튼은 단계 줄의 [도로정보 확인 ↓] 하나 — 여기서는 말만 한다(같은 버튼을 두 벌 두지 않는다) */
+      /* 그 일로 가는 버튼은 단계 줄의 [교통환경 · 도로 확인 ↓] 하나 — 여기서는 말만 한다(같은 버튼을 두 벌 두지 않는다) */
       setMsg({
         kind: 'ok',
         text: `${sheet ?? '반경시설'} 수집 완료 — ${got.length}종 조회 · 반경 내 ${hit}종`
           + ` · ${j.basis === 'polygon' ? '사업지 경계 기준' : '대표지번 중심점 기준'}`
-          + (roadLeft ? ' — 교통환경의 6차선 왕복도로는 차선을 세어 확정해야 끝납니다 (위 [도로정보 확인 ↓])' : ''),
+          + (roadLeft ? ' — 교통환경의 6차선 왕복도로는 차선을 세어 확정해야 끝납니다 (위 [교통환경 · 도로 확인 ↓])' : ''),
         road: roadLeft,
       });
       if (roadLeft) flash('road');
@@ -435,11 +449,27 @@ export default function Home() {
     setMsg({ kind: 'warn', text: '사업지를 초기화했습니다. 시도·시군구부터 다시 지정하세요.' });
   }
 
+  /**
+   * 탭을 고르면 그 시트가 보이게 내려 준다.
+   * 탭 줄이 화면 아래쪽(y≈790)에 있어 탭을 누르면 시트 제목만 겨우 보이고
+   * 표는 스크롤 밖이었다 — 탭을 누를 때마다 한 번씩 굴려야 했다(실측 2026-10-01).
+   * 단계가 바뀌면 위쪽 도구가 접히며 높이가 변하므로 그린 뒤에 잰다.
+   */
+  function jump(id) {
+    setTab(id); setMapOpenManual(null); setMsg(null);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const el = document.querySelector('[data-sheet-tabs]');
+      if (!el) return;
+      const y = el.getBoundingClientRect().top;
+      if (y > window.innerHeight * 0.3 || y < 0) window.scrollTo({ top: window.scrollY + y - 8, behavior: 'smooth' });
+    }));
+  }
+
   // ── 보관 / 내보내기 ───────────────────────────────────────
   /** 다른 사업장 심사하기 — 지금 심사를 보관하고 처음 상태로 */
   function startNewCase() {
     const ask = data
-      ? `지금 사업장(${data.region}${addr ? ` ${addr}` : ''})을 보관하고 새 사업장 심사를 시작할까요?\n\n보관한 심사는 첫 화면 [저장된 조회] 에서 다시 열 수 있습니다.`
+      ? `지금 사업장(${addr || data.region})을 보관하고 새 사업장 심사를 시작할까요?\n\n보관한 심사는 첫 화면 [저장된 조회] 에서 다시 열 수 있습니다.`
       : '입력한 주소를 지우고 처음부터 시작할까요?';
     if (!window.confirm(ask)) return;
     if (data) store.save({ data, facilities, addr, manual, compare, rate, review, sheetInput });
@@ -542,7 +572,7 @@ export default function Home() {
     }, 60);
     setTimeout(() => setPulse(p => (p === key ? null : p)), 3600);
   };
-  /** [도로정보 확인 ↓] — 교통환경 탭의 도로 칸으로 바로 내려간다(차선을 넣는 중이면 그 칸으로) */
+  /** [교통환경 · 도로 확인 ↓] — 교통환경 탭의 도로 칸으로 바로 내려간다(차선을 넣는 중이면 그 칸으로) */
   const goRoad = () => {
     setTab('교통환경'); setMapOpenManual(null); setMsg(null);
     setTimeout(() => {
@@ -858,8 +888,7 @@ export default function Home() {
       {/* 원천 상태는 수집할 때 보는 것이다 — 뒤 단계에서는 그 자리를 표에 내준다 */}
       {gatherTab && <SourceHealth />}
       {/* 로드맵인데 못 누르면 그림일 뿐이다 — 마디를 누르면 그 단계의 탭으로 간다 */}
-      <Steps current={current} done={done}
-        onJump={(id) => { setTab(id); setMapOpenManual(null); setMsg(null); }} />
+      <Steps current={current} done={done} onJump={jump} />
 
       <div style={S.panel}>
         {/*
@@ -1086,21 +1115,27 @@ export default function Home() {
                 POI_SHEETS.map(sh => {
                   /*
                     **교통환경은 도로를 사람이 확정해야 끝난다** — 시설만 받고 초록 ✓ 를 달면 끝난 줄 안다.
-                    확정 전이면 주황으로 두고, 바로 옆 [도로정보 확인 ↓] 가 교통환경 탭의 도로 칸으로 내려보낸다.
+                    확정 전이면 주황 칩 자체가 [교통환경 · 도로 확인 ↓] — 교통환경 탭의 도로 칸으로 내려보낸다.
                   */
                   const roadLeft = sh === '교통환경' && !roadOk;
                   return (
                     <span key={sh} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                      <button
-                        style={roadLeft ? { ...S.btn({ busy: busy === sh }), ...S.btnWarn } : S.btn({ busy: busy === sh, done: true })}
-                        onClick={() => collectPoi(sh)} disabled={!!busy}
-                        title={roadLeft ? '시설은 받았습니다 — 6차선 왕복도로 차선을 확정해야 끝납니다 (누르면 교통환경 시설만 다시 수집)' : `${sh} 만 다시 수집합니다`}
-                      >
-                        {busy === sh ? '수집 중…' : roadLeft ? <>교통환경 · 도로 확인 전</> : <><span style={S.check}>✓</span>{sh}</>}
-                      </button>
-                      {roadLeft && (
+                      {/*
+                        주황 칩과 [도로정보 확인 ↓] 를 따로 두었더니 단계 줄이 두 줄로 넘쳐
+                        「비교사업장 · 분양가」 가 홀로 아랫줄에 떨어졌다(실측 2026-10-01 수원 서둔동).
+                        확정 전에는 칩 자체가 그 길이다 — 누르면 교통환경 탭의 도로 칸으로 내려간다.
+                      */}
+                      {roadLeft ? (
                         <button data-step="road" className={pulse === 'road' ? 'pf-pulse' : undefined}
-                          style={S.miniGo} onClick={goRoad}>도로정보 확인 ↓</button>
+                          style={{ ...S.btn({ busy: busy === sh }), ...S.btnWarn }} onClick={goRoad} disabled={!!busy}
+                          title="시설은 받았습니다 — 6차선 왕복도로 차선을 확정해야 끝납니다 (누르면 교통환경 탭의 도로 칸으로)">
+                          {busy === sh ? '수집 중…' : '교통환경 · 도로 확인 ↓'}
+                        </button>
+                      ) : (
+                        <button style={S.btn({ busy: busy === sh, done: true })}
+                          onClick={() => collectPoi(sh)} disabled={!!busy} title={`${sh} 만 다시 수집합니다`}>
+                          {busy === sh ? '수집 중…' : <><span style={S.check}>✓</span>{sh}</>}
+                        </button>
                       )}
                     </span>
                   );
@@ -1117,7 +1152,7 @@ export default function Home() {
               <button
                 data-step="comp" className={pulse === 'comp' ? 'pf-pulse' : undefined}
                 style={S.btn({ primary: !!data && allPoi && roadOk && !compDone && tab !== '비교사업장', done: compDone })}
-                onClick={() => setTab('비교사업장')} disabled={!!busy}
+                onClick={() => jump('비교사업장')} disabled={!!busy}
               >
                 {compDone && <span style={S.check}>✓</span>}
                 {/* 줄이 이미 › 로 이어져 있다 — 끝에 또 → 를 달면 무엇을 가리키는지 흐려진다 */}
@@ -1296,11 +1331,11 @@ export default function Home() {
       */}
       {gatherTab && <SavedList onOpen={openRecord} refreshKey={savedKey} />}
 
-      {data && gatherTab && <Overview data={data} onJump={setTab} />}
+      {data && gatherTab && <Overview data={data} onJump={jump} />}
 
-      <div style={{ marginTop: 20 }}>
+      <div style={{ marginTop: 20 }} data-sheet-tabs>
         <SheetTabs sheets={SHEETS} active={tab}
-          onSelect={(id) => { setTab(id); setMapOpenManual(null); setMsg(null); }}
+          onSelect={jump}
           status={status} progress={tabProgress} />
         {/*
           모든 시트를 항상 마운트해 둔다.
@@ -1322,7 +1357,7 @@ export default function Home() {
               ? (
                 <ManualView
                   region={region} addr={addr} data={data} facilities={view} manual={manual}
-                  value={sheetInput} onChange={setSheetInput} onJump={setTab}
+                  value={sheetInput} onChange={setSheetInput} onJump={jump}
                   /* 심사평점표가 쓰는 입력값도 여기서 받는다 — 그 탭은 결과만 읽는 자리다 */
                   review={review} onReview={setReview}
                   company={data?.company}
@@ -1336,7 +1371,7 @@ export default function Home() {
                   compare={compare} rate={rate} excl={mSum.excl} sheetInput={sheetInput}
                   district={manual['사업지구']}
                   gate={gate}
-                  value={review} onChange={setReview} onJump={setTab}
+                  value={review} onChange={setReview} onJump={jump}
                 />
               )
               : s.kind === 'rate'
@@ -1346,7 +1381,7 @@ export default function Home() {
                   coord={coord} polygon={polygon} radiusBasis={radiusBasis} company={data?.company}
                   compare={compare} onCompare={setCompare} excl={mSum.excl} manualSum={mSum} sheetInput={sheetInput}
                   onSheetInput={(patch) => setSheetInput(x => ({ ...(x ?? {}), ...(typeof patch === 'function' ? patch(x) : patch) }))}
-                  value={rate} onChange={setRate} onJump={setTab}
+                  value={rate} onChange={setRate} onJump={jump}
                   district={manual['사업지구']}
                   onDistrict={(d) => setManual(m => ({ ...m, 사업지구: d }))}
                 />
@@ -1361,6 +1396,7 @@ export default function Home() {
                   companyRank={(data?.results ?? []).find(r => r.indicatorId === 'construction_capability_rank' && r.ok)?.value ?? null}
                   excl={mSum.excl} manualSum={mSum} district={manual['사업지구']}
                   firstInDistrict={isFirstInDistrict(manual['사업지구'], sheetInput?.인근초기분양률)}
+                  households={households}
                   value={compare} onChange={setCompare}
                 />
               )
