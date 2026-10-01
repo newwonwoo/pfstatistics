@@ -1112,12 +1112,19 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
           {' '}같은 단지가 재공고(조합원 취소분 등)로 여러 건 올라오면 <b>최신 공고 1건</b>만 남깁니다.
         </p>
 
-        <div style={S.secTitle}>반경 {rLabel(data.radius)} 분양단지 위치</div>
+        <div style={S.secTitle}>반경 {rLabel(radius)} 분양단지 위치
+          {!collected && <span style={{ fontWeight: 400, color: T.warn }}> — 아직 수집 전 · 핀은 반경 {rLabel(data.radius)} 수집분입니다</span>}
+        </div>
         <RadiusMap
           /* RadiusMap 이 제목 뒤에 "· 반경 Nkm" 을 스스로 붙인다 — 여기서 또 쓰면 두 번 나온다 */
           title="비교사업장"
           center={{ lat: Number(coord.y), lng: Number(coord.x) }}
-          radius={data.radius}
+          /*
+            **반경을 고르면 지도도 따라간다 · 1km 마다 고리를 색으로 나눈다**(사용자 요청 2026-10-01
+            「2km 선택했을 땐 1km 2km 색구분해서 다 보여줄 필요가 있어 · 3km 면 1,2,3 다 구분해서」).
+          */
+          radius={radius}
+          steps={[1000, 2000, 3000, 4000, 5000].filter(r => r < radius)}
           markers={markers}
           polygon={data.basis === 'polygon' ? polygon : null}
           radiusBasis={radiusBasis}

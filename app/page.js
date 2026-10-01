@@ -410,11 +410,12 @@ export default function Home() {
         수집 완료 문구에서 그 일을 말하고 그 자리로 가는 길을 같이 준다(사용자 요청 2026-10-01).
       */
       const roadLeft = (sheet == null || sheet === '교통환경') && !roadConfirmed(manual['6차선 왕복도로']);
+      /* 그 일로 가는 버튼은 단계 줄의 [도로정보 확인 ↓] 하나 — 여기서는 말만 한다(같은 버튼을 두 벌 두지 않는다) */
       setMsg({
         kind: 'ok',
         text: `${sheet ?? '반경시설'} 수집 완료 — ${got.length}종 조회 · 반경 내 ${hit}종`
           + ` · ${j.basis === 'polygon' ? '사업지 경계 기준' : '대표지번 중심점 기준'}`
-          + (roadLeft ? ' — 교통환경의 6차선 왕복도로는 차선을 세어 확정해야 끝납니다' : ''),
+          + (roadLeft ? ' — 교통환경의 6차선 왕복도로는 차선을 세어 확정해야 끝납니다 (위 [도로정보 확인 ↓])' : ''),
         road: roadLeft,
       });
       if (roadLeft) flash('road');
@@ -533,8 +534,10 @@ export default function Home() {
     setTab('교통환경'); setMapOpenManual(null); setMsg(null);
     setTimeout(() => {
       const root = document.querySelector('[data-sheet="교통환경"]');
-      const el = root?.querySelector('[data-road-lanes]') ?? root?.querySelector('[data-road]');
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const lanes = root?.querySelector('[data-road-lanes]');
+      const el = lanes ?? root?.querySelector('[data-road]');
+      /* 도로 후보 상자는 화면보다 길다 — 가운데로 맞추면 머리가 화면 위로 잘린다(실측 -397px). 머리부터 보인다 */
+      el?.scrollIntoView({ behavior: 'smooth', block: lanes ? 'center' : 'start' });
       /* 도착한 자리를 맥박으로 알린다 — 단계 줄의 다음 버튼과 같은 효과(.pf-pulse) */
       [el, root?.querySelector('[data-road-draw]')].filter(Boolean).forEach(x => {
         x.classList.remove('pf-pulse'); void x.offsetWidth; x.classList.add('pf-pulse');
@@ -1164,9 +1167,7 @@ export default function Home() {
         {msg && (
           <div style={S.msg(msg.kind)}>
             {msg.text}
-            {msg.road && !roadOk && (
-              <button style={{ ...S.miniGo, marginLeft: 10 }} onClick={goRoad}>도로정보 확인 ↓</button>
-            )}
+
             {msg.needCompany && (
               <div style={S.msgFix}>
                 <div style={{ width: 280 }}>

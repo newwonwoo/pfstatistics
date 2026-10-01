@@ -64,7 +64,18 @@ const LABEL_MAX = 999;
 
 const levelCapFor = (r) => MAX_LEVEL[r] ?? (r <= 300 ? 3 : r <= 500 ? 4 : r <= 1000 ? 5 : 6);
 
-export default function RadiusMap({ title, center, radius, markers = [], lines = [], polygon = null, labelMax = null, caption, defaultMapType = 'ROADMAP', roadview = false, roadviewOpen = false, roadviewAt = null, radiusBasis,
+/**
+ * **반경 단계별 색**(사용자 요청 2026-10-01 「2km 선택했을 땐 1km 2km 색구분해서 다 보여줄 필요가 있어」).
+ * 비교사업장은 반경을 1km 씩 넓혀 가며 본다(제16조 비고1) — 어느 단지가 몇 km 고리 안인지 한눈에 읽혀야 한다.
+ * 안쪽에서 바깥으로 따뜻한 색 → 찬 색. 글자색은 바탕 밝기에 맞춘다.
+ */
+const RING_COLORS = { 1000: ['#FFD600', '#3a2f00'], 2000: ['#FB8C00', '#fff'], 3000: ['#E53935', '#fff'],
+                      4000: ['#8E24AA', '#fff'], 5000: ['#3949AB', '#fff'] };
+export const ringColor = (r) => RING_COLORS[r]?.[0] ?? '#FFEB3B';
+const ringInk = (r) => RING_COLORS[r]?.[1] ?? '#3a2f00';
+const ringText = (r) => (r >= 1000 ? `${r / 1000}km` : `${r}m`);
+
+export default function RadiusMap({ title, center, radius, steps = null, markers = [], lines = [], polygon = null, labelMax = null, caption, defaultMapType = 'ROADMAP', roadview = false, roadviewOpen = false, roadviewAt = null, radiusBasis,
   drawMode = false, onDrawClick = null, sketch = null }) {
   const el = useRef(null);
   const mapRef = useRef(null);
@@ -138,7 +149,17 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
     () => (basis === 'polygon' && hasPoly ? bufferPolygon(polygon, radius) : null),
     [basis, hasPoly, pkey, radius],   // eslint-disable-line react-hooks/exhaustive-deps
   );
-  const rkey = ring ? `poly${radius}` : `pt${radius}`;
+  /* 안쪽 고리들 — `steps` 를 넘긴 지도(비교사업장)만. 판정선과 같은 방법(bufferPolygon)으로 그린다 */
+  const stepKey = JSON.stringify(steps ?? []);
+  const stepRings = useMemo(
+    () => (steps ?? []).filter(r => r > 0 && r < radius).map(r => ({
+      r, color: ringColor(r), ink: ringInk(r), text: ringText(r),
+      ring: basis === 'polygon' && hasPoly ? bufferPolygon(polygon, r) : null,
+    })),
+    [stepKey, basis, hasPoly, pkey, radius],   // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const outerColor = steps?.length ? ringColor(radius) : '#FFEB3B';
+  const rkey = `${ring ? 'poly' : 'pt'}${radius}|${stepKey}`;
 
   useEffect(() => {
     let dead = false;
@@ -152,12 +173,33 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
       });
       mapRef.current = { map, kakao };
       // 위성 타일 위에서도 보이도록 선을 굵고 밝게, 채움은 옅게
-      const paint = { strokeWeight: 3, strokeColor: '#FFEB3B', strokeOpacity: 1, strokeStyle: 'solid',
+      const paint = { strokeWeight: 3, strokeColor: outerColor, strokeOpacity: 1, strokeStyle: 'solid',
                       fillColor: '#CE93D8', fillOpacity: 0.18 };
       const area = ring
         ? new kakao.maps.Polygon({ ...paint, path: ring.map(p => new kakao.maps.LatLng(p.lat, p.lng)) })
         : new kakao.maps.Circle({ ...paint, center: c, radius });
       area.setMap(map);
+      /*
+        안쪽 고리 + 고리마다 「Nkm」 꼬리표(정북 자리). 채움은 바깥 고리 하나만 — 겹쳐 칠하면 안쪽이 짙어져 지도가 안 보인다.
+      */
+      if (steps?.length) {
+        const tag = (lat, lng, text, color, ink) => new kakao.maps.CustomOverlay({
+          map, position: new kakao.maps.LatLng(lat, lng), xAnchor: 0.5, yAnchor: 0.5, zIndex: 4,
+          content: `<div style="padding:1px 7px;border-radius:9px;background:${color};color:${ink};font:800 11px/1.45 sans-serif;border:1px solid rgba(0,0,0,.25);white-space:nowrap">${text}</div>`,
+        });
+        const northOf = (rg, r) => (rg ? rg.reduce((a, q) => (q.lat > a.lat ? q : a), rg[0])
+          : { lat: center.lat + r / 111320, lng: center.lng });
+        for (const st of stepRings) {
+          const line = { strokeWeight: 2.5, strokeColor: st.color, strokeOpacity: 1, strokeStyle: 'solid', fillOpacity: 0 };
+          (st.ring
+            ? new kakao.maps.Polygon({ ...line, path: st.ring.map(q => new kakao.maps.LatLng(q.lat, q.lng)) })
+            : new kakao.maps.Circle({ ...line, center: c, radius: st.r })).setMap(map);
+          const n = northOf(st.ring, st.r);
+          tag(n.lat, n.lng, st.text, st.color, st.ink);
+        }
+        const n = northOf(ring, radius);
+        tag(n.lat, n.lng, ringText(radius), outerColor, ringInk(radius));
+      }
       const areaBounds = () => {
         if (!ring) return area.getBounds();
         const b = new kakao.maps.LatLngBounds();
@@ -537,6 +579,8 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
       map: mapRef.current.map,
       kakao: mapRef.current.kakao,
       center, radius, markers, lines, polygon, title, radiusRing: ring, labelMax,
+      /* 반경 단계 고리 — 화면과 같은 색·꼬리표 */
+      radiusSteps: steps?.length ? stepRings : null, radiusColor: outerColor, radiusText: steps?.length ? ringText(radius) : null,
       labelPlacement: labelPlace.current,
       /* 화면에서 이름표를 껐으면 캡쳐도 끈다 — 증빙이 화면과 달라지면 안 된다 */
       labels,

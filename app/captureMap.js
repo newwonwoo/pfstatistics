@@ -171,6 +171,7 @@ const LABEL_MAX = 999;   /* 이름은 전부 단다 — 자리를 못 찾은 것
  */
 export async function composeMap(el, spec = {}) {
   const { map, kakao, center, radius, markers = [], lines = [], polygon = null, radiusRing = null, title = '', labels = true, labelMax = null, labelPlacement = null,
+    radiusSteps = null, radiusColor = '#FFEB3B', radiusText = null,
           mime = 'image/png', quality = 0.92 } = spec;
   /*
    * **확대해도 깨지지 않게 3배로 찍는다**(사용자 요청 2026-09-17).
@@ -230,7 +231,7 @@ export async function composeMap(el, spec = {}) {
       ctx.fillStyle = 'rgba(206,147,216,0.18)';
       ctx.fill();
       ctx.lineWidth = 3;
-      ctx.strokeStyle = '#FFEB3B';
+      ctx.strokeStyle = radiusColor;
       ctx.stroke();
     } else if (radius) {
       // 중심 기준 — 반경 픽셀은 정북으로 radius m 떨어진 점을 투영해 잰다 (배율 가정 없이)
@@ -241,8 +242,39 @@ export async function composeMap(el, spec = {}) {
       ctx.fillStyle = 'rgba(206,147,216,0.18)';
       ctx.fill();
       ctx.lineWidth = 3;
-      ctx.strokeStyle = '#FFEB3B';
+      ctx.strokeStyle = radiusColor;
       ctx.stroke();
+    }
+
+    /* 반경 단계 고리(비교사업장) — 화면과 같은 색, 정북 자리에 「Nkm」 꼬리표 */
+    if (radiusSteps?.length) {
+      const tagAt = (q, text, color, ink) => {
+        ctx.font = '800 11px sans-serif';
+        const w = ctx.measureText(text).width + 14, h = 17;
+        ctx.fillStyle = color; ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 1;
+        roundRect(ctx, q.x - w / 2, q.y - h / 2, w, h, 8);
+        ctx.fill(); ctx.stroke();
+        ctx.fillStyle = ink; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, q.x, q.y + 0.5);
+        ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+      };
+      const north = (rg, r) => (rg?.length ? rg.reduce((a, q) => (q.lat > a.lat ? q : a), rg[0])
+        : { lat: center.lat + r / 111320, lng: center.lng });
+      for (const st of radiusSteps) {
+        ctx.beginPath();
+        if (st.ring?.length) {
+          st.ring.forEach((p, i) => { const q = pt(p.lat, p.lng); if (i) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y); });
+          ctx.closePath();
+        } else {
+          const n = pt(center.lat + st.r / 111320, center.lng);
+          ctx.arc(c.x, c.y, Math.hypot(n.x - c.x, n.y - c.y), 0, Math.PI * 2);
+        }
+        ctx.lineWidth = 2.5; ctx.strokeStyle = st.color; ctx.stroke();
+        const n = north(st.ring, st.r); tagAt(pt(n.lat, n.lng), st.text, st.color, st.ink);
+      }
+      if (radiusText) {
+        const n = north(radiusRing, radius);
+        tagAt(pt(n.lat, n.lng), radiusText, radiusColor, radiusColor === '#FFD600' || radiusColor === '#FFEB3B' ? '#3a2f00' : '#fff');
+      }
     }
 
     if (polygon?.length >= 3) {
