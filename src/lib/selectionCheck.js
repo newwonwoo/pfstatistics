@@ -73,6 +73,7 @@ export function checkSelectionRules() {
   /* 공통 — 거리 기본값 · 유사도 셈 */
   chk('거리 수도권 1km · 그 밖 2km', [baseRadius('경기 광주시'), baseRadius('충남 천안시')], [1000, 2000]);
   chk('유사도 미상은 일치로 세지 않는다', [similarityOf(SITE, { houseType: '아파트' }).n], [1]);
+  chk('아파트↔주상복합은 주택유형 일치', [similarityOf({ houseType: '주상복합' }, { houseType: '아파트' }).n], [1]);
 
   const failures = out.filter(o => o.status !== 'pass');
   return { healthy: failures.length === 0, summary: `선정기준 사례 ${out.length - failures.length}/${out.length}`, failures, checks: out };

@@ -1311,7 +1311,7 @@ export default function Home() {
                   region={region} addr={addr} facilities={view}
                   coord={coord} polygon={polygon} radiusBasis={radiusBasis} company={data?.company}
                   compare={compare} onCompare={setCompare} excl={mSum.excl} manualSum={mSum} sheetInput={sheetInput}
-                  onSheetInput={(patch) => setSheetInput(x => ({ ...(x ?? {}), ...patch }))}
+                  onSheetInput={(patch) => setSheetInput(x => ({ ...(x ?? {}), ...(typeof patch === 'function' ? patch(x) : patch) }))}
                   value={rate} onChange={setRate} onJump={setTab}
                   district={manual['사업지구']}
                   onDistrict={(d) => setManual(m => ({ ...m, 사업지구: d }))}
@@ -1339,7 +1339,7 @@ export default function Home() {
                   manual={manual} sheetInput={sheetInput}
                   onManual={(label, v) => setManual(m => ({ ...m, [label]: v }))}
                   /* 지역수요 시트의 인구유입요인을 그 표에서 바로 고친다 */
-                  onSheetInput={(patch) => setSheetInput(x => ({ ...(x ?? {}), ...patch }))}
+                  onSheetInput={(patch) => setSheetInput(x => ({ ...(x ?? {}), ...(typeof patch === 'function' ? patch(x) : patch) }))}
                 />
               )}
           </div>

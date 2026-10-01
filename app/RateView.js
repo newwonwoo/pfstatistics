@@ -183,7 +183,10 @@ export default function RateView({ region, addr, coord, polygon, radiusBasis, co
           site={compare?.site ?? {}}
           onSite={(patch) => onCompare?.({ ...(compare ?? {}), site: { ...(compare?.site ?? {}), ...patch } })}
           value={sheetInput?.인근초기분양률}
-          onChange={(nb) => onSheetInput?.({ 인근초기분양률: nb })}
+          /* 함수로 오면 그 시점의 값에 얹는다 — 수집을 기다리는 사이 넣은 값을 지키려고 */
+          onChange={(nb) => onSheetInput?.(typeof nb === 'function'
+            ? (x) => ({ 인근초기분양률: nb(x?.인근초기분양률) })
+            : { 인근초기분양률: nb })}
           district={district}
           onDistrict={onDistrict}
         />

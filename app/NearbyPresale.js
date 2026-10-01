@@ -129,7 +129,8 @@ export default function NearbyPresale({
       if (usePoly) qs.set('polygon', JSON.stringify(polygon));
       const j = await fetchJson(`/api/apts?${qs}`);
       /* 다시 받으면 고른 단지는 비운다 — 목록에 없는 단지가 평균에 남으면 안 된다 */
-      set({ radius, data: j, picked: {} });
+      /* 기다리는 사이 넣은 값이 버튼을 누른 순간의 값으로 되돌아가지 않게 — 지금 값에 결과만 얹는다(비교사업장과 같은 함정) */
+      onChange?.(prev => ({ ...(prev ?? {}), radius, data: j, picked: {} }));
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 

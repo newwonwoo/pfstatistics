@@ -36,7 +36,7 @@ const isSale = (a) => a.priceKind !== 'deposit';
 
 /**
  * 가~라 네 항목 중 몇 개가 일치하는가 — 세 기준이 **같은 네 항목**을 쓴다.
- *   가. 주택유형 아파트/주상복합/기타 · 나. 단지규모 500미만/500~999/1,000이상
+ *   가. 주택유형 아파트/주상복합/기타(아파트↔주상복합은 일치로 본다) · 나. 단지규모 500미만/500~999/1,000이상
  *   다. 시공능력평가순위 50위이내/51~100/101~200/201~300/300위밖 · 라. 택지유형 민간/공공/신도시/기타
  * 한쪽이라도 모르면 일치로 세지 않는다(「미상」) — 추정해서 맞추면 유사도가 부풀려진다.
  */
@@ -46,7 +46,14 @@ export function similarityOf(site = {}, a = {}) {
     if (!mine || !theirs) { miss.push(`${name}(${!theirs && note ? note : '미상'})`); return; }
     if (mine === theirs) hit.push(name); else miss.push(`${name}(${theirs})`);
   };
-  cmp('주택유형', site.houseType, a.houseType);
+  /*
+    **아파트와 주상복합은 서로 일치로 센다**(사용자 확정 2026-10-01 「아파트와 주상복합은 상호호환이야」).
+    게다가 청약홈은 주상복합을 따로 표시하지 않아 상대 단지는 늘 「아파트」 로 온다 —
+    본건이 주상복합이면 지금까지는 모든 단지가 가목에서 빠졌다.
+  */
+  const houseGroup = (t) => (t === '아파트' || t === '주상복합' ? '아파트·주상복합' : t);
+  if (site.houseType && a.houseType && houseGroup(site.houseType) === houseGroup(a.houseType)) hit.push('주택유형');
+  else cmp('주택유형', site.houseType, a.houseType);
   cmp('단지규모', site.sizeBand, a.sizeBand);
   cmp('시공순위', site.rankBand, a.rankBand);
   /*

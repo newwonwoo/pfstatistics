@@ -255,7 +255,12 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
       // 그린 선이 곧 판정선이어야 한다 — 지도에 경계 기준으로 그릴 때만 경계로 잰다
       if (usePoly) qs.set('polygon', JSON.stringify(polygon));
       const j = await fetchJson(`/api/apts?${qs}`);
-      set({ radius, data: j, picked: [] });
+      /*
+        **수집하는 동안 넣은 [본건 제원] 이 날아갔다**(사용자 지적 2026-10-01).
+        `set` 은 버튼을 누른 순간의 값(v)에 덮어쓰므로, 응답을 기다리는 사이 넣은 칸이 옛 값으로 되돌아간다.
+        응답이 온 시점의 **지금 값**에 결과만 얹는다.
+      */
+      onChange?.(prev => ({ mode, areaBasis, kinds, ...(prev ?? {}), radius, data: j, picked: [] }));
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
@@ -582,6 +587,7 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
           </label>
         </div>
         <div style={{ ...S.note, marginTop: 8 }}>
+          주택유형은 <b>아파트와 주상복합을 서로 일치</b>로 셉니다(청약홈은 주상복합을 따로 표시하지 않습니다).<br />
           상대 단지 택지유형은 <b>청약홈 공고의 공공주택지구·대규모 택지개발지구 표시</b>가 있을 때만 「공공택지」 로 셉니다.
           표시가 없다고 민간택지인 것은 아니라서(도시개발구역 등은 표시 칸이 없다) 그때는 「미상」 입니다.
           오피스텔·도시형 공고에는 이 표시가 없습니다.
