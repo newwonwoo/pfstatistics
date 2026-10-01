@@ -88,6 +88,9 @@ const page = (ws) => {
   };
 };
 
+/** 등급 칸에는 등급 낱말만 — 구간 글(「3.41 ~ 3.78 미만 · 열악」)은 평가내용 칸이 말한다 */
+const gradeWord = (...texts) => texts.map(t => String(t ?? '').match(/매우양호|매우열악|양호|보통|열악/)?.[0]).find(Boolean) ?? '';
+
 const won = (n) => (Number.isFinite(Number(n)) ? Math.round(Number(n)).toLocaleString('ko-KR') : '');
 
 /**
@@ -132,7 +135,7 @@ export function writeMainSheets(wb, { data, facilities, manual, compare, rate, r
       cell(ws, r, 3, x.id, { h: 'left', bold: true });
       cell(ws, r, 4, x.max ?? '');
       cell(ws, r, 5, x.why ?? '', { h: 'left', size: 9 });
-      cell(ws, r, 6, x.sc?.label ?? '');
+      cell(ws, r, 6, gradeWord(x.sc?.label, x.why));
       cell(ws, r, 7, x.score ?? '', { bold: true });
       ws.getRow(r).height = Math.min(48, 18 + Math.floor(String(x.why ?? '').length / 44) * 12);
       r += 1;
@@ -153,7 +156,7 @@ export function writeMainSheets(wb, { data, facilities, manual, compare, rate, r
       ? `분양가격지수 ${cmp.index.toFixed(2)}${cmp.indexBasis === 'firstInDistrict' ? ' (사업지구 내 최초 분양 — 100 적용)' : ''}`
         + (cmp.avg != null ? ` · 비교사업장 평균 ${won(cmp.avg)}원/㎡` : '')
       : (cmp.sc?.text ?? '미산출'), { h: 'left', size: 9 });
-    cell(ws, r, 6, cmp.sc?.label ?? '');
+    cell(ws, r, 6, gradeWord(cmp.sc?.label, ''));
     cell(ws, r, 7, compScore ?? '', { bold: true });
     r += 1;
     merge(ws, r, 2, r, 3, '종합평가 점수', { bold: true, size: 11, fill: SUM });

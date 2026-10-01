@@ -439,7 +439,7 @@ export default function Home() {
   /** 다른 사업장 심사하기 — 지금 심사를 보관하고 처음 상태로 */
   function startNewCase() {
     const ask = data
-      ? `지금 사업장(${data.region}${addr ? ` ${addr}` : ''})을 보관하고 새 사업장 심사를 시작할까요?\n\n보관한 심사는 첫 화면 [보관 목록] 에서 다시 열 수 있습니다.`
+      ? `지금 사업장(${data.region}${addr ? ` ${addr}` : ''})을 보관하고 새 사업장 심사를 시작할까요?\n\n보관한 심사는 첫 화면 [저장된 조회] 에서 다시 열 수 있습니다.`
       : '입력한 주소를 지우고 처음부터 시작할까요?';
     if (!window.confirm(ask)) return;
     if (data) store.save({ data, facilities, addr, manual, compare, rate, review, sheetInput });
