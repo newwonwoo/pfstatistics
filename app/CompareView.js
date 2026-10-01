@@ -69,6 +69,13 @@ const rankBandOf = (rank) => {
 };
 
 const S = {
+  rtLink: { display: 'inline-block', padding: '3px 9px', borderRadius: 5, border: `1px solid ${T.accent}`, background: '#fff',
+            color: T.accent, fontSize: 11.5, fontWeight: 800, textDecoration: 'none', whiteSpace: 'nowrap' },
+  notes: { display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 16px 14px', borderTop: `1px solid ${T.line}` },
+  noteBox: (k) => ({ display: 'flex', alignItems: 'flex-start', gap: 9, padding: '9px 12px', borderRadius: 7, fontSize: 12.5, lineHeight: 1.65, color: T.ink2,
+    background: k === 'warn' ? T.warnSoft : '#eef4ff', border: `1px solid ${k === 'warn' ? '#f0dcb4' : '#cddcfb'}` }),
+  noteTag: (k) => ({ flex: '0 0 auto', padding: '1px 8px', borderRadius: 4, fontSize: 11, fontWeight: 800, color: '#fff',
+    background: k === 'warn' ? T.warn : T.accent, marginTop: 1 }),
   page: { background: T.panel, border: `1px solid ${T.lineStrong}`, borderTop: 0, borderRadius: `0 0 ${T.radius}px ${T.radius}px`, padding: '22px 24px 26px' },
   h2: { fontSize: 17, fontWeight: 700, margin: '0 0 6px', letterSpacing: '-.02em' },
   subject: { fontSize: 12.5, color: T.ink2, margin: '0 0 16px' },
@@ -387,7 +394,7 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
    * **④는 자동이 아니다.** "±10퍼센트 범위 이내로서 단위사업의 입지여건, 마감수준,
    * 인근부동산중개업소 방문조사 결과 등을 감안하여 그 **타당성이 인정되는 경우**" 다.
    * 예전에는 110% 이내면 말없이 예정분양가를 채택했는데, 그건 규정을 앞질러 간 것이다.
-   * 원칙(나목)은 평균가격 채택이고, ④는 심사자가 체크해야 열린다.
+   * 원칙(나목)은 평균가격 채택이고, ④는 「확인하세요」 알림으로 그 결과값을 함께 보여준다(2026-10-01 — 체크박스 폐지).
    */
   const proper = (() => {
     if (!sitePrice || !gAvg) return null;
@@ -401,14 +408,10 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
           + (ratio < 90 ? ' 적정분양가의 90% 미만이므로 실무상 적정한 것으로 간주합니다.' : ''),
       };
     }
-    if (within10 && site.art4) {
-      return {
-        price: sitePrice, ratio, within10, tone: 'ok',
-        clause: '제16조④',
-        why: '±10% 범위 이내이고 입지여건·마감수준·인근 중개업소 방문조사 결과를 감안해 '
-          + '타당성이 인정되는 것으로 판단하여 예정분양가를 적용합니다.',
-      };
-    }
+    /*
+      **④ 를 체크박스로 묻지 않는다**(사용자 지적 2026-10-01 「체크하게 할 필요는 없고 결과를 다 보여줘」).
+      결론은 원칙(나목 — 평균가격)으로 내고, ④ 가 열리는 경우는 아래 「확인하세요」 로 그 결과값까지 보여준다.
+    */
     return {
       price: gAvg, ratio, within10, tone: 'warn',
       clause: '제16조①2 나목',
@@ -417,10 +420,21 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
   })();
 
   /* 근사 좌표로 찍은 핀은 이름에 그 사실을 적는다 — 지도에서 정확한 핀과 구분이 안 되면 안 된다 */
-  const markers = useMemo(() => items.map((a, i) => ({
-    no: i + 1, lat: a.y, lng: a.x, distance: a.distance,
-    name: a.geocode && a.geocode !== 'exact' ? `${a.name} (${GEOCODE_PIN[a.geocode] ?? '근사'})` : a.name,
-  })), [items]);
+  /*
+    **기축·미공고 단지도 골라서 지도에 띄운다**(사용자 요청 2026-10-01 「선택해서 지도에 표시하는 옵션」).
+    분양가가 없어 평균에는 못 넣지만 「옆에 뭐가 있나」 는 지도로 봐야 한다. 청록 핀 · 번호 「기N」 = 기축 표의 #.
+  */
+  const knownOn = v.knownShown ?? [];
+  const knownItems = data?.knownApts?.items ?? [];
+  const markers = useMemo(() => [
+    ...items.map((a, i) => ({
+      no: i + 1, lat: a.y, lng: a.x, distance: a.distance,
+      name: a.geocode && a.geocode !== 'exact' ? `${a.name} (${GEOCODE_PIN[a.geocode] ?? '근사'})` : a.name,
+    })),
+    ...knownItems.map((a, i) => ({ a, i })).filter(({ a }) => knownOn.includes(a.name) && a.y != null)
+      .map(({ a, i }) => ({ no: `기${i + 1}`, lat: Number(a.y), lng: Number(a.x), distance: a.distance,
+        name: `[기축] ${a.name}`, color: '#00897B' })),
+  ], [items, knownItems, knownOn]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const basisNote = areaBasis === 'supply' ? '공급면적 기준' : '전용면적 기준';
   const noSupply = areaBasis === 'supply' && items.some(a => isSale(a) && priceOf(a) == null);
@@ -734,33 +748,36 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
           </table>
           <div style={S.propWhy}>{proper.why}</div>
 
-          <div style={S.propAsk}>
-            <div style={S.propAskHead}>심사자 판단</div>
-            {/* ④ 는 자동이 아니다 — 타당성 인정은 사람이 한다 */}
-            <label style={{ ...S.propCheck, opacity: proper.within10 && sitePrice > gAvg ? 1 : 0.45 }}>
-              <input type="checkbox" checked={!!site.art4}
-                disabled={!(proper.within10 && sitePrice > gAvg)}
-                onChange={e => setSite({ art4: e.target.checked })} />
+          {/*
+            **심사자가 판단할 것은 체크가 아니라 알림으로**(사용자 지적 2026-10-01 「이것보세요! 유의하세요 이런 느낌」).
+            어느 경우든 결과값을 미리 계산해 보여준다 — 판단은 사람이 하고, 화면은 판단에 필요한 숫자를 다 낸다.
+          */}
+          <div style={S.notes}>
+            {proper.within10 && sitePrice > gAvg && (
+              <div style={S.noteBox('info')}>
+                <span style={S.noteTag('info')}>확인하세요</span>
+                <span>
+                  <b>제16조④</b> — 예정분양가가 평균가격의 <b>{proper.ratio.toFixed(1)}%</b> 로 ±10% 이내입니다.
+                  입지여건·마감수준·인근 중개업소 방문조사 결과를 감안해 <b>타당성이 인정되면</b>{' '}
+                  적정분양가는 예정분양가 <b>{won(sitePrice)} 원/㎡</b>(평당 {won(sitePrice * PY)}) 입니다.
+                  인정되지 않으면 위 평균가격 {won(gAvg)} 원/㎡ 입니다.
+                </span>
+              </div>
+            )}
+            {!proper.within10 && (
+              <div style={S.noteBox('warn')}>
+                <span style={S.noteTag('warn')}>유의하세요</span>
+                <span>예정분양가가 평균가격의 <b>{proper.ratio.toFixed(1)}%</b> 로 ±10% 를 넘습니다 — 제16조④ 를 적용할 수 없어 평균가격으로 정하고 보증신청인과 사전협의가 필요합니다.</span>
+              </div>
+            )}
+            <div style={S.noteBox(proper.ratio <= 105 ? 'info' : 'warn')}>
+              <span style={S.noteTag(proper.ratio <= 105 ? 'info' : 'warn')}>{proper.ratio <= 105 ? '확인하세요' : '유의하세요'}</span>
               <span>
-                <b>제16조④ 타당성 인정</b> — ±10% 이내이고 입지여건·마감수준·인근 중개업소
-                방문조사 결과를 감안해 타당하다고 판단
-                {proper.within10 && sitePrice > gAvg
-                  ? <span style={S.propHint}> → 체크하면 적정분양가가 예정분양가 {won(sitePrice)} 이 됩니다</span>
-                  : <span style={S.propHint}> (예정분양가가 평균보다 높고 ±10% 이내일 때만 해당)</span>}
+                <b>미분양관리지역 사업장이면</b> 예정분양가가 적정분양가(평균가격 기준)의 105% 이내여야 합니다(제16조⑥) —
+                지금 <b style={{ color: proper.ratio <= 105 ? T.ok : T.warn }}>{proper.ratio.toFixed(1)}% · {proper.ratio <= 105 ? '충족' : '초과'}</b>.
+                미분양관리지역 여부는 HUG 가 매월 공고합니다.
               </span>
-            </label>
-            <label style={S.propCheck}>
-              <input type="checkbox" checked={!!site.unsoldZone}
-                onChange={e => setSite({ unsoldZone: e.target.checked })} />
-              <span>
-                <b>미분양관리지역 사업장</b> — 예정분양가가 적정분양가의 105% 이내여야 함 (제16조⑥)
-                {site.unsoldZone && (
-                  <b style={{ color: proper.ratio <= 105 ? T.ok : T.warn }}>
-                    {' '}→ 현재 {proper.ratio.toFixed(1)}% · {proper.ratio <= 105 ? '충족' : '초과'}
-                  </b>
-                )}
-              </span>
-            </label>
+            </div>
           </div>
         </div>
       )}
@@ -1024,13 +1041,20 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
             </div>
             <div style={S.scroll}>
               <table style={S.table}>
-                <thead><tr>{['#', '단지명', '주소', '거리', '세대수', '시공사', '사용승인일',
-                             '실거래 단가(원/㎡·전용)', '거래'].map(c =>
+                <thead><tr>{['지도', '#', '단지명', '주소', '거리', '세대수', '시공사', '사용승인일',
+                             '실거래 단가(원/㎡·전용)', '거래', '실거래가'].map(c =>
                   <th key={c} style={S.th}>{c}</th>)}</tr></thead>
                 <tbody>
                   {data.knownApts.items.map((a, i) => (
                     <tr key={`${a.name}-${i}`} style={S.rowOut}>
-                      <td style={S.td}>{i + 1}</td>
+                      <td style={S.td}>
+                        <input type="checkbox" style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#00897B' }}
+                          title="아래 지도에 청록 핀으로 표시합니다"
+                          checked={knownOn.includes(a.name)}
+                          onChange={() => set({ knownShown: knownOn.includes(a.name)
+                            ? knownOn.filter(n => n !== a.name) : [...knownOn, a.name] })} />
+                      </td>
+                      <td style={S.td}>{knownOn.includes(a.name) ? <b style={{ color: '#00897B' }}>기{i + 1}</b> : i + 1}</td>
                       <td style={S.tdL}>
                         {a.name}
                         {a.planned && <span style={{ ...S.badge('none'), marginLeft: 6 }}>미준공</span>}
@@ -1045,6 +1069,16 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
                         {a.trade
                           ? <span style={{ fontSize: 11, color: T.muted }}>{a.trade.deals}건 · {a.trade.from}~{a.trade.to}</span>
                           : '-'}
+                      </td>
+                      {/*
+                        **실거래가를 바로 보는 길**(사용자 요청 2026-10-01). 단지명으로 검색했을 때 그 단지가 바로 뜨는 곳이
+                        호갱노노였다(실측 — KB·네이버는 검색어를 넘겨도 결과 화면으로 가지 않는다). 동 번호·괄호는 떼고 묻는다.
+                      */}
+                      <td style={S.td}>
+                        <a style={S.rtLink} target="_blank" rel="noopener noreferrer"
+                          href={`https://hogangnono.com/search?q=${encodeURIComponent(String(a.name).replace(/\s*\d+동$/, '').replace(/\(.*?\)/g, '').trim())}`}>
+                          보기 ↗
+                        </a>
                       </td>
                     </tr>
                   ))}
@@ -1129,7 +1163,7 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
           polygon={data.basis === 'polygon' ? polygon : null}
           radiusBasis={radiusBasis}
           defaultMapType="ROADMAP"
-          caption="핀 번호 = 위 표의 #"
+          caption={knownOn.length ? '핀 번호 = 위 표의 # · 청록 「기N」 = 기축·미공고 단지 표의 #' : '핀 번호 = 위 표의 # · 기축·미공고 단지는 그 표의 「지도」 칸을 켜면 찍힙니다'}
         />
 
       </>)}

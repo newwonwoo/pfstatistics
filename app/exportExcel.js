@@ -263,16 +263,15 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
         ? { price: sitePrice, clause: '제16조①2 가목',
             why: '예정분양가가 평균가격보다 낮으므로 예정분양가를 적용'
               + (ratio < 90 ? ' (적정분양가의 90% 미만 — 실무상 적정한 것으로 간주)' : '') }
-        : (within10 && site.art4)
-          ? { price: sitePrice, clause: '제16조④',
-              why: '±10% 이내이고 타당성이 인정되는 것으로 판단하여 예정분양가를 적용 (심사자 판단)' }
-          : { price: gAvg, clause: '제16조①2 나목',
-              why: '예정분양가가 평균가격보다 높으므로 평균가격을 적용 — 보증신청인과 사전협의 필요' };
+        : { price: gAvg, clause: '제16조①2 나목',
+            why: '예정분양가가 평균가격보다 높으므로 평균가격을 적용 — 보증신청인과 사전협의 필요'
+              /* 화면과 같다 — ④ 는 체크가 아니라 「확인하세요」 로 결과값을 함께 적는다 */
+              + (within10 ? ` · [확인] 제16조④ ±10% 이내 — 타당성이 인정되면 예정분양가 ${Math.round(sitePrice).toLocaleString('ko-KR')} 원/㎡ 적용` : '') };
       const c = cw.getCell(cur.nextRow + 2, 2);
       c.value = `적정분양가 ${Math.round(p.price).toLocaleString('ko-KR')} 원/㎡`
         + ` (평당 ${Math.round(p.price * PY).toLocaleString('ko-KR')}) · ${p.clause}`
         + ` · ②÷① ${ratio.toFixed(1)}% · ${p.why}`
-        + (site.unsoldZone ? ` · 미분양관리지역 105% 기준 ${ratio <= 105 ? '충족' : '초과'} (제16조⑥)` : '')
+        + ` · [유의] 미분양관리지역 사업장이면 105% 이내여야 함 — 현재 ${ratio.toFixed(1)}% ${ratio <= 105 ? '충족' : '초과'} (제16조⑥)`
         + (guarantee.dropped.length
           ? ` · 평균가격은 분양보증 기준(${PRIORITY_YEARS}년 이내 분양개시 우선)으로 ${guarantee.set.length}곳`
             + ` — ${guarantee.dropped.map(x => x.name).join('·')} 제외`

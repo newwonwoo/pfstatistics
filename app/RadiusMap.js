@@ -276,9 +276,9 @@ export default function RadiusMap({ title, center, radius, steps = null, markers
         }
         new kakao.maps.CustomOverlay({
           position: p, map, yAnchor: 1, zIndex: 3,
-          content: `<div style="width:24px;height:24px;border-radius:24px;background:${i === 0 ? '#1b4fd8' : '#EA4335'};
+          content: `<div style="width:24px;height:24px;border-radius:24px;background:${m.color ?? (i === 0 ? '#1b4fd8' : '#EA4335')};
             border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);color:#fff;
-            font:700 12px 'Malgun Gothic',sans-serif;display:flex;align-items:center;justify-content:center">${no}</div>`,
+            font:700 ${/^\d{1,2}$/.test(String(no)) ? 12 : 10}px 'Malgun Gothic',sans-serif;display:flex;align-items:center;justify-content:center">${no}</div>`,
         });
         if (i < (labelMax ?? LABEL_MAX)) {
           /*

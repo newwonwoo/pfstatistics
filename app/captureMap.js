@@ -103,7 +103,8 @@ function drawPin(ctx, x, y, color, no = null) {
     ctx.fill();
   } else {
     ctx.fillStyle = '#ffffff';
-    ctx.font = '700 12px "Malgun Gothic","맑은 고딕",sans-serif';
+    /* 「기1」 처럼 글자가 섞이면 원 안에 들도록 작게 */
+    ctx.font = `700 ${/^\d{1,2}$/.test(String(no)) ? 12 : 10}px "Malgun Gothic","맑은 고딕",sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(String(no), x, y - 21 + 0.5);
@@ -334,7 +335,7 @@ export async function composeMap(el, spec = {}) {
         ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
         return;
       }
-      drawPin(ctx, q.x, q.y, i === 0 ? '#1b4fd8' : '#EA4335', m.no ?? i + 1);
+      drawPin(ctx, q.x, q.y, m.color ?? (i === 0 ? '#1b4fd8' : '#EA4335'), m.no ?? i + 1);
     });
     /* 경계가 그려져 있으면 사업지 핀은 그리지 않는다 — 화면과 같은 규칙 */
     const siteHasPoly = polygon?.length >= 3;
