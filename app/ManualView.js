@@ -105,6 +105,9 @@ const S = {
   /* 상시 표시되는 설명을 경고색으로 두면 진짜 경고를 놓친다 — 정보 톤으로 */
   warn: { marginTop: 10, padding: '9px 13px', background: '#f7f9fb', border: `1px solid ${T.line}`, borderRadius: 6, fontSize: 11.5, color: T.ink2, lineHeight: 1.65 },
   note: { marginTop: 12, fontSize: 11.5, color: T.muted, lineHeight: 1.8 },
+  /* 입력/결과 구획 이름 — 이 탭이 「위에서 넣고 아래서 읽는다」 는 것을 머리에서 말한다 */
+  sec: { fontSize: 12.5, fontWeight: 800, color: T.ink2, margin: '18px 0 9px', paddingLeft: 9,
+         borderLeft: `3px solid ${T.accent}` },
 };
 
 const KIND_LABEL = { auto: '자동', form: '값→점수', typed: '점수 직접' };
@@ -157,6 +160,17 @@ export default function ManualView({ region, addr, data, facilities, manual, val
         지금 할 일과 상관이 없다** — 여기서 할 일은 아래 칸을 채우는 것이고,
         각 칸은 이미 제 배점·근거를 달고 있다. 아래 합계표가 결과를 말한다.
       */}
+
+      {/*
+        **넣는 것은 위에, 결과는 아래에**(사용자 지적 2026-10-01 「심사표에 직접 넣는 걸 전부 위로 끄집어 올려 ·
+        모든 수기입력사항은 별도 폼으로 두고 표는 그 결과만 보는 곳으로」).
+        전에는 심사평점표 입력값이 맨 아래, 인구유입요인·합계 직접 입력이 결과표 안에 섞여 있어
+        넣다가 읽다가 위아래를 오갔다. 이제 칸은 전부 폼이고, 맨 아래 표는 읽기만 한다.
+      */}
+      <div style={S.sec}>입력 ① 심사평점표에 들어가는 값</div>
+      <ReviewInputs value={review} onChange={onReview} company={company} companyRank={companyRank} />
+
+      <div style={S.sec}>입력 ② 분양가격지수 제외 항목에 들어가는 값</div>
 
       {/* ── 규모 및 배치 ───────────────────────────────── */}
       <div style={S.box}>
@@ -291,6 +305,32 @@ export default function ManualView({ region, addr, data, facilities, manual, val
         </div>
       )}
 
+      {/* ── 지역수요 · 합계 직접 입력 ── 결과표 안에 있던 칸을 폼으로 꺼냈다 */}
+      <div style={S.box}>
+        <div style={S.head}><span>지역수요 — 인구유입요인</span><span style={S.headNote}>원천이 없어 직접 셉니다</span></div>
+        <div style={S.body}>
+          <div style={S.grid}>
+            <div style={S.field}>
+              <span style={S.lab}>인구유입요인 개수</span>
+              <div style={S.inflowSeg}>
+                {INFLOW_CHOICES.map(([n, lab]) => (
+                  <button key={n} style={S.inflowBtn(inflowOn(v.지역수요?.inflow, n))}
+                    onClick={() => setDemand({ inflow: n })}>{lab}</button>
+                ))}
+              </div>
+              <span style={S.sub}>신도시 · 혁신도시 · 기업도시 · 산업단지 등 · 2개 이상 5점 · 1개 3점 · 없음 1점 (4점·2점 행은 원문에 없습니다)</span>
+            </div>
+            <div style={S.field}>
+              <span style={S.lab}>분양가격지수 제외 항목 합계 직접 입력 <span style={{ fontWeight: 400, color: T.muted }}>(선택)</span></span>
+              <input style={S.input} type="number" min="0" step="any" placeholder="직접 입력"
+                value={v.exclOverride ?? ''} onChange={e => set({ exclOverride: e.target.value })} />
+              <span style={S.sub}>내부망 평가표 값을 그대로 쓸 때만 — 넣으면 아래 자동 합계 대신 이 값을 씁니다</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={S.sec}>결과 — 분양가격지수 제외 항목 점수</div>
       {/* ── A 합산 ─────────────────────────────────────── */}
       <div style={S.box}>
         <div style={S.head}>
@@ -304,7 +344,7 @@ export default function ManualView({ region, addr, data, facilities, manual, val
         */}
         {sum.override != null && (
           <div style={S.ovBanner}>
-            <b>직접 입력한 A = {sum.override} 을 씁니다</b> — 아래 표는 <b>참고</b>입니다(계산에 쓰이지 않습니다).
+            <b>직접 입력한 합계 {sum.override} 을 씁니다</b> — 아래 표는 <b>참고</b>입니다(계산에 쓰이지 않습니다).
             <button style={S.ovUndo} onClick={() => set({ exclOverride: '' })}>자동 합산으로 되돌리기</button>
           </div>
         )}
@@ -327,27 +367,6 @@ export default function ManualView({ region, addr, data, facilities, manual, val
                   : <td style={S.blank}><span style={S.wait}>대기</span></td>}
                 <td style={S.tdWhy}>
                   {r.why}
-                  {/*
-                    **인구유입요인은 어느 원천에도 없다** — 신도시·혁신도시·기업도시·산업단지 등
-                    요인의 개수를 사람이 센다. 전에는 표 위에 별도 입력칸을 두었는데,
-                    점수가 읽히는 줄과 넣는 칸이 떨어져 있었다(「넣는 버튼은 넣는 칸에」).
-                    구간표가 세 단계뿐이라 칩으로 정확히 덮인다 — 3개·4개를 구분해 넣어도 점수는 같다.
-                  */}
-                  {r.id === '지역수요' && (
-                    <div style={S.inflow}>
-                      <span style={S.inflowLab}>인구유입요인</span>
-                      <div style={S.inflowSeg}>
-                        {INFLOW_CHOICES.map(([n, lab]) => (
-                          <button key={n} style={S.inflowBtn(inflowOn(v.지역수요?.inflow, n))}
-                            onClick={() => setDemand({ inflow: n })}>{lab}</button>
-                        ))}
-                      </div>
-                      <span style={S.inflowHint}>
-                        신도시 · 혁신도시 · 기업도시 · 산업단지 등 — 원천이 없어 직접 셉니다
-                        (2개 이상 5점 · 1개 3점 · 없음 1점, <b>4점·2점 행은 원문에 없습니다</b>)
-                      </span>
-                    </div>
-                  )}
                   {/* 갈 곳을 글로만 적으면 탭을 찾아 눌러야 한다 — 그 자리에서 바로 보낸다 */}
                   {r.score == null && (r.tab ?? GOTO_TAB[r.id]) && (
                     <button style={S.go} onClick={() => onJump?.(r.tab ?? GOTO_TAB[r.id])}>
@@ -379,7 +398,7 @@ export default function ManualView({ region, addr, data, facilities, manual, val
                   ? <b style={{ color: T.warn }}>직접 입력한 {sum.override} 을 씁니다 (자동 합계 {sum.missing.length ? '산출 불가' : sum.sum})</b>
                   : sum.missing.length
                     ? <>미입력 <b style={{ color: T.warn }}>{sum.missing.length}개</b> — {sum.missing.join(' · ')}<br />
-                        <span>전 항목이 차야 A 를 확정합니다. 부분 합계({sum.sum})를 A 로 쓰면 분양률이 통째로 낮아집니다.</span></>
+                        <span>전 항목이 차야 이 점수를 확정합니다. 부분 합계({sum.sum})를 그대로 쓰면 분양률이 통째로 낮아집니다.</span></>
                     : sum.provisional.length
                       ? <>전 항목 입력됨 — 다만 <b style={{ color: T.warn }}>{sum.provisional.map(x => x.id).join(' · ')}</b> 에 판정 전 기본점수가 섞여 있습니다. 그 항목을 판정하면 이 점수가 바뀝니다.</>
                       : '전 항목 입력됨'}
@@ -387,27 +406,8 @@ export default function ManualView({ region, addr, data, facilities, manual, val
             </tr>
           </tbody>
         </table>
-        <div style={S.body}>
-          <div style={S.grid}>
-            <div style={S.field}>
-              <span style={S.lab}>합계 직접 입력 <span style={{ fontWeight: 400, color: T.muted }}>(선택)</span></span>
-              <input style={S.input} type="number" min="0" step="any" placeholder="직접 입력"
-                value={v.exclOverride ?? ''} onChange={e => set({ exclOverride: e.target.value })} />
-              <span style={S.sub}>내부망 평가표 값을 그대로 쓰고 싶을 때</span>
-            </div>
-          </div>
-          <div style={S.note}>
-            ※ 비워두면 위 합계를 씁니다. 넣으면 그 값이 <b>초기예상분양률</b>과 <b>분양가경쟁력 행렬</b>에 함께 적용됩니다.
-          </div>
-        </div>
       </div>
 
-      {/*
-        **심사평점표 입력값** — 「심사평점표에 있는 이 표는 결과만 보여주는 곳」(사용자 확정 2026-09-25).
-        사업수익률·누적DSCR·자기자금·시공순위·신용등급·PF보증잔액비율·감점을 여기서 받는다.
-        A 합산표 **아래**에 둔다 — 이 값들은 A 에 들어가지 않고 심사평점표에서 따로 쓰인다.
-      */}
-      <ReviewInputs value={review} onChange={onReview} company={company} companyRank={companyRank} />
     </div>
   );
 }

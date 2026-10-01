@@ -384,6 +384,15 @@ function liftByDistrict(sheetId, band, manual) {
   };
 }
 
+/**
+ * **6차선 왕복도로를 확정했는가** — 교통환경의 「완료」 를 가르는 단 하나의 기준(사용자 요청 2026-10-01
+ * 「몇차선인지까지 선택 및 확정하면 교통환경도 완료표시」). 도로를 적용하고, 차선 수를 넣고, [차선 확정] 을 눌러야 한다.
+ * `confirmed` 가 아예 없는 옛 보관본은 차선이 들어 있으면 확정으로 본다 — 그때는 확정 버튼이 없었다.
+ */
+export function roadConfirmed(road) {
+  return Boolean(road?.name) && (road?.lanes ?? 0) > 0 && road?.confirmed !== false;
+}
+
 export function scoreAverage(sheetId, { facilities, manual } = {}) {
   let parts = null;
   /* **실측치를 같이 들고 간다** — "지하철역 5" 만 적으면 몇 m 라서 5점인지 검산이 안 된다(사용자 지적) */
@@ -429,7 +438,10 @@ export function scoreAverage(sheetId, { facilities, manual } = {}) {
   /* 수기 입력을 아직 안 한 항목은 점수가 나와도 "확정" 이 아니다 — 평균 옆에 적어 둔다 */
   /* 하한이 만점(5)이면 무엇을 넣어도 결과가 같다 — 그때는 미입력이 판정을 흔들지 않는다 */
   const unset = lf.floor?.score >= 5 ? []
-    : parts.filter(p => p.sc.reason === '도로 미선택' || p.sc.reason === '차선 수 미입력');
+    : parts.filter(p => p.sc.reason === '도로 미선택' || p.sc.reason === '차선 수 미입력'
+      /* 차선을 골랐어도 [차선 확정] 전이면 아직 판정이 아니다 — 고르다 만 값이 결론까지 흘러가지 않게 */
+      || (p.name === '6차선 왕복도로' && road?.name && (road?.lanes ?? 0) > 0 && road?.confirmed === false));
+  const unconfirmedOnly = unset.length > 0 && unset.every(p => p.name === '6차선 왕복도로' && (road?.lanes ?? 0) > 0);
   const floorText = lf.text;
   return {
     avg: Number(avg.toFixed(2)),      // 평균점수 — 평가표의 "평균점수" 칸
@@ -446,7 +458,9 @@ export function scoreAverage(sheetId, { facilities, manual } = {}) {
         + `　⇒　(${parts.map(p => p.sc.score).join(' + ')}) / ${parts.length} = ${Number(avg.toFixed(2))}`
         + ` → ${band?.label ?? ''} → ${band?.score ?? '?'}점`
         + floorText,
-    caution: unset.length ? `${unset.map(p => p.name).join(' · ')} 미입력 상태의 기본점수가 섞여 있습니다` : null,
+    caution: !unset.length ? null
+      : unconfirmedOnly ? '6차선 왕복도로 차선 확정 전입니다 — [차선 확정] 을 눌러야 판정이 끝납니다'
+      : `${unset.map(p => p.name).join(' · ')} 미입력 상태의 기본점수가 섞여 있습니다`,
     parts,
   };
 }

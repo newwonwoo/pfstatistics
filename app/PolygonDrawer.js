@@ -85,6 +85,8 @@ export default function PolygonDrawer({ center, polygon, onChange, busy, autoDra
   }, [autoDraw]);
 
   useEffect(() => { if (!active) setDrawing(false); }, [active]);
+  /* 확정됐으면 더 찍히지 않게 — [그리기 중] 버튼이 숨은 채로 클릭이 점이 되면 경계가 조용히 바뀐다 */
+  useEffect(() => { if (done) setDrawing(false); }, [done]);
 
   // 꼭짓점이 바뀔 때마다 다시 그린다
   useEffect(() => {
@@ -112,22 +114,58 @@ export default function PolygonDrawer({ center, polygon, onChange, busy, autoDra
     onChange?.(pts.length >= 3 ? pts : null);
   }, [pts]);   // eslint-disable-line react-hooks/exhaustive-deps
 
+  /*
+    **그리기를 끝맺는 버튼은 [그리기 중 — 지도 클릭] 바로 옆에 둔다**(사용자 지적 2026-10-01).
+    전에는 지도 **아래 오른쪽 끝**에 있어, 점을 찍던 눈이 지도를 가로질러 내려가야 닿았고
+    그 옆 안내문(「이제 [통계 수집] 을 누르세요」)도 잘 안 읽혔다. 확정하면 다음 버튼으로 데려간다(page.js flash).
+    버튼은 한 자리에만 둔다 — 아래 띠에는 지금 상태를 말하는 글만 남긴다.
+  */
+  const finish = (fn) => () => { setDrawing(false); fn?.(); };
+  const action = !active ? (
+    <span style={S.ready(basisMode === 'point')}>
+      {basisMode === 'point' ? '중심 기준 — 보관된 경계는 거리 판정에 쓰지 않습니다' : '거리 기준 선택 중'}
+    </span>
+  ) : onCollect ? (
+    <button style={S.go(pts.length >= 3 && !busy)}
+      disabled={pts.length < 3 || !!busy}
+      title={pts.length < 3 ? `경계를 ${3 - pts.length}점 더 찍어야 누를 수 있습니다` : ''}
+      onClick={finish(onCollect)}>
+      {busy ? '수집 중…'
+        : pts.length >= 3 ? `이 경계로 ${pendingSheet ?? '반경시설'} 수집`
+        : `경계를 ${3 - pts.length}점 더 찍으세요`}
+    </button>
+  ) : done ? (
+    <>
+      <span style={S.ready(true)}>✓ 경계 {pts.length}점 확정됨</span>
+      {onRedraw && <button style={S.btn(false)} onClick={() => { onRedraw(); setDrawing(true); }}>다시 그리기</button>}
+    </>
+  ) : onConfirm ? (
+    <button style={S.go(pts.length >= 3)}
+      disabled={pts.length < 3}
+      title={pts.length < 3 ? `경계를 ${3 - pts.length}점 더 찍어야 누를 수 있습니다` : ''}
+      onClick={finish(onConfirm)}>
+      {pts.length >= 3 ? `경계 ${pts.length}점 확정 →` : `경계를 ${3 - pts.length}점 더 찍으세요`}
+    </button>
+  ) : null;
+
   return (
     <div style={S.box}>
       <div style={S.bar}>
         <span style={S.name}>사업지 경계</span>
-        {active && <button style={S.btn(drawing)} onClick={() => setDrawing(d => !d)}>
+        {active && !done && <button style={S.btn(drawing)} onClick={() => setDrawing(d => !d)}>
           {drawing ? '그리기 중 — 지도 클릭' : '그리기 시작'}
         </button>}
-        {active && <button style={S.btn(false)} onClick={() => setPts(p => p.slice(0, -1))} disabled={!pts.length}>
+        {action}
+        {active && !done && <button style={S.btn(false)} onClick={() => setPts(p => p.slice(0, -1))} disabled={!pts.length}>
           한 점 취소
         </button>}
-        {active && <button style={S.btn(false)} onClick={() => { setPts([]); setDrawing(false); }} disabled={!pts.length}>
+        {active && !done && <button style={S.btn(false)} onClick={() => { setPts([]); setDrawing(false); }} disabled={!pts.length}>
           전체 지우기
         </button>}
         <span style={S.hint}>
           {!active ? (basisMode === 'point' ? '현재 대표지번 중심 기준으로 판정합니다' : '거리 기준을 선택하세요')
-            : pts.length >= 3 ? `${pts.length}점 — 경계 기준 판정`
+            : done ? (doneHint ?? '경계 기준으로 잽니다')
+            : pts.length >= 3 ? `${pts.length}점 — 다 찍었으면 확정하세요`
             : '3점 이상 찍으면 경계 최단거리로 잽니다 (실측 100m 넘게 차이납니다)'}
         </span>
       </div>
@@ -135,73 +173,17 @@ export default function PolygonDrawer({ center, polygon, onChange, busy, autoDra
       {err ? <div style={S.fail}>지도를 불러오지 못했습니다.<br />{err}</div>
            : <div ref={el} data-map="사업지 경계" style={S.map} />}
 
-      {/*
-        그리고 나서 뭘 해야 하는지가 안 보이면 안 된다.
-        다음 동작(수집)을 지도 바로 아래에 붙여 둔다.
-      */}
       <div style={S.next}>
         <span style={S.foot2}>
           {!active ? (basisMode === 'point'
             ? `현재 중심 기준으로 잽니다${pts.length >= 3 ? ` — 경계 ${pts.length}점은 보관 중` : ''}`
             : '거리 기준을 선택한 뒤 수집하세요')
             : pts.length >= 3
-            ? `경계 ${pts.length}점 지정됨 — 경계 최단거리로 판정합니다 (사업지 안의 시설은 0m)`
+            ? `경계 ${pts.length}점 — 경계 최단거리로 판정합니다 (사업지 안의 시설은 0m)`
             : drawing
               ? '지도를 클릭해 사업지 모서리를 찍으세요 (3점 이상)'
               : '[그리기 시작] 을 누르고 지도에서 사업지 모서리를 찍으세요'}
         </span>
-        {/*
-          **안내문이 가리키는 버튼이 화면에 없었다**(사용자 지적 2026-09-17).
-          "「이 경계로 수집」 을 누르세요" 라고 적어놓고 정작 그 이름의 버튼은 어디에도 없었고,
-          실제로는 674px 위 단계 줄의 [반경시설 수집] 을 다시 눌러야 했다.
-          **수집 버튼을 두 군데 두지 않는다**는 규칙은 지킨다 —
-          이 버튼은 경계 기준을 고른 **그 순간에만** 있고, 수집이 끝나면 사라진다.
-          단계 줄 버튼은 이 흐름을 *시작한* 버튼이고, 이건 그 흐름을 *끝내는* 버튼이다.
-        */}
-        {/*
-          **경계 그리기를 끝맺는 버튼이 없었다**(사용자 요청 2026-09-24).
-          점을 다 찍어도 "이제 뭘 하지" 가 화면에 없었다 — 다음 할 일([통계 수집])은
-          674px 위 단계 줄에 있는데 그리로 시선을 보내는 것이 아무것도 없었다.
-          **[경계 확정]** 으로 이 흐름을 끝내고, 끝나면 다음 단계를 말해준다.
-          확정한 뒤에도 고칠 수 있어야 하므로 **[다시 그리기]** 를 같은 자리에 둔다.
-
-          수집 흐름에서 들어온 경우([반경시설 수집] → 경계)는 그 흐름을 끝내는 버튼이
-          [이 경계로 … 수집] 이다 — 그때는 그쪽이 우선이다(버튼을 두 개 세우지 않는다).
-        */}
-        {!active ? (
-          <span style={S.ready(basisMode === 'point')}>
-            {basisMode === 'point' ? '중심 기준 — 보관된 경계는 거리 판정에 쓰지 않습니다' : '거리 기준 선택 중'}
-          </span>
-        ) : onCollect ? (
-          <button style={S.go(pts.length >= 3 && !busy)}
-            disabled={pts.length < 3 || !!busy}
-            title={pts.length < 3 ? `경계를 ${3 - pts.length}점 더 찍어야 누를 수 있습니다` : ''}
-            onClick={onCollect}>
-            {busy ? '수집 중…'
-              : pts.length >= 3 ? `이 경계로 ${pendingSheet ?? '반경시설'} 수집`
-              : `경계를 ${3 - pts.length}점 더 찍으세요`}
-          </button>
-        ) : done ? (
-          <>
-            <span style={S.ready(true)}>✓ 경계 {pts.length}점 확정됨{doneHint ? ` — ${doneHint}` : ''}</span>
-            {onRedraw && (
-              <button style={S.btn(false)} onClick={onRedraw}>다시 그리기</button>
-            )}
-          </>
-        ) : onConfirm ? (
-          <button style={S.go(pts.length >= 3)}
-            disabled={pts.length < 3}
-            title={pts.length < 3 ? `경계를 ${3 - pts.length}점 더 찍어야 누를 수 있습니다` : ''}
-            onClick={onConfirm}>
-            {pts.length >= 3 ? `경계 ${pts.length}점 확정` : `경계를 ${3 - pts.length}점 더 찍으세요`}
-          </button>
-        ) : (
-          <span style={S.ready(pts.length >= 3)}>
-            {busy ? '수집 중…'
-              : pts.length >= 3 ? `경계 ${pts.length}점 지정됨 — 경계 기준으로 잽니다`
-              : '경계 그리기는 선택입니다 — 안 그리면 대표지번 중심으로 잽니다'}
-          </span>
-        )}
       </div>
     </div>
   );

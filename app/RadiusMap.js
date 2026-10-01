@@ -194,6 +194,13 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
           new kakao.maps.Polyline({ map, path, strokeWeight: 2.5, strokeColor: '#ad1457', strokeOpacity: 0.95, strokeStyle: 'shortdash' });
           return;
         }
+        /*
+          **판정에 쓰는 도로(굵은 파랑)는 흰 테두리를 깐다**(사용자 요청 2026-10-01 「직관적으로 볼 수 있도록 이펙트 · 통일감 있게」).
+          위성 바탕에서 파랑 선이 묻혔다 — 사업지 경계·반경선처럼 바탕 위에 떠 보이게 한다. 캡쳐(composeMap)도 같다.
+        */
+        if (ln.strong) {
+          new kakao.maps.Polyline({ map, path, strokeWeight: 11, strokeColor: '#ffffff', strokeOpacity: 0.85, strokeStyle: 'solid' });
+        }
         new kakao.maps.Polyline({
           map, path,
           strokeWeight: ln.strong ? 6 : 4,
@@ -463,6 +470,10 @@ export default function RadiusMap({ title, center, radius, markers = [], lines =
     const { map, kakao } = m;
     const LL = (p) => new kakao.maps.LatLng(p.lat, p.lng);
     if (sketch.path.length >= 2) {
+      /* 적용한 도로와 같은 흰 테두리 — 그리는 선도 바탕 위에 뜬다 */
+      sketchOverlays.current.push(new kakao.maps.Polyline({
+        map, path: sketch.path.map(LL), strokeWeight: 11, strokeColor: '#ffffff', strokeOpacity: 0.85, strokeStyle: 'solid',
+      }));
       sketchOverlays.current.push(new kakao.maps.Polyline({
         map, path: sketch.path.map(LL), strokeWeight: 6, strokeColor: '#d81b60', strokeOpacity: 0.9, strokeStyle: 'solid',
       }));

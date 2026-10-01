@@ -8,7 +8,7 @@ import Steps from './Steps';
 import SheetTabs from './SheetTabs';
 import { expectedRateOf } from '../src/lib/compare';
 import { manualSummary, isFirstInDistrict, firstAnswered } from '../src/lib/manual';
-import { reviewScore, applyHidden } from '../src/lib/scoring';
+import { reviewScore, applyHidden, roadConfirmed } from '../src/lib/scoring';
 import CompareView from './CompareView';
 import RateView from './RateView';
 import ReviewView from './ReviewView';
@@ -71,6 +71,11 @@ const S = {
     color: done ? T.ok : primary ? '#fff' : T.ink,
   }),
   check: { fontSize: 11, fontWeight: 800 },
+  /* 받긴 했는데 사람이 마무리할 것이 남은 단계 — 초록(완료)도 파랑(실행)도 아닌 주황 */
+  btnWarn: { border: `1px solid ${T.warn}`, background: T.warnSoft, color: T.warn },
+  /* 그 일을 하러 가는 작은 길 — 단계 버튼 바로 옆에 붙는다 */
+  miniGo: { padding: '5px 10px', borderRadius: 5, fontSize: 11.5, fontWeight: 800, cursor: 'pointer',
+            border: `1px solid ${T.accent}`, background: '#fff', color: T.accent, whiteSpace: 'nowrap', fontFamily: 'inherit' },
   dim: { color: T.muted },
   /** 수집 전 기준 선택 관문 — 지나칠 수 없게 눈에 띄어야 한다 */
   ask: {
@@ -205,6 +210,8 @@ export default function Home() {
     그 자리에서 다음 단계([통계 수집])를 말해준다. [다시 그리기] 로 되돌린다.
   */
   const [polyDone, setPolyDone] = useState(false);
+  /* 다음에 누를 버튼을 잠깐 맥박치게 한다 — 'stats' · 'poi' · 'road' · 'comp' (globals.css .pf-pulse) */
+  const [pulse, setPulse] = useState(null);
   const [geo, setGeo] = useState(null);             // 주소 매칭 결과 (후보 포함)
   const [pick, setPick] = useState(0);              // 고른 후보
   const [manual, setManual] = useState({});         // 위성 육안 판정(6차선 등) · 사업지구(수용·환지)
@@ -398,11 +405,19 @@ export default function Home() {
       */
       const got = Object.values(j.facilities ?? {});
       const hit = got.filter(v => v.nearest).length;
+      /*
+        **교통환경은 받고 나서 사람이 할 일이 남는다** — 6차선 왕복도로의 차선을 로드뷰로 세어 확정하는 것.
+        수집 완료 문구에서 그 일을 말하고 그 자리로 가는 길을 같이 준다(사용자 요청 2026-10-01).
+      */
+      const roadLeft = (sheet == null || sheet === '교통환경') && !roadConfirmed(manual['6차선 왕복도로']);
       setMsg({
         kind: 'ok',
         text: `${sheet ?? '반경시설'} 수집 완료 — ${got.length}종 조회 · 반경 내 ${hit}종`
-          + ` · ${j.basis === 'polygon' ? '사업지 경계 기준' : '대표지번 중심점 기준'}`,
+          + ` · ${j.basis === 'polygon' ? '사업지 경계 기준' : '대표지번 중심점 기준'}`
+          + (roadLeft ? ' — 교통환경의 6차선 왕복도로는 차선을 세어 확정해야 끝납니다' : ''),
+        road: roadLeft,
       });
+      if (roadLeft) flash('road');
     } catch (e) { setMsg({ kind: 'err', text: e.message }); }
     finally { setBusy(null); }
   }
@@ -464,6 +479,7 @@ export default function Home() {
      */
     const missing = [
       ...POI_SHEETS.filter(sh => !poiDone(sh)).map(sh => `${sh} (반경시설 미수집)`),
+      ...(poiDone('교통환경') && !roadOk ? ['교통환경 (6차선 왕복도로 차선 미확정)'] : []),
       ...(compare?.data ? [] : ['비교사업장 (미수집)']),
       ...(mSum?.excl == null ? [`수기입력 (A 미완성${mSum?.missing?.length ? ` — ${mSum.missing.length}개 남음` : ''})`] : []),
       ...(() => {
@@ -494,6 +510,38 @@ export default function Home() {
     Object.values(facilities?.facilities ?? {}).some(v => v.sheet === sheet);
   const allPoi = POI_SHEETS.every(poiDone);
   const poiDone3 = POI_SHEETS.filter(poiDone).length;
+  /*
+    **교통환경은 시설을 받았다고 끝나지 않는다** — 6차선 왕복도로는 사람이 로드뷰로 차선을 세어
+    [차선 확정] 을 눌러야 판정이 끝난다(사용자 요청 2026-10-01). 완료 점·단계 줄·STEP 이 모두 이 값을 본다.
+  */
+  const roadOk = roadConfirmed(manual['6차선 왕복도로']);
+
+  /**
+   * 다음에 누를 버튼으로 시선을 보낸다 — 그 버튼까지 스크롤하고 세 번 맥박친다.
+   * 안내문(「이제 [통계 수집] 을 누르세요」)은 화면 구석에 있어 잘 안 읽혔다(사용자 지적 2026-10-01).
+   */
+  const flash = (key) => {
+    setPulse(null);
+    setTimeout(() => {
+      setPulse(key);
+      document.querySelector(`[data-step="${key}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 60);
+    setTimeout(() => setPulse(p => (p === key ? null : p)), 3600);
+  };
+  /** [도로정보 확인 ↓] — 교통환경 탭의 도로 칸으로 바로 내려간다(차선을 넣는 중이면 그 칸으로) */
+  const goRoad = () => {
+    setTab('교통환경'); setMapOpenManual(null); setMsg(null);
+    setTimeout(() => {
+      const root = document.querySelector('[data-sheet="교통환경"]');
+      const el = root?.querySelector('[data-road-lanes]') ?? root?.querySelector('[data-road]');
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      /* 도착한 자리를 맥박으로 알린다 — 단계 줄의 다음 버튼과 같은 효과(.pf-pulse) */
+      [el, root?.querySelector('[data-road-draw]')].filter(Boolean).forEach(x => {
+        x.classList.remove('pf-pulse'); void x.offsetWidth; x.classList.add('pf-pulse');
+        setTimeout(() => x.classList.remove('pf-pulse'), 3600);
+      });
+    }, 120);
+  };
   /*
     비교사업장도 **자료수집 단계**다. 이걸 빼고 STEP 2 를 완료로 표시했더니
     분양가경쟁력이 빈 채로 다음 단계가 열렸고, 단계 줄에 그 탭으로 가는 길도 없었다.
@@ -663,13 +711,13 @@ export default function Home() {
 
   const done = [
     ...(fixed ? ['input'] : []),
-    ...(data && allPoi && compDone ? ['collect'] : []),
+    ...(data && allPoi && roadOk && compDone ? ['collect'] : []),
     ...(mSum.excl != null ? ['manual'] : []),
     ...(ratePct != null ? ['rate'] : []),
     ...(reviewRes?.net != null ? ['review'] : []),
   ];
   const current = !fixed ? 'input'
-    : !data || !allPoi || !compDone ? 'collect'
+    : !data || !allPoi || !roadOk || !compDone ? 'collect'
     : mSum.excl == null ? 'manual'
     : ratePct == null ? 'rate'
     : 'review';
@@ -731,6 +779,8 @@ export default function Home() {
     for (const sh of POI_SHEETS) {
       if (Object.values(facilities?.facilities ?? {}).some(v => v.sheet === sh)) m[sh] = 'ok';
     }
+    /* 교통환경은 6차선 차선을 확정해야 끝난다 — 시설만 받았으면 절반 */
+    if (m['교통환경'] === 'ok' && !roadOk) m['교통환경'] = 'partial';
     /* 비교사업장 — 수집만 했으면 절반, 단지를 골라 평균이 나와야 다 된 것이다 */
     if (compare?.data) m['비교사업장'] = cmpSum?.avg != null ? 'ok' : 'partial';
     /* 수기입력 — A 가 나와야 끝난다 */
@@ -743,7 +793,7 @@ export default function Home() {
     if (reviewRes?.net != null) m['심사평점표'] = 'ok';
     else if (review && Object.keys(review).length) m['심사평점표'] = 'partial';
     return m;
-  }, [data, facilities, compare, cmpSum, sheetInput, mSum.excl, ratePct, review, reviewRes]);
+  }, [data, facilities, compare, cmpSum, sheetInput, mSum.excl, ratePct, review, reviewRes, roadOk]);
 
   /*
     수기입력 탭 옆 숫자 = **아직 넣지 않은 입력 칸 수**.
@@ -972,6 +1022,7 @@ export default function Home() {
               <span style={S.arrow}>›</span>
 
               <button
+                data-step="stats" className={pulse === 'stats' ? 'pf-pulse' : undefined}
                 style={S.btn({ busy: busy === 'collect', primary: !data, done: !!data })}
                 onClick={collect} disabled={!!busy}
               >
@@ -989,22 +1040,35 @@ export default function Home() {
               */}
               {!allPoi ? (
                 <button
+                  data-step="poi" className={pulse === 'poi' ? 'pf-pulse' : undefined}
                   style={S.btn({ busy: busy === 'poi', primary: !!data, done: false })}
                   onClick={() => collectPoi(null)} disabled={!!busy}
                 >
                   {busy === 'poi' ? '수집 중…' : `반경시설 수집${poiDone3 ? ` (${poiDone3}/3)` : ' (3종)'}`}
                 </button>
               ) : (
-                POI_SHEETS.map(sh => (
-                  <button
-                    key={sh}
-                    style={S.btn({ busy: busy === sh, done: true })}
-                    onClick={() => collectPoi(sh)} disabled={!!busy}
-                    title={`${sh} 만 다시 수집합니다`}
-                  >
-                    {busy === sh ? '수집 중…' : <><span style={S.check}>✓</span>{sh}</>}
-                  </button>
-                ))
+                POI_SHEETS.map(sh => {
+                  /*
+                    **교통환경은 도로를 사람이 확정해야 끝난다** — 시설만 받고 초록 ✓ 를 달면 끝난 줄 안다.
+                    확정 전이면 주황으로 두고, 바로 옆 [도로정보 확인 ↓] 가 교통환경 탭의 도로 칸으로 내려보낸다.
+                  */
+                  const roadLeft = sh === '교통환경' && !roadOk;
+                  return (
+                    <span key={sh} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      <button
+                        style={roadLeft ? { ...S.btn({ busy: busy === sh }), ...S.btnWarn } : S.btn({ busy: busy === sh, done: true })}
+                        onClick={() => collectPoi(sh)} disabled={!!busy}
+                        title={roadLeft ? '시설은 받았습니다 — 6차선 왕복도로 차선을 확정해야 끝납니다 (누르면 교통환경 시설만 다시 수집)' : `${sh} 만 다시 수집합니다`}
+                      >
+                        {busy === sh ? '수집 중…' : roadLeft ? <>교통환경 · 도로 확인 전</> : <><span style={S.check}>✓</span>{sh}</>}
+                      </button>
+                      {roadLeft && (
+                        <button data-step="road" className={pulse === 'road' ? 'pf-pulse' : undefined}
+                          style={S.miniGo} onClick={goRoad}>도로정보 확인 ↓</button>
+                      )}
+                    </span>
+                  );
+                })
               )}
 
               <span style={S.arrow}>›</span>
@@ -1015,7 +1079,8 @@ export default function Home() {
                 (실측 2026-09-24). 가라는 곳에 이미 와 있으면 그 버튼은 더 이상 다음이 아니다.
               */}
               <button
-                style={S.btn({ primary: !!data && allPoi && !compDone && tab !== '비교사업장', done: compDone })}
+                data-step="comp" className={pulse === 'comp' ? 'pf-pulse' : undefined}
+                style={S.btn({ primary: !!data && allPoi && roadOk && !compDone && tab !== '비교사업장', done: compDone })}
                 onClick={() => setTab('비교사업장')} disabled={!!busy}
               >
                 {compDone && <span style={S.check}>✓</span>}
@@ -1099,6 +1164,9 @@ export default function Home() {
         {msg && (
           <div style={S.msg(msg.kind)}>
             {msg.text}
+            {msg.road && !roadOk && (
+              <button style={{ ...S.miniGo, marginLeft: 10 }} onClick={goRoad}>도로정보 확인 ↓</button>
+            )}
             {msg.needCompany && (
               <div style={S.msgFix}>
                 <div style={{ width: 280 }}>
@@ -1175,8 +1243,9 @@ export default function Home() {
           done={polyDone || allPoi}
           doneHint={data ? '경계 기준으로 잽니다' : '이제 [통계 수집] 을 누르세요'}
           onConfirm={() => {
-            setPolyDone(true); setDrawNow(false); setMapOpenManual(false);
-            setMsg({ kind: 'ok', text: `경계 ${polygon?.length ?? 0}점 확정 — 이제 [통계 수집] 을 누르세요.` });
+            setPolyDone(true); setDrawNow(false); setMapOpenManual(false); setMsg(null);
+            /* 확정하면 다음 버튼으로 바로 데려간다 — 구석의 안내문을 찾아 읽게 하지 않는다 */
+            flash(!data ? 'stats' : !allPoi ? 'poi' : !roadOk ? 'road' : 'comp');
           }}
           onRedraw={() => {
             setPolyDone(false); setDrawNow(true); setMapOpenManual(true); setMsg(null);

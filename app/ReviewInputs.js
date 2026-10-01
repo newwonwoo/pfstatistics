@@ -27,13 +27,23 @@ const S = {
   tdWhy: { border: `1px solid ${T.sheetLine}`, padding: '7px 10px', textAlign: 'left', fontSize: 11.5, color: T.ink2, lineHeight: 1.6 },
   input: { width: 96, padding: '5px 7px', fontSize: 12.5, textAlign: 'right', borderRadius: 4,
            border: `1px solid ${T.line}`, background: '#fffdf0', color: T.ink, fontFamily: 'inherit' },
-  select: { width: 104, padding: '5px 5px', fontSize: 12.5, borderRadius: 4,
+  select: { width: 120, padding: '5px 5px', fontSize: 12.5, borderRadius: 4,
             border: `1px solid ${T.line}`, background: '#fffdf0', color: T.ink, fontFamily: 'inherit' },
   score: { border: `1px solid ${T.sheetLine}`, padding: '7px 10px', textAlign: 'center', fontWeight: 800, background: '#fffdf0', ...mono },
   pend: { color: T.muted, fontStyle: 'italic' },
   auto: { display: 'inline-block', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 3,
           background: T.okSoft, color: T.ok, marginLeft: 6 },
   note: { marginTop: 10, fontSize: 11.5, color: T.muted, lineHeight: 1.75 },
+  group: { display: 'flex', gap: 14, alignItems: 'flex-start', padding: '10px 0', borderBottom: `1px dashed ${T.line}` },
+  gLab: { width: 112, flex: '0 0 112px', paddingTop: 2, fontSize: 12, fontWeight: 800, color: T.ink2 },
+  grid: { display: 'flex', gap: 18, flexWrap: 'wrap', flex: 1 },
+  field: { display: 'flex', flexDirection: 'column', gap: 4, width: 190 },
+  lab: { fontSize: 11.5, fontWeight: 700, color: T.ink2 },
+  max: { marginLeft: 6, fontSize: 10.5, fontWeight: 600, color: T.muted },
+  inRow: { display: 'inline-flex', alignItems: 'center', gap: 5 },
+  unit: { fontSize: 11.5, color: T.muted },
+  out: { fontSize: 12, fontWeight: 800, color: T.ok, minHeight: 17, ...mono },
+  tip: { fontSize: 10.5, color: T.muted, lineHeight: 1.45 },
   warn: { marginTop: 10, padding: '9px 13px', background: T.warnSoft, border: `1px solid #f0dcb4`,
           borderRadius: 6, fontSize: 12, color: T.ink2, lineHeight: 1.65 },
 };
@@ -59,75 +69,78 @@ export default function ReviewInputs({ value, onChange, companyRank = null, comp
   const r = useMemo(() => reviewScore({ manual: v, rate: NaN }), [v]);
   const fromApp = companyRank != null && String(v[rankId] ?? '') === String(companyRank);
 
+  /*
+    **넣는 칸은 폼으로, 표는 결과만**(사용자 지적 2026-10-01 「모든 수기입력사항은 별도폼으로 두고 표는 그 결과만 보는 곳」).
+    전에는 「값」 열이 표 안에 있어 넣는 자리와 읽는 자리가 한 줄에 섞였다.
+    칸마다 바로 아래에 「→ N점」 만 짧게 붙인다 — 점수표 자체는 [심사평점표] 탭이다.
+  */
+  /* 컴포넌트가 아니라 함수로 부른다 — 렌더마다 새 컴포넌트가 되면 입력칸이 글자마다 포커스를 잃는다 */
+  const field = (it) => (
+    <div key={it.id} style={S.field}>
+      <span style={S.lab}>
+        {it.id}
+        {it.id === rankId && fromApp && <span style={S.auto}>자동</span>}
+        <span style={S.max}>배점 {it.max}</span>
+      </span>
+      {it.select
+        ? (
+          <select style={S.select} value={v[it.id] ?? ''} onChange={e => put(it.id, e.target.value)}>
+            <option value="">선택</option>
+            {it.select.options.map(o => <option key={o.id} value={o.id}>{o.id}</option>)}
+          </select>
+        )
+        : (
+          <span style={S.inRow}>
+            <input style={S.input} type="number" step="any" placeholder="입력"
+              value={v[it.id] ?? ''} onChange={e => put(it.id, e.target.value)} />
+            {it.unit && <span style={S.unit}>{it.unit}</span>}
+          </span>
+        )}
+      <span style={S.out}>
+        {it.score == null ? '' : `${typeof it.band === 'string' && it.band ? `${it.band} → ` : ''}${it.score}점`}
+      </span>
+      {it.id === rankId && companyRank != null && (
+        <span style={S.tip}>
+          {company ? `${company} ` : ''}{companyRank}위 — 이 앱이 수집한 값
+          {!fromApp && <b style={{ color: T.warn }}> (칸의 값과 다릅니다)</b>}
+        </span>
+      )}
+      {it.formula && <span style={S.tip}>{it.formula}</span>}
+    </div>
+  );
+
   return (
     <div style={S.box}>
       <div style={S.head}>
-        <span>심사평점표 입력값</span>
-        <span style={S.headNote}>사업수지표 · 신용평가에서 옮겨 적습니다 · 점수는 [심사평점표] 탭에서 읽습니다</span>
+        <span>심사평점표에 들어가는 값</span>
+        <span style={S.headNote}>사업수지표 · 신용평가에서 옮겨 적습니다 · 점수표는 [심사평점표] 탭</span>
       </div>
       <div style={S.body}>
-        <table style={S.tbl}>
-          <thead>
-            <tr>{['구분', '평가항목', '배점', '값', '점수', '근거'].map(c => <th key={c} style={S.th}>{c}</th>)}</tr>
-          </thead>
-          <tbody>
-            {r.groups.map(g => g.items.filter(it => !it.auto).map((it, i, arr) => (
-              <tr key={it.id}>
-                {i === 0 && (
-                  <td style={{ ...S.tdL, textAlign: 'center' }} rowSpan={arr.length}>
-                    {g.label}
-                  </td>
-                )}
-                <td style={S.tdL}>
-                  {it.id}
-                  {it.id === rankId && fromApp && <span style={S.auto}>자동</span>}
-                </td>
-                <td style={S.td}>{it.max}</td>
-                <td style={S.td}>
-                  {it.select
-                    ? (
-                      <select style={S.select} value={v[it.id] ?? ''} onChange={e => put(it.id, e.target.value)}>
-                        <option value="">선택</option>
-                        {it.select.options.map(o => <option key={o.id} value={o.id}>{o.id}</option>)}
-                      </select>
-                    )
-                    : (
-                      <input style={S.input} type="number" step="any"
-                        placeholder={it.unit || '값'}
-                        value={v[it.id] ?? ''} onChange={e => put(it.id, e.target.value)} />
-                    )}
-                </td>
-                <td style={it.score != null ? S.score : S.td}>
-                  {it.score == null ? <span style={S.pend}>—</span> : it.score}
-                </td>
-                <td style={S.tdWhy}>
-                  {it.id === rankId && companyRank != null && (
-                    <><b style={{ color: T.ink2 }}>
-                      {company ? `시공사 ${company} ` : ''}{companyRank}위 — 이 앱이 수집한 값입니다
-                    </b>
-                    {!fromApp && <span style={{ color: T.warn }}> (지금 칸의 값과 다릅니다)</span>}
-                    <br /></>
-                  )}
-                  {typeof it.band === 'string' && it.band ? `${it.band}${it.score != null ? ` → ${it.score}점` : ''}` : ''}
-                  {it.formula ? <><br />{it.formula}</> : null}
-                  {it.known ? <><br />확인된 구간 : {it.known}</> : null}
-                  {it.note ? <><br />{it.note}</> : null}
-                </td>
-              </tr>
-            )))}
-            <tr>
-              <td style={{ ...S.tdL, textAlign: 'center' }}>감점</td>
-              <td style={S.tdL}>사고사망만인율</td>
-              <td style={S.td}>—</td>
-              <td style={S.td}>
+        {r.groups.map(g => {
+          const items = g.items.filter(it => !it.auto);
+          if (!items.length) return null;
+          return (
+            <div key={g.label} style={S.group}>
+              <div style={S.gLab}>{g.label}</div>
+              <div style={S.grid}>{items.map(field)}</div>
+            </div>
+          );
+        })}
+        <div style={S.group}>
+          <div style={S.gLab}>감점</div>
+          <div style={S.grid}>
+            <div style={S.field}>
+              <span style={S.lab}>사고사망만인율 감점</span>
+              <span style={S.inRow}>
                 <input style={S.input} type="number" step="any" placeholder="없음"
                   value={v.__deduct ?? ''} onChange={e => put('__deduct', e.target.value)} />
-              </td>
-              <td style={S.td}>{Number.isFinite(Number(v.__deduct)) && v.__deduct !== '' ? `−${Number(v.__deduct)}` : <span style={S.pend}>—</span>}</td>
-              <td style={S.tdWhy}>0.5배 초과 ~ 1.0배 이하면 1점 감점합니다</td>
-            </tr>
-          </tbody>
-        </table>
+                <span style={S.unit}>점</span>
+              </span>
+              <span style={S.out}>{Number.isFinite(Number(v.__deduct)) && v.__deduct !== '' ? `−${Number(v.__deduct)}점` : ''}</span>
+              <span style={S.tip}>0.5배 초과 ~ 1.0배 이하면 1점</span>
+            </div>
+          </div>
+        </div>
 
         {r.zero && (
           <div style={S.warn}>
@@ -137,11 +150,9 @@ export default function ReviewInputs({ value, onChange, companyRank = null, comp
         )}
 
         <div style={S.note}>
-          ※ 이 칸들은 <b>점수가 아니라 원시값</b>입니다 — 사업수익률 10.64(%) · 누적DSCR 1.05 · 순위 3(위).
-          구간표가 점수를 냅니다.<br />
-          ※ 초기분양률(22)은 이 앱이 산정한 <b>초기예상분양률</b>에서 자동으로 나므로 여기에 칸이 없습니다.<br />
-          ※ 사업수익률의 분양가는 <b>Min(적정분양가, 예정분양가)</b> 이고, 적정분양가는
-          [비교사업장 · 분양가] 탭이 심사지침 제16조로 냅니다.
+          ※ 점수가 아니라 <b>원시값</b>을 넣습니다 — 사업수익률 10.64(%) · 누적DSCR 1.05 · 순위 3(위). 구간표가 점수를 냅니다.
+          초기분양률(22)은 이 앱이 산정한 <b>초기예상분양률</b>에서 나므로 칸이 없습니다.
+          사업수익률의 분양가는 <b>Min(적정분양가, 예정분양가)</b> — 적정분양가는 [비교사업장 · 분양가] 탭이 냅니다.
         </div>
       </div>
     </div>

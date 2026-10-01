@@ -279,6 +279,11 @@ export async function composeMap(el, spec = {}) {
         ctx.stroke(); ctx.setLineDash([]);
         return;
       }
+      /* 판정 도로는 화면처럼 흰 테두리를 먼저 깐다 */
+      if (ln.strong) {
+        ctx.strokeStyle = '#ffffff'; ctx.globalAlpha = 0.85; ctx.lineWidth = 11;
+        ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
+      }
       ctx.strokeStyle = ln.strong ? '#1b4fd8' : '#ff6f00';
       ctx.globalAlpha = ln.strong ? 0.95 : 0.7;
       ctx.lineWidth = ln.strong ? 6 : 4;

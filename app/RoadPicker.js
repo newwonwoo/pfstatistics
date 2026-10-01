@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { T } from './theme';
-import { scoreFacility } from '../src/lib/scoring';
+import { scoreFacility, roadConfirmed } from '../src/lib/scoring';
 
 /**
  * 6차선 왕복도로 — 주변 도로 후보에서 고른다.
@@ -57,6 +57,11 @@ const S = {
     borderRadius: 6, background: ask ? T.warnSoft : '#f7f9fb',
     border: `${ask ? 2 : 1}px solid ${ask ? T.warn : T.line}`, flexWrap: 'wrap' }),
   laneAsk: { fontSize: 12, fontWeight: 800, color: T.warn },
+  /* [차선 확정] — 고른 차선을 판정으로 굳히는 실행 버튼(진한 색은 실행만) */
+  confirm: { padding: '6px 14px', borderRadius: 6, border: 0, background: T.accent, color: '#fff',
+             fontSize: 12.5, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' },
+  confirmed: { padding: '5px 11px', borderRadius: 6, background: T.okSoft, color: T.ok,
+               border: '1px solid #c7e9d5', fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap' },
   lbl: { fontSize: 12, fontWeight: 700, color: T.ink2 },
   step: { width: 28, height: 28, borderRadius: 5, border: `1px solid ${T.lineStrong}`, background: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 700, color: T.ink2 },
   num: { width: 46, textAlign: 'center', fontSize: 15, fontWeight: 800, color: T.ink },
@@ -110,6 +115,57 @@ export function shownSet(value, rows) {
 /** 한 줄만 볼 때 — 목록이 크면 `shownSet` 을 한 번 만들어 쓸 것 */
 export const roadShown = (value, r, rows = null) => shownSet(value, rows).has(r.name);
 
+/**
+ * **차선 칸** — 차선을 고르고 [차선 확정] 으로 굳힌다. 후보 도로 행 밑과 그린 구간 막대(SheetView) 두 자리에서 쓴다.
+ * 값은 `manual['6차선 왕복도로']` 하나다 — 어느 자리에서 고쳐도 같은 값이 바뀐다.
+ */
+export function LaneControl({ value, onChange }) {
+  const set = (patch) => onChange?.(patch);
+  const lanes = value?.lanes ?? 0;
+  const verdict = scoreFacility('6차선 왕복도로', value);
+  /* 확정해야 교통환경이 끝난다 — 기준은 scoring.roadConfirmed 한 곳 */
+  const sure = roadConfirmed(value);
+  /* 차선을 바꾸면 다시 확정한다 — 고르다 만 값이 판정으로 굳지 않게 */
+  const setLanes = (n) => set({ lanes: n, confirmed: false });
+  return (
+    <div style={S.lanes(!sure)} data-road-lanes="">
+      <span style={S.lbl}>{value.name}{value.method === 'drawn' ? ' 그린 구간' : ''} · 왕복</span>
+      {/*
+        **＋ 를 여섯 번 눌러야 6차선이 됐다.** 게다가 같은 화면(교통환경 시트)의 지도 바에도
+        글자가 똑같은 [＋][－] 가 있어(확대·축소) 어느 쪽이 차선인지 헷갈렸다 —
+        실측 점검에서 확대만 여섯 번 되고 차선은 0 인 채로 넘어갔다.
+        왕복 차선은 실무상 2·4·6·8 로 떨어지므로 **한 번에 고르게** 하고,
+        스테퍼는 그 사이 값(3·5·10)을 위해 남기되 글자를 지도 버튼과 다르게 한다.
+      */}
+      <span style={S.quick}>
+        {[2, 4, 6, 8].map(n => (
+          <button key={n} style={S.quickBtn(lanes === n)} onClick={() => setLanes(n)}>{n}</button>
+        ))}
+      </span>
+      <button style={S.step} title="한 차선 줄이기"
+        onClick={() => setLanes(Math.max(0, lanes - 1))}>▼</button>
+      <span style={S.num}>{lanes || '?'}</span>
+      <button style={S.step} title="한 차선 늘리기"
+        onClick={() => setLanes(lanes + 1)}>▲</button>
+      <span style={S.lbl}>차선</span>
+      {/*
+        **차선을 고르는 것과 확정하는 것을 나눈다**(사용자 요청 2026-10-01 「몇차선인지까지 선택 및 확정(신규버튼) 하면
+        교통환경도 완료표시」). 확정 버튼은 고른 차선 **바로 옆**에 둔다 — 넣는 버튼은 넣는 칸 옆에.
+      */}
+      {!lanes
+        ? <span style={S.laneAsk}>왕복 몇 차선입니까? — 로드뷰로 세어 고르세요</span>
+        : sure
+          ? <><span style={S.confirmed}>✓ 왕복 {lanes}차선 확정</span>
+              <button style={S.undo} onClick={() => set({ confirmed: false })}>고치기</button></>
+          : <button style={S.confirm} onClick={() => set({ confirmed: true })}>왕복 {lanes}차선으로 확정</button>}
+      <span style={S.verdict(verdict.score > 1)}>
+        {verdict.score}점 · {verdict.label}{lanes > 0 && !sure ? ' (확정 전)' : ''}
+        <span style={{ fontWeight: 400, marginLeft: 6, opacity: 0.85 }}>({verdict.reason})</span>
+      </span>
+    </div>
+  );
+}
+
 export default function RoadPicker({ coord, radius = 300, polygon = null, value, onChange, onRoads, onPreview }) {
   const [rows, setRows] = useState(null);
   const [src, setSrc] = useState(null);
@@ -156,8 +212,6 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
   const visible = showSmall ? kept : kept.filter(r => r.rank <= 1);
   // 지도에 찍히는 것은 큰 도로(대로·로)만 — 길·번길까지 찍으면 핀에 덮인다
   const shown = shownSet(value, rows);
-  const lanes = value?.lanes ?? 0;
-  const verdict = scoreFacility('6차선 왕복도로', value);
 
 
   /*
@@ -167,36 +221,7 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
     이제 **고른 행 바로 밑**에 붙어 나타난다. 0px 이다.
   */
   /** 차선 입력 — 적용한 도로 **바로 밑**에 붙는다 */
-  const LaneBar = () => (
-    <div style={S.lanes(!lanes)}>
-      <span style={S.lbl}>{value.name} · 왕복</span>
-      {/*
-        **＋ 를 여섯 번 눌러야 6차선이 됐다.** 게다가 같은 화면(교통환경 시트)의 지도 바에도
-        글자가 똑같은 [＋][－] 가 있어(확대·축소) 어느 쪽이 차선인지 헷갈렸다 —
-        실측 점검에서 확대만 여섯 번 되고 차선은 0 인 채로 넘어갔다.
-        왕복 차선은 실무상 2·4·6·8 로 떨어지므로 **한 번에 고르게** 하고,
-        스테퍼는 그 사이 값(3·5·10)을 위해 남기되 글자를 지도 버튼과 다르게 한다.
-      */}
-      <span style={S.quick}>
-        {[2, 4, 6, 8].map(n => (
-          <button key={n} style={S.quickBtn(lanes === n)} onClick={() => set({ lanes: n })}>{n}</button>
-        ))}
-      </span>
-      <button style={S.step} title="한 차선 줄이기"
-        onClick={() => set({ lanes: Math.max(0, lanes - 1) })}>▼</button>
-      <span style={S.num}>{lanes || '?'}</span>
-      <button style={S.step} title="한 차선 늘리기"
-        onClick={() => set({ lanes: lanes + 1 })}>▲</button>
-      <span style={S.lbl}>차선</span>
-      {lanes
-        ? <span style={{ fontSize: 11, color: T.muted }}>로드뷰로 세어 넣으세요</span>
-        : <span style={S.laneAsk}>왕복 몇 차선입니까? — 로드뷰로 세어 고르세요</span>}
-      <span style={S.verdict(verdict.score > 1)}>
-        {verdict.score}점 · {verdict.label}
-        <span style={{ fontWeight: 400, marginLeft: 6, opacity: 0.85 }}>({verdict.reason})</span>
-      </span>
-    </div>
-  );
+  const LaneBar = () => <LaneControl value={value} onChange={set} />;
 
   const ApplyBar = () => (
         <div style={S.applyBar}>
@@ -227,7 +252,7 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
               drawn: null, drawnLength: null, from: null,
               shown: cur.includes(sel.name) ? cur : [...cur, sel.name],
               // 도로가 바뀌면 차선 수는 다시 센다 — 앞 도로 값을 물려받으면 판정이 틀린다
-              lanes: 0,
+              lanes: 0, confirmed: false,
             });
             setSel(null);
           }}
@@ -236,7 +261,8 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
   );
 
   return (
-    <div style={S.box}>
+    /* 단계 줄의 [도로정보 확인 ↓] 가 이 자리로 내려온다 */
+    <div style={S.box} data-road="">
       <div style={S.head}>
         반경 {Math.round(radius * 1.2)}m 도로 후보 — 판정 대상을 고르세요
         {shown.size > 0 && (
@@ -293,7 +319,8 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
       </div>
 
       {visible.map(r => {
-        const applied = value?.name === r.name;
+        /* 그린 구간은 이름이 후보와 같아도 그 후보를 적용한 것이 아니다 — 차선 칸은 목록 위에 따로 선다 */
+        const applied = value?.name === r.name && value?.method !== 'drawn';
         const on = applied || sel?.name === r.name;
         // 어느 점수 구간에 드는지 미리 보여준다 (6차선이라고 가정한 값)
         const band = scoreFacility('6차선 왕복도로', { distance: r.distance, lanes: 6 });
@@ -368,7 +395,7 @@ export default function RoadPicker({ coord, radius = 300, polygon = null, value,
         적용한 도로가 **목록에 안 보일 때**(길·번길을 접어두었거나 나중에 숨겼을 때)만
         아래에 한 벌 남긴다 — 그때 차선 칸까지 사라지면 6차선 판정을 손댈 방법이 없다.
       */}
-      {value?.name && !visible.some(r => r.name === value.name) && <LaneBar />}
+      {value?.name && value?.method !== 'drawn' && !visible.some(r => r.name === value.name) && <LaneBar />}
 
     </div>
   );
