@@ -492,7 +492,10 @@ export async function collectFacilities({ x, y }, only = null, polygon = null) {
       capped: capped || null,
       scanned,
       excluded: dropped.length || null,
-      excludedBy: dropped.length
+      /* 전부 부속시설이면 「부속시설이라 1곳 제외 (부속시설 1)」 로 같은 말을 되풀이한다 — 그때는 이름을 적는다 */
+      excludedBy: dropped.length && dropped.every(d => d.__sub)
+        ? dropped.slice(0, 3).map(d => d.place_name).join(' · ') + (dropped.length > 3 ? ` 외 ${dropped.length - 3}곳` : '')
+        : dropped.length
         ? Object.entries(droppedBy).sort((a, b) => b[1] - a[1]).slice(0, 6)
             .map(([k, v]) => `${k} ${v}`).join(' · ')
         : null,
