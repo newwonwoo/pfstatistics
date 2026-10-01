@@ -402,7 +402,7 @@ export function scoreAverage(sheetId, { facilities, manual } = {}) {
       { name: '지하철역', basis: distText(facilities, '지하철역'), sc: scorePoi('지하철역', facilities) },
       { name: '6차선 왕복도로',
         basis: road?.name
-          ? `${road.name}${road.method === 'drawn' ? ' (지도에서 두 점 지정)' : ''} ${road.distance ?? '?'}m · 왕복 ${road.lanes || '?'}차선`
+          ? `${road.name}${road.method === 'drawn' ? ' (지도에서 지정)' : ''} ${road.distance ?? '?'}m · 왕복 ${road.lanes || '?'}차선`
           : '도로 미선택',
         sc: scoreFacility('6차선 왕복도로', road) },
     ];
