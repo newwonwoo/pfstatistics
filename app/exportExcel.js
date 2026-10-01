@@ -28,6 +28,7 @@ import { scoreSheet, scoreGroup, scoreFacility, scorePoi, scoreMatrix, scoreAver
 import { expectedRateOf, firstOpts } from '../src/lib/compare';
 import { manualSummary } from '../src/lib/manual';
 import { guaranteeSetOf, PRIORITY_YEARS } from '../src/lib/similar';
+import { writeMainSheets } from './excelMain';
 
 const fmt = (v) =>
   typeof v === 'number' ? v : (v == null || v === '' ? '' : String(v));
@@ -139,6 +140,14 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
   wb.created = new Date();
 
   const byId = Object.fromEntries((data?.results ?? []).map(r => [r.indicatorId, r]));
+
+  /*
+    **결론 두 장을 맨 앞에**(사용자 지적 2026-10-01 「심사평점표랑 초기분양률 산정표는 메인으로 잡고 각잡고」).
+    종합(초기분양률 산정표) · 심사평점표 — 제목·사업장 정보·굵은 바깥선·결론 줄 강조·A4 인쇄 설정까지 갖춘 문서로.
+    예전의 「초기예상분양률」 · 「심사평점표」 덤프 시트는 이 두 장이 대신한다.
+  */
+  onProgress?.('종합 · 심사평점표');
+  writeMainSheets(wb, { data, facilities, manual, compare, rate, review, sheetInput, excl, manualSum });
 
   // ── 요약 시트 ────────────────────────────────────────────
   const sum = wb.addWorksheet('수집요약', { views: [{ showGridLines: false }] });
@@ -324,46 +333,6 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
     평가표의 결론이라 **맨 앞 가까이** 둔다. 화면의 값을 그대로 옮긴다 —
     종합평가 점수 = 제외항목점수(A) + 분양가경쟁력, 그 점수를 급간표에 댄 결과.
   */
-  {
-    onProgress?.('초기예상분양률');
-    /* 화면(page · RateView)과 같은 함수로 낸다 — 여기서 산식을 다시 쓰면 지구 내 최초 분양(지수 100) 같은 단서가 한쪽에만 걸린다 */
-    const { cmp, compScore, total, res } = expectedRateOf(compare, rate, excl, sheetInput, manual?.['사업지구']);
-    const hasExcl = excl != null;
-    const series = rate?.series ?? '주택';
-    const hh = sheetInput?.규모및배치?.총세대수 ?? '';
-
-    const rw = wb.addWorksheet('초기예상분양률', { views: [{ showGridLines: false }] });
-    let r = writeTable(rw, 2, {
-      title: '초기예상분양률',
-      subtitle: `▶ 사업지 : ${facilities?.address ?? data.region}`,
-      columns: ['구분', '값', '단위', '근거'],
-      rows: [
-        ['① 분양가격지수 제외 항목 점수', hasExcl ? excl : '', '점',
-         hasExcl ? (manualSum?.source === 'override' ? '수기입력 탭 · 직접 입력' : '수기입력 탭 자동 합산') : '미입력'],
-        ['② 분양가경쟁력', compScore ?? '', '점',
-         compScore != null ? `분양가격지수 ${cmp.index.toFixed(2)}${cmp.indexBasis === 'firstInDistrict' ? ' (지구 내 최초 분양 — 100 적용)' : ''} · ${cmp.sc.label}` : (cmp.sc?.text ?? '미산출')],
-        ['⇒ 종합평가 점수', total ?? '', '점', total != null ? res.band : ''],
-        ['⇒ 초기예상분양률', total != null && !res.pending ? `${res.rate}%` : '', '',
-         total != null && !res.pending
-           ? `${res.series} 급간` + (res.capped ? ` · ${res.capped.from}% 에서 상한 적용 (${res.capped.text})` : '')
-           : (res?.text ?? '산정 대기')],
-      ],
-    });
-    if (hh) { rw.getCell(r + 1, 2).value = `※ 총 세대수 ${hh} 세대 — 100세대 미만이면 60% 상한`; rw.getCell(r + 1, 2).font = { size: 9, color: { argb: 'FF666666' } }; r += 1; }
-    rw.getCell(r + 2, 2).value = '※ 「인근아파트 초기 분양률(10)」은 옆 단지를 조사해 매기는 입력 항목이고,'
-      + ' 위 초기예상분양률은 본건의 산정 결과다 — 서로 다른 값이다';
-    rw.getCell(r + 2, 2).font = { size: 9, color: { argb: 'FF666666' } };
-
-    /*
-      여기 「참고 — 이 앱이 낸 항목 점수」 표를 또 두었었다. 항목 구성이 낡아
-      규모및배치·평형구성·인근초기분양률을 "이 앱의 범위 밖" 으로 비워 두었는데,
-      지금은 수기입력 시트가 값을 받아 점수를 낸다 — **같은 파일 안에서 두 표가 서로 다른 말**을 했다.
-      A 의 항목별 내역은 [수기입력] 시트 한 곳에만 둔다.
-    */
-    rw.getCell(r + 5, 2).value = '※ A 의 항목별 점수와 근거는 [수기입력] 시트에 있다';
-    rw.getCell(r + 5, 2).font = { size: 9, color: { argb: 'FF666666' } };
-    rw.getColumn(2).width = 34; rw.getColumn(3).width = 12; rw.getColumn(4).width = 8; rw.getColumn(5).width = 62;
-  }
 
   /*
     ── 수기입력 (A 산출근거) ──────────────────────────────
@@ -402,60 +371,6 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
     최종 산출물. 이 앱이 만든 초기예상분양률이 여기서 점수가 되어 종합평점에 들어간다.
     사업성·시공자 항목은 수동입력이라 화면에 넣은 값을 그대로 옮긴다.
   */
-  {
-    onProgress?.('심사평점표');
-    const { total: rateTotal, res } = expectedRateOf(compare, rate, excl, sheetInput, manual?.['사업지구']);
-    const pct = res && !res.pending ? res.rate : null;
-    const rv = reviewScore({ manual: review ?? {}, rate: pct ?? NaN });
-    const t = tableOf('심사평점표');
-
-    const vw = wb.addWorksheet('심사평점표', { views: [{ showGridLines: false }] });
-    const rows = [];
-    for (const g of rv.groups) {
-      g.items.forEach((it, i) => {
-        rows.push([
-          i === 0 ? `${g.label} (${g.max})` : '',
-          it.id + (it.auto ? ' [자동]' : '') + (it.forced ? ' [0점 처리]' : ''),
-          it.max,
-          it.auto ? (pct != null ? `${pct}%` : '') : (it.value ?? ''),
-          it.score ?? '',
-          [
-            it.auto && pct != null ? `초기예상분양률 ${pct}% · ${rv.presale?.label}` : '',
-            it.forced && it.from != null ? `${it.from}점 → 0점` : '',
-            !it.auto && typeof it.band === 'string' && it.band ? `${it.band}${it.score != null ? ` → ${it.score}점` : ''}` : '',
-            it.formula ?? '', it.known ? `확인된 구간 : ${it.known}` : '', it.note ?? '',
-          ].filter(Boolean).join(' / '),
-        ]);
-      });
-    }
-    rows.push(['합 계', '', rv.max, '', rv.total, rv.missing.length ? `미입력 : ${rv.missing.join(' · ')}` : '전 항목 입력됨']);
-    rows.push(['감 점', '', '', rv.deduct ?? '', rv.deduct != null ? -rv.deduct : '', t?.deduct?.known ?? '']);
-    rows.push(['종합평점', '', 100, '', rv.net ?? '', '합계 − 감점']);
-    rows.push(['심사등급', '', '', '', rv.gradeOf?.pending ? '' : rv.gradeOf.grade,
-               rv.gradeOf?.pending ? rv.gradeOf.text : `종합평점 ${rv.net}점 · ${rv.gradeOf.label}`]);
-    rows.push(['보증료율', '', '', '', rv.gradeOf?.pending || rv.gradeOf?.reject ? '' : `${rv.gradeOf.fee}%`,
-               rv.gradeOf?.reject ? '60점 미만 — 보증거절' : '심사등급에 따른 요율']);
-
-    let r = writeTable(vw, 2, {
-      title: '심사평점표',
-      subtitle: `▶ 사업지 : ${facilities?.address ?? data.region}`,
-      columns: ['구분', '평가항목', '배점', '값', '평점', '근거 · 산식'],
-      rows,
-    });
-    vw.getCell(r + 2, 2).value =
-      `※ 산정 흐름 : 시트별 항목 점수 → 종합평가 ${rateTotal ?? '—'}점 → 초기예상분양률 ${pct != null ? pct + '%' : '—'}`
-      + ` → 초기분양률 배점 ${rv.presale?.pending ? '—' : rv.presale.score + '점'} → 종합평점`;
-    vw.getCell(r + 2, 2).font = { size: 9, color: { argb: 'FF666666' } };
-    if (rv.zero) {
-      vw.getCell(r + 3, 2).value = `※ 0점 처리 적용 — ${rv.zero.text}`;
-      vw.getCell(r + 3, 2).font = { size: 9, bold: true, color: { argb: 'FFB3261E' } };
-      r += 1;
-    }
-    vw.getCell(r + 3, 2).value = '※ 사업수익률의 분양가는 Min(적정분양가, 예정분양가) — 적정분양가는 [비교사업장·분양가] 탭이 낸다';
-    vw.getCell(r + 3, 2).font = { size: 9, color: { argb: 'FF666666' } };
-    vw.getColumn(2).width = 24; vw.getColumn(3).width = 28; vw.getColumn(4).width = 7;
-    vw.getColumn(5).width = 11; vw.getColumn(6).width = 8; vw.getColumn(7).width = 74;
-  }
 
   // ── 시트별 ──────────────────────────────────────────────
   const failed = [];
