@@ -24,6 +24,8 @@ export const FACILITY_SPEC = {
     sheet: '주거편의', category: 'MT1', keywordAlso: '백화점', radius: 1500,
     categoryFilter: /대형마트|백화점/,
     accept: '대형마트·백화점',
+    /* 매장 안의 부속 시설(이마트 서수원점_문화 = 문화센터 · 주차장)은 매장이 아니다 — 실측 2026-10-01 수원 서둔동 */
+    excludeName: /주차장|문화센터|_문화$|화장실/,
   },
   /*
    * 의료시설: HP8(병원)에는 동물병원도 들어간다("송정동물의료센터" 확인).
@@ -51,7 +53,13 @@ export const FACILITY_SPEC = {
     categoryExclude: /공원시설물|공원관리/,
     excludeName: /주차장|화장실|매점|관리(사무)?소|관리운영|족구장|축구장|풋살장|테니스장|농구장|배드민턴장|게이트볼장|야구장|기념수목|기념식수|조형물/,
   },
-  문화시설:   { sheet: '주거편의', category: 'CT1', radius: 1000 },
+  /*
+    **박물관의 버스주차장은 문화시설이 아니다**(실측 2026-10-01 수원 서둔동 —
+    「국립농업박물관 대형버스주차장」 이 카카오 분류 `문화,예술 > 문화시설 > 박물관` 으로 와서 최근접 43m 가 됐다).
+    공원 부속시설을 뺀 것(사용자 지적 2026-10-01)과 같은 규칙 — 분류가 맞아도 이름이 부속시설이면 뺀다.
+  */
+  문화시설:   { sheet: '주거편의', category: 'CT1', radius: 1000,
+                excludeName: /주차장|화장실|매표소|매점|관리(사무)?소|관리동|출입구|입구$/ },
   /*
    * 공공시설 = 규정 원문 「시·군·구청사 · 도서관」.
    *
@@ -415,7 +423,8 @@ export async function collectFacilities({ x, y }, only = null, polygon = null) {
       keep(d => spec.categoryLeaf.test(String(d.category_name ?? '').split('>').pop().trim()));
     }
     if (spec.categoryExclude) keep(d => !spec.categoryExclude.test(d.category_name ?? ''));
-    if (spec.excludeName) keep(d => !spec.excludeName.test(d.place_name));
+    /* 이름으로 뺀 것은 분류가 맞는 것이라 분류로 라벨을 달면 「박물관을 왜 빼나」 로 읽힌다 — 「부속시설」 로 단다 */
+    if (spec.excludeName) keep(d => (spec.excludeName.test(d.place_name) ? ((d.__sub = true), false) : true));
     if (spec.nameFilter) keep(d => spec.nameFilter.test(d.place_name));
 
     /* 제외된 것들의 분류 분포 — "왜 0건인가" 를 증빙이 스스로 설명하게 한다 */
@@ -434,7 +443,7 @@ export async function collectFacilities({ x, y }, only = null, polygon = null) {
     const term = spec.keywordAlso ?? spec.keyword ?? null;
     for (const d of dropped) {
       const leaf = String(d.category_name ?? '기타').split('>').map(t => t.trim()).filter(Boolean);
-      let key = leaf[2] ?? leaf[1] ?? leaf[0] ?? '기타';
+      let key = d.__sub ? '부속시설(주차장 등)' : (leaf[2] ?? leaf[1] ?? leaf[0] ?? '기타');
       if (term && key === term && leaf.length > 3) key = leaf[leaf.length - 1];
       droppedBy[key] = (droppedBy[key] ?? 0) + 1;
     }
@@ -474,7 +483,8 @@ export async function collectFacilities({ x, y }, only = null, polygon = null) {
         */
         accept: spec.accept ?? null,
         /* 조사까지 붙여 **한 군데서** 만든다 — 화면과 엑셀이 각자 붙이면 갈린다 */
-        acceptNot: spec.accept ? `${spec.accept}${hasBatchim(spec.accept) ? '이' : '가'} 아닌` : null,
+        acceptNot: spec.accept ? `${spec.accept}${hasBatchim(spec.accept) ? '이' : '가'} 아닌`
+          : (dropped.length && dropped.every(d => d.__sub) ? '부속시설(주차장 등)이라' : null),
       },
       count: items.length,
       nearest: items[0] ?? null,

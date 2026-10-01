@@ -146,7 +146,7 @@ function AvgRow({ sheetId, facilities, manual, label, span, S }) {
   );
 }
 
-export default function SheetView({ sheetId, data, facilities, manual, onManual, sheetInput = {}, onSheetInput, radiusBasis = 'polygon', onRadiusBasis, sitePolygon = null }) {
+export default function SheetView({ sheetId, data, facilities, manual, onManual, sheetInput = {}, onSheetInput, radiusBasis = 'polygon', onRadiusBasis, sitePolygon = null, siteAddr = null }) {
   // 도로 후보에서 고른 지점 — 로드뷰를 그곳으로 보낸다
   const [roadSpot, setRoadSpot] = useState({});
   // 후보 목록 자체 — 큰 도로를 지도에 자동으로 찍기 위해 들고 있는다
@@ -411,7 +411,7 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
       <div style={S.page}>
         <h2 style={S.h2}>{spec.title}</h2>
         <p style={S.subject}>
-          ▶ 사업지 : {facilities?.address || spec.subject || '주소 확정 전'}
+          ▶ 사업지 : {facilities?.address || siteAddr || spec.subject || '주소 확정 전'}
           {/* 입력 주소와 실제 매칭 주소가 다르면 증빙에 그대로 드러나야 한다 — 시도 표기(경기도/경기)만 다르면 같은 주소다 */}
           {facilities?.matched && sameAddr(facilities.matched, facilities.address) === false && (
             <span style={{ color: T.muted }}> · 좌표매칭 {facilities.matched}</span>

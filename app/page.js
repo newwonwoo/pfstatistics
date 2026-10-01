@@ -525,10 +525,16 @@ export default function Home() {
       ...POI_SHEETS.filter(sh => !poiDone(sh)).map(sh => `${sh} (반경시설 미수집)`),
       ...(poiDone('교통환경') && !roadOk ? ['교통환경 (6차선 왕복도로 차선 미확정)'] : []),
       ...(compare?.data ? [] : ['비교사업장 (미수집)']),
-      ...(mSum?.excl == null ? [`수기입력 (A 미완성${mSum?.missing?.length ? ` — ${mSum.missing.length}개 남음` : ''})`] : []),
+      ...(mSum?.excl == null ? [`분양가격지수 제외 항목 (${mSum?.missing?.length ? `${mSum.missing.join(' · ')} 미입력` : '미완성'})`] : []),
+      /*
+        **초기분양률(22)은 손으로 넣는 칸이 아니다** — 이 앱이 산정한 값이 들어간다.
+        여기서 `rate`(탭 상태)를 숫자 자리에 넘겨 늘 「1개 미입력」 으로 셌다(실측 2026-10-01 · 화면은 7/7 완료).
+        손으로 넣는 칸(auto 가 아닌 것)만 센다.
+      */
       ...(() => {
-        const r = reviewScore({ manual: review ?? {}, rate });
-        return r.missing?.length ? [`심사평점표 입력값 (${r.missing.length}개 미입력 — [수기입력] 탭)`] : [];
+        const r = reviewScore({ manual: review ?? {}, rate: NaN });
+        const left = r.groups.flatMap(g => g.items).filter(it => !it.auto && it.score == null).map(it => it.id);
+        return left.length ? [`심사평점표 입력값 (${left.join(' · ')} 미입력 — [수기입력] 탭)`] : [];
       })(),
     ];
     if (missing.length && !window.confirm(
@@ -1405,7 +1411,7 @@ export default function Home() {
                   sheetId={s.id} data={data} facilities={view}
                   radiusBasis={radiusBasis} onRadiusBasis={setRadiusBasis}
                   /* 도로 거리는 경계에서 잰다 — 중심으로 수집했어도 경계를 그려 두었으면 그 경계 */
-                  sitePolygon={polygon}
+                  sitePolygon={polygon} siteAddr={fixed ? addr : null}
                   manual={manual} sheetInput={sheetInput}
                   onManual={(label, v) => setManual(m => ({ ...m, [label]: v }))}
                   /* 지역수요 시트의 인구유입요인을 그 표에서 바로 고친다 */
