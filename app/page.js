@@ -456,6 +456,7 @@ export default function Home() {
    * 단계가 바뀌면 위쪽 도구가 접히며 높이가 변하므로 그린 뒤에 잰다.
    */
   function jump(id) {
+    if (id === 'road') { goRoad(); return; }   // 관문 줄 「도로 확인하러 가기」 — 도로 칸으로 바로
     setTab(id); setMapOpenManual(null); setMsg(null);
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const el = document.querySelector('[data-sheet-tabs]');
@@ -689,6 +690,11 @@ export default function Home() {
 
     /* 판정을 안 한 항목 — 비어 있는 것이 아니라 기본점수가 들어가 있어 더 위험하다 */
     for (const pv of (mSum.provisional ?? [])) {
+      /* 교통환경이 걸린 까닭은 도로 차선이다 — 탭 머리가 아니라 그 도로 칸으로 바로 보낸다(단계 줄 주황 칩과 같은 길) */
+      if (pv.id === '교통환경' && !roadOk) {
+        need.push({ label: '교통환경 — 6차선 왕복도로 차선 확정 전', why: pv.text, tab: 'road', go: '도로 확인하러 가기 ↓' });
+        continue;
+      }
       const t = pv.id === '지역수요' ? '수기입력' : pv.id;
       need.push({ label: `${pv.id} — 아직 판정하지 않음`, why: pv.text,
         tab: t, go: `${tabLabel(t)} 탭으로 →` });
@@ -1376,7 +1382,7 @@ export default function Home() {
                   region={region} addr={addr} data={data} facilities={view}
                   compare={compare} rate={rate} excl={mSum.excl} sheetInput={sheetInput}
                   district={manual['사업지구']}
-                  gate={gate}
+                  gate={gate} tainted={tainted}
                   value={review} onChange={setReview} onJump={jump}
                 />
               )

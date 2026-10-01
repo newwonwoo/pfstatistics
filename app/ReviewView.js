@@ -89,12 +89,17 @@ const S = {
   dscrBar: { display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap', margin: '14px 0 4px', fontSize: 12, color: T.ink2 },
 };
 
-export default function ReviewView({ region, addr, data, facilities, compare, rate, excl = null, sheetInput = null, gate = null, district = null, value, onChange, onJump }) {
+export default function ReviewView({ region, addr, data, facilities, compare, rate, excl = null, sheetInput = null, gate = null, district = null, tainted = false, value, onChange, onJump }) {
   const v = value ?? {};
 
   /* 초기예상분양률은 그 탭과 **같은 함수**로 낸다 — 두 화면의 숫자가 갈리면 안 된다 */
   const { total: rateTotal, res } = useMemo(() => expectedRateOf(compare, rate, excl, sheetInput, district), [compare, rate, excl, sheetInput, district]);
-  const pct = res && !res.pending ? res.rate : null;
+  /*
+    **판정 전 기본점수가 섞이면 결론을 내지 않는다** — page.js 가 한 지점에서 끊는다고 적어 두었는데
+    이 표는 분양률을 스스로 다시 내고 있어서 그 끊음을 못 받았다. 도로 위치를 두 점으로 다시 지정해
+    차선 확정이 풀린 채로 종합평점 81 · 2등급 · 0.697% 가 그대로 떴다(실측 2026-10-01). 같은 판정을 받아 쓴다.
+  */
+  const pct = !tainted && res && !res.pending ? res.rate : null;
 
   const r = useMemo(() => reviewScore({ manual: v, rate: pct ?? NaN }), [v, pct]);
   const items = r.groups.flatMap(g => g.items).length;
