@@ -29,6 +29,8 @@ const S = {
   head: { display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 3 },
   h1: { fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: '-.025em' },
   tag: { fontSize: 11, fontWeight: 700, color: T.accent, background: T.accentSoft, padding: '3px 8px', borderRadius: 4 },
+  newCase: { marginLeft: 'auto', alignSelf: 'center', padding: '7px 14px', borderRadius: 6, fontSize: 12.5, fontWeight: 800,
+             cursor: 'pointer', border: `1px solid ${T.accent}`, background: '#fff', color: T.accent, fontFamily: 'inherit' },
   lead: { color: T.muted, margin: '0 0 18px', fontSize: 12.5 },
 
   panel: { background: T.panel, border: `1px solid ${T.line}`, borderRadius: T.radius, padding: 16, boxShadow: T.shadow, marginBottom: 16 },
@@ -434,6 +436,17 @@ export default function Home() {
   }
 
   // ── 보관 / 내보내기 ───────────────────────────────────────
+  /** 다른 사업장 심사하기 — 지금 심사를 보관하고 처음 상태로 */
+  function startNewCase() {
+    const ask = data
+      ? `지금 사업장(${data.region}${addr ? ` ${addr}` : ''})을 보관하고 새 사업장 심사를 시작할까요?\n\n보관한 심사는 첫 화면 [보관 목록] 에서 다시 열 수 있습니다.`
+      : '입력한 주소를 지우고 처음부터 시작할까요?';
+    if (!window.confirm(ask)) return;
+    if (data) store.save({ data, facilities, addr, manual, compare, rate, review, sheetInput });
+    window.scrollTo(0, 0);
+    window.location.reload();
+  }
+
   function saveRecord() {
     if (!data) return;
     const ok = store.save({ data, facilities, addr, manual, compare, rate, review, sheetInput });
@@ -805,12 +818,24 @@ export default function Home() {
     **감점(사고사망만인율)은 빼고 센다** — 없는 것이 정상이라 「안 넣은 칸」 이 아니다.
     인근아파트 초기 분양률은 [초기예상분양률] 탭에서 조사하므로 여기서 세지 않는다.
   */
-  const tabCounts = useMemo(() => {
-    const form = (mSum.rows ?? []).filter(r => r.kind === 'form' && (r.tab ?? '수기입력') === '수기입력' && r.score == null).length;
-    const rv = (reviewRes?.groups ?? []).flatMap(g => g.items)
-      .filter(it => !it.auto && String(it.value ?? '') === '').length;
-    return { 수기입력: form + rv };
-  }, [mSum.rows, reviewRes]);
+  const tabProgress = useMemo(() => {
+    /* 수기입력 — 이 탭에서 손으로 넣는 칸(분양가격지수 제외 항목의 값→점수 + 심사평점표 입력값). 감점은 없는 것이 정상이라 세지 않는다 */
+    const formRows = (mSum.rows ?? []).filter(r => r.kind === 'form' && (r.tab ?? '수기입력') === '수기입력');
+    const rvItems = (reviewRes?.groups ?? []).flatMap(g => g.items).filter(it => !it.auto);
+    const manualTotal = formRows.length + rvItems.length;
+    const manualDone = formRows.filter(r => r.score != null).length
+      + rvItems.filter(it => String(it.value ?? '') !== '').length;
+    /* 초기예상분양률 — 그 탭의 로드맵 ①②③ 과 같은 셈 */
+    const nb = (mSum.rows ?? []).find(r => r.id === '인근아파트 초기 분양률')?.score != null;
+    const presaleScore = reviewRes?.presale && !reviewRes.presale.pending;
+    /* 심사평점표 — 점수가 난 항목 수 */
+    const rvAll = (reviewRes?.groups ?? []).flatMap(g => g.items);
+    return {
+      수기입력: { done: manualDone, total: manualTotal },
+      초기예상분양률: { done: [nb, ratePct != null, ratePct != null && presaleScore].filter(Boolean).length, total: 3 },
+      심사평점표: { done: rvAll.filter(it => it.score != null).length, total: rvAll.length },
+    };
+  }, [mSum.rows, reviewRes, ratePct]);
 
 
   return (
@@ -818,6 +843,14 @@ export default function Home() {
       <div style={S.head}>
         <h1 style={S.h1}>PF 보증심사 통계 자동수집</h1>
         <span style={S.tag}>원천 직결</span>
+        {/*
+          **한 사업장을 끝내면 다음 사업장으로**(사용자 요청 2026-10-01 「상단에 다른 사업장 심사하기를 눌러서 처음 진행상태로」).
+          지금 것을 **먼저 보관하고** 처음 화면으로 돌린다 — 손으로 넣은 값은 재조회로 못 되살리므로 조용히 버리지 않는다.
+          상태가 열 곳 넘게 흩어져 있어 하나씩 비우면 빠뜨린 것이 다음 사업장에 남는다 — 화면을 새로 연다.
+        */}
+        {fixed && (
+          <button style={S.newCase} disabled={!!busy} onClick={startNewCase}>↺ 다른 사업장 심사하기</button>
+        )}
       </div>
       {/* 안내문은 처음 한 번만 읽는다 — 확정 뒤에는 그 자리를 일에 쓴다 */}
       {!fixed && <p style={S.lead}>사업장 시군구를 입력하면 심사에 필요한 수치와 증빙을 원천에서 직접 수집합니다.</p>}
@@ -1268,7 +1301,7 @@ export default function Home() {
       <div style={{ marginTop: 20 }}>
         <SheetTabs sheets={SHEETS} active={tab}
           onSelect={(id) => { setTab(id); setMapOpenManual(null); setMsg(null); }}
-          status={status} counts={tabCounts} />
+          status={status} progress={tabProgress} />
         {/*
           모든 시트를 항상 마운트해 둔다.
           엑셀 내보내기가 각 시트의 증빙 카드와 지도를 캡쳐하는데,

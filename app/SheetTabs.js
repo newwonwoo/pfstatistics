@@ -62,7 +62,7 @@ const Dot = ({ st, size = 6 }) => (st ? (
   }} />
 ) : null);
 
-export default function SheetTabs({ sheets, active, onSelect, status, counts = null }) {
+export default function SheetTabs({ sheets, active, onSelect, status, progress = null }) {
   /* 단계별로 묶는다 — 등장 순서를 그대로 쓴다(그것이 심사 진행 순서다) */
   const groups = useMemo(() => {
     const out = [];
@@ -161,21 +161,20 @@ export default function SheetTabs({ sheets, active, onSelect, status, counts = n
               style={S.topBtn(on, tone)}>
               {solo ? solo.label : g.key}
               {/*
-                **자료수집에는 숫자가 있는데 수기입력에는 없었다**(사용자 지적 2026-09-25).
-                자료수집의 9 는 「이 단계에 시트가 9장」 이다. 수기입력은 시트가 한 장이라
-                그 셈으로는 숫자가 안 붙지만, 정작 **손으로 넣을 칸이 가장 많은 단계**다.
-                그래서 남은 입력 칸 수를 적는다 — 다 넣으면 숫자를 지우고 초록 점만 남긴다.
-                결론 탭(초기예상분양률·심사평점표)에는 달지 않는다 — 거기 숫자는 점수라
-                옆에 개수가 또 붙으면 무엇을 세는 숫자인지 갈린다.
+                **단계마다 「한 것 / 할 것 (완료·미완료)」**(사용자 요청 2026-10-01 「다 했으면 5/5 (완료), 안 됐으면 2/5 (미완료)」).
+                전에는 자료수집에 시트 수(9), 수기입력에 남은 칸 수만 붙어 같은 자리의 숫자가 서로 다른 것을 셌다.
+                이제 네 단계 모두 같은 문법이다 — 여러 시트 단계는 완료 시트 수, 한 장 단계는 그 화면이 끝내야 할 일의 수.
               */}
-              {!solo
-                ? <span style={S.count}>{g.items.length}</span>
-                : (counts?.[solo.id] > 0 && (
-                    <span style={S.count} title={`아직 넣지 않은 입력 칸 ${counts[solo.id]}개`}>
-                      {counts[solo.id]}
-                    </span>
-                  ))}
-              <Dot st={st} size={7} />
+              {(() => {
+                const pg = !solo
+                  ? { done: g.items.filter(x => status?.[x.id] === 'ok').length, total: g.items.length }
+                  : progress?.[solo.id];
+                if (!pg?.total) return <Dot st={st} size={7} />;
+                const ok = pg.done >= pg.total;
+                return <span style={S.prog(ok)} title={ok ? '이 단계를 마쳤습니다' : `남은 일 ${pg.total - pg.done}개`}>
+                  {pg.done}/{pg.total} ({ok ? '완료' : '미완료'})
+                </span>;
+              })()}
             </button>
           );
         })}
@@ -235,6 +234,10 @@ const S = {
     탭에 1~4 를 또 달면 번호가 두 벌이 되어 「지금 STEP 2 인데 탭은 1?」 이 된다.
     순서는 STEP 줄이, 묶음은 이 줄이 맡는다.
   */
+  prog: (ok) => ({
+    marginLeft: 7, padding: '1px 7px', borderRadius: 9, fontSize: 10.5, fontWeight: 800, whiteSpace: 'nowrap',
+    background: ok ? T.okSoft : '#fdf1d8', color: ok ? T.ok : '#8a5a00',
+  }),
   count: {
     marginLeft: 6, padding: '1px 6px', borderRadius: 9, fontSize: 10.5, fontWeight: 700,
     background: '#dfe3e9', color: T.ink2,

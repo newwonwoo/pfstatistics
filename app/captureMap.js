@@ -258,8 +258,9 @@ export async function composeMap(el, spec = {}) {
         ctx.fillStyle = ink; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, q.x, q.y + 0.5);
         ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
       };
-      const north = (rg, r) => (rg?.length ? rg.reduce((a, q) => (q.lat > a.lat ? q : a), rg[0])
-        : { lat: center.lat + r / 111320, lng: center.lng });
+      /* 화면과 같은 자리 — 고리의 동쪽 끝 */
+      const north = (rg, r) => (rg?.length ? rg.reduce((a, q) => (q.lng > a.lng ? q : a), rg[0])
+        : { lat: center.lat, lng: center.lng + r / (111320 * Math.cos(center.lat * Math.PI / 180)) });
       for (const st of radiusSteps) {
         ctx.beginPath();
         if (st.ring?.length) {

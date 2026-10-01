@@ -187,8 +187,12 @@ export default function RadiusMap({ title, center, radius, steps = null, markers
           map, position: new kakao.maps.LatLng(lat, lng), xAnchor: 0.5, yAnchor: 0.5, zIndex: 4,
           content: `<div style="padding:1px 7px;border-radius:9px;background:${color};color:${ink};font:800 11px/1.45 sans-serif;border:1px solid rgba(0,0,0,.25);white-space:nowrap">${text}</div>`,
         });
-        const northOf = (rg, r) => (rg ? rg.reduce((a, q) => (q.lat > a.lat ? q : a), rg[0])
-          : { lat: center.lat + r / 111320, lng: center.lng });
+        /*
+          꼬리표는 고리의 **동쪽 끝**에 — 지도는 가로가 길어 반경원을 화면에 꽉 채우면 위아래가 잘린다.
+          정북에 두었더니 바깥 고리 꼬리표가 화면 밖으로 나갔다(실측 2km).
+        */
+        const northOf = (rg, r) => (rg ? rg.reduce((a, q) => (q.lng > a.lng ? q : a), rg[0])
+          : { lat: center.lat, lng: center.lng + r / (111320 * Math.cos(center.lat * Math.PI / 180)) });
         for (const st of stepRings) {
           const line = { strokeWeight: 2.5, strokeColor: st.color, strokeOpacity: 1, strokeStyle: 'solid', fillOpacity: 0 };
           (st.ring
