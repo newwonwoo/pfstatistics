@@ -8,7 +8,7 @@ import RadiusMap from './RadiusMap';
 import RoadPicker, { shownSet, LaneControl } from './RoadPicker';
 import { INFLOW_CHOICES, inflowOn } from './inflow';
 import { districtLabel, DISTRICT_SHEETS, floorNote } from './DistrictRow';
-import { lineToSite, haversine, nearestOnRing } from '../src/lib/geo';
+import { lineToSite, haversine, nearestOnRing, distanceToPolygon } from '../src/lib/geo';
 
 const S = {
   /* 시설 행 지우기 — 도로 후보 목록과 같은 모양이어야 같은 동작으로 읽힌다 */
@@ -209,7 +209,7 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
       */
       const base = drawnV ? [] : sorted;
       const drawnPin = drawnV && drawnV.y != null ? [{
-        lat: Number(drawnV.y), lng: Number(drawnV.x), name: `${drawnV.name} (그린 구간)`, distance: drawnV.distance,
+        lat: Number(drawnV.y), lng: Number(drawnV.x), name: `${drawnV.name} (지도에서 지정)`, distance: drawnV.distance,
       }] : [];
       const pins = [...drawnPin, ...base].map((r, i) => r.lat != null ? { ...r, no: i + 1 } : ({
         no: i + 1, lat: Number(r.y), lng: Number(r.x),
@@ -235,9 +235,16 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
       const v = manual?.[f.label];
       /* 그린 구간이 판정 근거면 그 구간만 굵은 파랑으로 — 흰 테두리(halo)로 바탕 위에서 뜨게 한다 */
       const drawnOn = v?.method === 'drawn' && v.drawn?.length >= 2 && !roadDraw[f.label]?.on;
-      const drawn = drawnOn ? [{ name: `${v.name} (그린 구간)`, strong: true, path: v.drawn }] : [];
+      /*
+        지정한 도로가 판정 근거 — **그 도로 선**을 굵은 파랑으로, 그은 선은 가는 자홍(잣대)으로, 최단 선분은 점선으로.
+      */
+      const target = drawnOn ? (roadList[f.label] ?? []).find(r => r.name === v.name) : null;
+      const drawn = drawnOn ? [
+        ...(target?.lines ?? []).map(path => ({ name: v.name, strong: true, path })),
+        { name: '그은 선', ruler: true, path: v.drawn },
+      ] : [];
       /* 적용한 도로가 있으면 잰 거리를 점선으로 — 그리는 중에는 스케치가 따로 긋는다 */
-      const ms = !roadDraw[f.label]?.on && v?.name ? measureOf(v) : null;
+      const ms = !roadDraw[f.label]?.on && v?.name && v?.method !== 'drawn' ? measureOf(v) : null;
       if (ms) drawn.push(ms);
       /* 그린 구간이 판정 근거면 그 구간과 잰 거리만 — 후보 도로 선은 걷는다(핀과 같은 규칙) */
       if (drawnOn || roadSrc[f.label]?.method !== 'geometry') return drawn;
@@ -276,51 +283,28 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
     };
 
     /**
-     * 그린 선이 어느 도로 위인지 — 후보 도로 선형 중 가장 가까운 것(40m 안)의 이름을 제안한다.
-     * 이름은 판정에 쓰이지 않는다(거리·차선이 판정한다). 표·엑셀에서 무엇을 그렸는지 읽히게 할 뿐이라 고칠 수 있다.
+     * **두 점을 잇는 잣대**(사용자 지적 2026-10-01 「사업지 경계에서 시작된 한 점이 있고 6차선 도로가 있는 곳에 한 점을 그리면
+     * 그 두 점을 이은 선이 몇 미터냐는 거지」). 전에는 그은 선 **자체**를 도로로 보고 경계에서 그 선까지를 쟀다 — 경계 모서리에서
+     * 시작한 선이 4m 가 나왔다.
+     *   첫 점 → 사업지 경계 위로 붙인다(경계가 없으면 찍은 자리) · 둘째 점 → 끝점 40m 안에 도로 선형이 있으면 그 도로 위로 붙인다
+     *   거리 = 두 점 사이 실거리 · 도로명 = 둘째 점이 붙은 도로(지도에 표시 중인 도로를 먼저 본다)
+     * 점을 찍을 때 한 번만 부른다.
      */
-    const suggestName = (label, pts) => {
-      /*
-        꼭짓점끼리만 견주면 곧은 도로(꼭짓점이 수백 m 간격)에서 바로 옆에 그어도 40m 를 넘었다(실측 송내대로).
-        두 선을 20m 간격으로 잘게 나눠 견준다. 점을 찍을 때 한 번만 부른다(렌더마다 돌리지 않는다).
-      */
-      if (!pts || pts.length < 2) return '';
-      const dense = (line, step) => {
-        const out = [];
-        for (let i = 0; i + 1 < line.length; i++) {
-          const a = line[i], b = line[i + 1];
-          const n = Math.max(1, Math.ceil(haversine(a, b) / step));
-          for (let k = 0; k <= n; k++) out.push({ lat: a.lat + (b.lat - a.lat) * k / n, lng: a.lng + (b.lng - a.lng) * k / n });
-        }
-        return out;
-      };
-      const P = dense(pts, 20);
-      const box = (arr, pad) => {
-        const la = arr.map(p => p.lat), ln = arr.map(p => p.lng);
-        const dLat = pad / 111320, dLng = pad / (111320 * Math.cos(la[0] * Math.PI / 180));
-        return [Math.min(...la) - dLat, Math.max(...la) + dLat, Math.min(...ln) - dLng, Math.max(...ln) + dLng];
-      };
-      /*
-        가장 가까운 **한 점**으로 고르면 그은 선과 교차하는 골목(○○번길)이 뽑힌다(실측: 송내대로 옆 10m 에 그었는데 송내대로73번길).
-        그은 선의 점마다 도로까지 거리를 재어 **평균**이 가장 작은 도로를 고른다 — 선을 따라 나란히 가는 도로가 이긴다.
-      */
-      const [a0, a1, b0, b1] = box(P, 60);
-      let best = null;
-      for (const r of (roadList[label] ?? [])) {
-        const Q = [];
-        for (const line of (r.lines ?? [])) {
-          if (!line?.length) continue;
-          const [c0, c1, d0, d1] = box(line, 0);
-          if (c1 < a0 || c0 > a1 || d1 < b0 || d0 > b1) continue;   // 멀리 있는 선은 건너뛴다
-          for (const q of dense(line, 20)) if (q.lat >= a0 && q.lat <= a1 && q.lng >= b0 && q.lng <= b1) Q.push(q);
-        }
-        if (!Q.length) continue;
-        let sum = 0;
-        for (const p of P) { let m = Infinity; for (const q of Q) { const d = haversine(p, q); if (d < m) m = d; } sum += Math.min(m, 200); }
-        const mean = sum / P.length;
-        if (!best || mean < best.d) best = { d: mean, name: r.name };
-      }
-      return best && best.d <= 40 ? best.name : '';
+    const measureDrawn = (label, pts) => {
+      if (!pts?.length) return null;
+      const site = siteOf();
+      const start = site.polygon ? nearestOnRing(pts[0], site.polygon, { edge: true }) : pts[0];
+      if (pts.length < 2) return { start, path: [start], distance: null, road: null };
+      const raw = pts[pts.length - 1];
+      const rows = roadList[label] ?? [];
+      const on = shownSet(manual?.[label], rows);
+      const snapOf = (r) => (r.lines ?? []).map(line => lineToSite(line, { center: raw }, 2))
+        .filter(Boolean).sort((x, y) => x.distance - y.distance)[0] ?? null;
+      const pick = (list) => list.map(r => ({ r, s: snapOf(r) })).filter(x => x.s && x.s.distance <= 40)
+        .sort((x, y) => x.s.distance - y.s.distance)[0] ?? null;
+      const hit = pick(rows.filter(r => on.has(r.name) || r.name === manual?.[label]?.name)) ?? pick(rows);
+      const end = hit ? hit.s.at : raw;
+      return { start, end, path: [start, end], distance: Math.round(haversine(start, end)), road: hit?.r.name ?? null };
     };
 
     /**
@@ -332,8 +316,9 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
     const drawBar = (f) => {
       const st = roadDraw[f.label] ?? { on: false, pts: [], name: '' };
       const v = manual?.[f.label];
-      const m = lineToSite(st.pts, siteOf());
+      const m = st.meas ?? null;
       const set = (patch) => setRoadDraw(prev => ({ ...prev, [f.label]: { ...st, ...patch } }));
+      const setPts = (pts) => { const meas = measureDrawn(f.label, pts); set({ pts, meas, guess: meas?.road ?? '' }); };
       if (!st.on) {
         return (
           <>
@@ -341,19 +326,19 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
             <button style={S.drawStart} onClick={() => set({ on: true, pts: [], name: '' })}>✎ 도로 위치 그리기</button>
             {v?.method === 'drawn' ? (
               <span style={S.drawTxt}>
-                적용됨 — <b>{v.name}</b> 그린 구간 · {fromText()}{' '}
-                <span style={S.drawNum}>{v.distance}m</span>{v.distance === 0 ? ' (경계에 맞닿음)' : ''} · 구간 길이 {v.drawnLength}m
+                적용됨 — 사업지 경계 ~ <b>{v.name}</b> 두 점 사이{' '}
+                <span style={S.drawNum}>{v.distance}m</span>
                 <button style={S.undo} onClick={() => onManual?.(f.label, {
                   ...v, method: null, drawn: null, drawnLength: null, name: null, distance: null, x: null, y: null, source: null, from: null, confirmed: false,
-                })}>그린 구간 지우기</button>
+                })}>지정 지우기</button>
               </span>
             ) : (
               <span style={S.drawTxt}>
-                같은 도로라도 구간마다 차선 수가 다릅니다 — <b>6차선인 구간을 지도에 선으로 그으면</b> 사업지 경계에서 그 선까지 최단거리를 잽니다
+                <b>사업지 경계에 한 점, 6차선 도로 위에 한 점</b>을 찍으면 두 점 사이 거리를 잽니다
               </span>
             )}
           </div>
-          {/* 그린 구간의 차선 칸은 그 구간을 그린 이 자리에 — 확정까지 여기서 끝낸다 */}
+          {/* 지정한 도로의 차선 칸은 지정한 이 자리에 — 확정까지 여기서 끝낸다 */}
           {v?.method === 'drawn' && v?.name && (
             <LaneControl value={v} onChange={(patch) => onManual?.(f.label, { ...v, ...patch })} />
           )}
@@ -364,34 +349,32 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
       return (
         <div style={S.drawBar(true)}>
           <span style={S.drawTxt}>
-            {st.pts.length < 2
-              ? <>지도에서 <b>6차선 구간을 따라</b> 점을 찍으세요 — 양 끝 두 점이면 되고, 굽은 곳은 중간에 더 찍습니다 ({st.pts.length}점)</>
-              : <>{fromText()} 그은 선까지 최단거리 <span style={S.drawNum}>{m?.distance}m</span> · 그은 길이 {m?.length}m ({st.pts.length}점)</>}
+            {st.pts.length === 0
+              ? <>① <b>사업지 경계</b>를 찍으세요 — 경계 위로 붙습니다</>
+              : st.pts.length === 1
+                ? <>② <b>6차선 도로</b> 위를 찍으세요 — 도로 선 위로 붙습니다</>
+                : <>사업지 경계 ~ {m?.road ? <b>{m.road}</b> : '찍은 점'} 두 점 사이 <span style={S.drawNum}>{m?.distance}m</span>
+                    <span style={{ color: T.muted }}> · 다시 찍으면 둘째 점이 옮겨 갑니다</span></>}
           </span>
-          {/*
-            **선이 사업지 경계에 닿으면 0m 다**(사용자 지적 2026-10-01 「사업지 경계에서 몇 미터인지 안 나오고 0m 로 나온다」).
-            실측 화면에서는 첫 점을 경계 모서리에 찍어 사업지 → 도로로 잇는 선이 됐다. 이 도구는 **도로 위만** 따라 긋는 것이다 —
-            도로가 정말 사업지에 붙어 있으면 0m 가 맞으므로 막지는 않고, 그 자리에서 말한다.
-          */}
-          {m?.distance === 0 && (
+          {m && m.distance != null && !m.road && (
             <span style={S.drawWarn}>
-              선이 사업지 경계에 닿아 0m 입니다 — 도로가 사업지에 붙어 있으면 맞는 값이고,
-              아니라면 <b>6차선 도로 위만</b> 따라 다시 그으세요(사업지에서 도로까지 잇는 선이 아닙니다)
+              둘째 점 40m 안에 도로 선이 없어 <b>찍은 자리</b>까지 잽니다 — 6차선 도로 선 위를 찍으면 도로 위로 붙습니다
             </span>
           )}
           <input style={S.drawName} placeholder="도로명" value={name}
             onChange={(e) => set({ name: e.target.value })} />
-          <button style={S.drawBtn} disabled={!st.pts.length} onClick={() => { const pts = st.pts.slice(0, -1); set({ pts, guess: suggestName(f.label, pts) }); }}>한 점 취소</button>
-          <button style={S.drawBtn} disabled={!st.pts.length} onClick={() => set({ pts: [], guess: '' })}>전체 지우기</button>
-          <button style={S.drawGo(st.pts.length >= 2)} disabled={st.pts.length < 2}
+          <button style={S.drawBtn} disabled={!st.pts.length} onClick={() => setPts(st.pts.slice(0, -1))}>한 점 취소</button>
+          <button style={S.drawBtn} disabled={!st.pts.length} onClick={() => setPts([])}>전체 지우기</button>
+          <button style={S.drawGo(m?.distance != null)} disabled={m?.distance == null}
             title={st.pts.length < 2 ? '점을 두 개 이상 찍어야 적용할 수 있습니다' : ''}
             onClick={() => {
               const nm = name || '도로명 미상';
               onManual?.(f.label, {
                 ...(v ?? {}),
-                name: nm, distance: m.distance, x: m.at.lng, y: m.at.lat, from: m.from, basis: m.basis,
-                method: 'drawn', source: '실무자가 지도에 그린 6차선 구간', precision: 5,
-                drawn: st.pts, drawnLength: m.length,
+                name: nm, distance: m.distance, x: m.end.lng, y: m.end.lat, from: m.start,
+                method: 'drawn', precision: null,
+                source: '실무자가 지도에 찍은 두 점(사업지 경계 ~ 6차선 도로) 사이 거리',
+                drawn: m.path, drawnLength: m.distance,
                 // 같은 도로면 센 차선 수를 이어 쓰고, 다른 도로면 다시 센다(앞 도로 값을 물려받으면 판정이 틀린다)
                 lanes: v?.name === nm ? (v?.lanes ?? 0) : 0,
                 /* 구간이 바뀌었으니 차선은 다시 확정한다 — 아래 [차선 확정] */
@@ -399,7 +382,7 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
               });
               setRoadDraw(prev => ({ ...prev, [f.label]: { on: false, pts: [], name: '' } }));
             }}>
-            {st.pts.length >= 2 ? '이 구간으로 적용' : '2점 이상 찍으세요'}
+            {m?.distance != null ? `${m.road ? `${m.road} ` : ''}${m.distance}m 로 적용` : '두 점을 찍으세요'}
           </button>
           <button style={S.drawBtn} onClick={() => set({ on: false, pts: [], name: '' })}>취소</button>
         </div>
@@ -494,7 +477,7 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                           return (<>
                             <td style={m?.name ? S.tdVal : S.td}>
                               {m?.name
-                                ? `${m.name}${m.method === 'drawn' ? ' 그린 구간' : ''}${m.lanes ? ` (왕복 ${m.lanes}차선)` : ''}`
+                                ? `${m.name}${m.method === 'drawn' ? ' (지도에서 지정)' : ''}${m.lanes ? ` (왕복 ${m.lanes}차선)` : ''}`
                                 : <span style={S.pend}>아래에서 도로 선택</span>}
                             </td>
                             <td style={S.td}>{m?.distance != null ? `${m.distance}m` : '-'}</td>
@@ -768,13 +751,17 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                       drawMode={Boolean(f.manual && roadDraw[f.label]?.on)}
                       onDrawClick={(pt) => setRoadDraw(prev => {
                         const cur = prev[f.label] ?? { on: true, pts: [], name: '' };
-                        const pts = [...cur.pts, pt];
-                        return { ...prev, [f.label]: { ...cur, pts, guess: suggestName(f.label, pts) } };
+                        /* 두 점만 쓴다 — 셋째부터는 둘째 점을 옮긴다 */
+                        const pts = cur.pts.length >= 2 ? [cur.pts[0], pt] : [...cur.pts, pt];
+                        const meas = measureDrawn(f.label, pts);
+                        return { ...prev, [f.label]: { ...cur, pts, meas, guess: meas?.road ?? '' } };
                       })}
                       sketch={f.manual && roadDraw[f.label]?.on ? (() => {
-                        const pts = roadDraw[f.label].pts;
-                        const mm = lineToSite(pts, siteOf());
-                        return { path: pts, at: mm?.at ?? null, from: mm?.from ?? null, text: mm ? `${mm.distance}m` : null };
+                        const { pts, meas: mm } = roadDraw[f.label];
+                        const path = mm?.path ?? pts;
+                        const mid = path.length >= 2 ? { lat: (path[0].lat + path[1].lat) / 2, lng: (path[0].lng + path[1].lng) / 2 } : null;
+                        /* 배지는 두 점 사이 가운데에 그 거리만 */
+                        return { path, at: mid, from: null, text: mm?.distance != null ? `${mm.distance}m` : null };
                       })() : null}
                       /*
                         도로 후보는 수십 곳이라 이름표를 다 달면 지도가 흰 박스로 덮인다

@@ -240,6 +240,12 @@ export default function RadiusMap({ title, center, radius, steps = null, markers
           new kakao.maps.Polyline({ map, path, strokeWeight: 2.5, strokeColor: '#ad1457', strokeOpacity: 0.95, strokeStyle: 'shortdash' });
           return;
         }
+        /* `ruler` = 실무자가 찍은 두 점(사업지 경계 ~ 6차선 도로)을 잇는 잣대 — 그리는 중과 같은 자홍, 흰 테두리 */
+        if (ln.ruler) {
+          new kakao.maps.Polyline({ map, path, strokeWeight: 9, strokeColor: '#ffffff', strokeOpacity: 0.85, strokeStyle: 'solid' });
+          new kakao.maps.Polyline({ map, path, strokeWeight: 4, strokeColor: '#d81b60', strokeOpacity: 0.95, strokeStyle: 'solid' });
+          return;
+        }
         /*
           **판정에 쓰는 도로(굵은 파랑)는 흰 테두리를 깐다**(사용자 요청 2026-10-01 「직관적으로 볼 수 있도록 이펙트 · 통일감 있게」).
           위성 바탕에서 파랑 선이 묻혔다 — 사업지 경계·반경선처럼 바탕 위에 떠 보이게 한다. 캡쳐(composeMap)도 같다.
@@ -550,7 +556,8 @@ export default function RadiusMap({ title, center, radius, steps = null, markers
         map, position: LL(mid), xAnchor: -0.08, yAnchor: 1.25, zIndex: 6,
         content: `<div style="padding:2px 7px;border-radius:10px;background:rgba(255,255,255,.93);border:1px solid #d81b60;color:#ad1457;font:700 11.5px/1.4 Pretendard,sans-serif;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.2)">${sketch.text}</div>`,
       }));
-      sketchOverlays.current.push(new kakao.maps.CustomOverlay({
+      /* 최단 선분이 있을 때만 그 끝을 점으로 — 두 점 잣대는 배지가 선 가운데에 붙으므로 점을 따로 찍지 않는다 */
+      if (gap) sketchOverlays.current.push(new kakao.maps.CustomOverlay({
         map, position: LL(sketch.at), xAnchor: 0.5, yAnchor: 0.5, zIndex: 6,
         content: '<div style="width:8px;height:8px;border-radius:8px;background:#fff;border:2px solid #ad1457"></div>',
       }));

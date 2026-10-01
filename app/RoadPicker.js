@@ -129,7 +129,7 @@ export function LaneControl({ value, onChange }) {
   const setLanes = (n) => set({ lanes: n, confirmed: false });
   return (
     <div style={S.lanes(!sure)} data-road-lanes="">
-      <span style={S.lbl}>{value.name}{value.method === 'drawn' ? ' 그린 구간' : ''} · 왕복</span>
+      <span style={S.lbl}>{value.name}{value.method === 'drawn' ? ' (지도에서 지정)' : ''} · 왕복</span>
       {/*
         **＋ 를 여섯 번 눌러야 6차선이 됐다.** 게다가 같은 화면(교통환경 시트)의 지도 바에도
         글자가 똑같은 [＋][－] 가 있어(확대·축소) 어느 쪽이 차선인지 헷갈렸다 —

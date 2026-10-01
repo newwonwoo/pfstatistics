@@ -207,7 +207,7 @@ export function pointInRing(point, ring) {
  * 경계 위에서 `point` 에 가장 가까운 점 — 「어디에서 어디까지 쟀는가」 를 지도에 선으로 보이기 위해.
  * 점이 경계 안이면 그 점 자신(거리 0). 거리 자체는 `distanceToPolygon` 이 정한다 — 이 함수는 자리만 준다.
  */
-export function nearestOnRing(point, ring) {
+export function nearestOnRing(point, ring, { edge = false } = {}) {
   if (!ring?.length) return null;
   if (ring.length === 1) return ring[0];
   const lat0 = ring.reduce((s, q) => s + q.lat, 0) / ring.length;
@@ -215,7 +215,8 @@ export function nearestOnRing(point, ring) {
   const k = Math.cos(rad(lat0));
   const pts = ring.map(proj);
   const p = proj(point);
-  if (inside(p, pts)) return point;
+  /* edge: 안쪽 점이어도 **선 위로** 끌어온다 — 「경계에서 시작하는 점」 을 경계에 붙일 때 */
+  if (!edge && inside(p, pts)) return point;
   let best = null;
   for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
     const a = pts[j], b = pts[i];

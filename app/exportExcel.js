@@ -411,7 +411,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
         const sc = scoreFacility(f.label, m);
         return [
           f.label, f.criteria,
-          m?.name ? `${m.name}${m.method === 'drawn' ? ' 그린 구간' : ''}${m.lanes ? ` (왕복 ${m.lanes}차선)` : ''}` : '(도로 미선택)',
+          m?.name ? `${m.name}${m.method === 'drawn' ? ' (지도에서 지정)' : ''}${m.lanes ? ` (왕복 ${m.lanes}차선)` : ''}` : '(도로 미선택)',
           m?.distance != null ? `${m.distance}m` : '',
           sc ? sc.score : '',
           sc ? `${sc.score}점 · ${sc.label}${sc.reason ? ` (${sc.reason})` : ''}` : '',
@@ -540,7 +540,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
         const rm = manual?.[f.label];
         ws.getCell(row, 2).value = f.manual
           ? (rm?.method === 'drawn'
-            ? `* 도로 위치 = 실무자가 지도에 그린 6차선 구간(${rm.name} · 길이 ${rm.drawnLength ?? '?'}m) · 거리는 사업지 ${facilities?.basis === 'polygon' ? '경계' : '대표지번 중심'}에서 그 선까지 최단거리(±5m)`
+            ? `* 도로 거리 = 실무자가 지도에 찍은 두 점(사업지 ${facilities?.basis === 'polygon' ? '경계' : '대표지번 중심'} 위 한 점 ~ ${rm.name} 위 한 점) 사이 실거리 ${rm.distance ?? '?'}m`
               + ` · 차선 수 = 로드뷰 육안 판정 · 기준 반경 ${f.radius}m`
             : rm?.method === 'geometry'
             ? `* 출처 : ${rm.source} — 도로 선형 좌표 · 거리는 도로 선까지 최단거리(±${rm.precision ?? 5}m)`
