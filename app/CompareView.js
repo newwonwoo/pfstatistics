@@ -1,11 +1,11 @@
 'use client';
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState } from 'react';
 import { T, mono } from './theme';
 import { fetchJson } from './fetchJson';
 import RadiusMap from './RadiusMap';
 import { scoreMatrix } from '../src/lib/scoring';
 import { similarityOf, pickComparables, guaranteeSetOf, baseRadius, PRIORITY_YEARS,
-  HOUSE_TYPES, SIZE_BANDS, RANK_BANDS, LAND_TYPES } from '../src/lib/similar';
+  HOUSE_TYPES, SIZE_BANDS, RANK_BANDS, LAND_TYPES, rankBandOf } from '../src/lib/similar';
 
 /**
  * 비교사업장 · 분양가 적정성.
@@ -61,13 +61,6 @@ const GEOCODE_NOTE = {
   sample: '견본주택 위치입니다 — 단지와 다른 자리일 수 있습니다',
 };
 
-/* 이 앱이 시공능력평가순위를 이미 수집한다 — 순위를 구간으로 옮기는 일을 사람에게 시키지 않는다 */
-const rankBandOf = (rank) => {
-  const n = Number(rank);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return n <= 50 ? '50위 이내' : n <= 100 ? '51~100위' : n <= 200 ? '101~200위' : n <= 300 ? '201~300위' : '300위 밖';
-};
-
 const S = {
   rtLink: { display: 'inline-block', padding: '3px 9px', borderRadius: 5, border: `1px solid ${T.accent}`, background: '#fff',
             color: T.accent, fontSize: 11.5, fontWeight: 800, textDecoration: 'none', whiteSpace: 'nowrap' },
@@ -105,10 +98,6 @@ const S = {
   ghost: { padding: '6px 13px', fontSize: 11.5, fontWeight: 700, borderRadius: 6, cursor: 'pointer', border: `1px solid ${T.accent}`, background: '#fff', color: T.accent },
   empty: { margin: '12px 0 0', padding: '12px 16px', background: T.warnSoft, border: `1px solid ${T.warn}33`,
            borderRadius: 7, fontSize: 12.5, color: T.ink2, lineHeight: 1.85 },
-  take: {
-    whiteSpace: 'nowrap', padding: '3px 8px', fontSize: 10.5, fontWeight: 700, cursor: 'pointer',
-    border: `1px solid ${T.accent}`, borderRadius: 4, background: T.accentSoft, color: T.accent,
-  },
   autoMsg: {
     flexBasis: '100%', marginTop: 8, padding: '8px 12px', borderRadius: 6,
     background: '#f7f9fb', border: `1px solid ${T.line}`, fontSize: 11.5, color: T.ink2, lineHeight: 1.6,
@@ -149,6 +138,7 @@ const S = {
     border: `1px solid ${done ? '#c7e9d5' : '#f0d9b4'}`,
   }),
   input: { padding: '5px 8px', fontSize: 12.5, border: `1px solid ${T.line}`, borderRadius: 4, background: '#fff', color: T.ink, fontFamily: 'inherit', width: 150, ...mono },
+  readVal: { padding: '5px 9px', fontSize: 12.5, fontWeight: 700, color: T.ink, background: '#f3f5f8', border: `1px solid ${T.line}`, borderRadius: 4, alignSelf: 'flex-start' },
   select: { padding: '5px 8px', fontSize: 12.5, border: `1px solid ${T.line}`, borderRadius: 4, background: '#fff', color: T.ink, fontFamily: 'inherit' },
   sum: { display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap', padding: '14px 18px', marginBottom: 14, borderRadius: 8, background: '#f4f8ff', border: '1px solid #cfdcf0' },
   sumNum: { fontSize: 26, fontWeight: 800, letterSpacing: '-.03em', ...mono },
@@ -222,7 +212,7 @@ const KIND_ORDER = ['아파트', '민간임대', '오피스텔', '도시형생�
 const rLabel = (r) => `${r / 1000}km`;
 
 
-export default function CompareView({ addr, coord, region, polygon, radiusBasis, company, companyRank, excl = null, manualSum = null, district = null, firstInDistrict = false, households = null, value, onChange }) {
+export default function CompareView({ addr, coord, region, polygon, radiusBasis, company, companyRank, excl = null, manualSum = null, district = null, firstInDistrict = false, households = null, siteFrom = {}, value, onChange }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [autoMsg, setAutoMsg] = useState(null);   // [규정대로 자동선택] 이 무엇을 했는지
@@ -299,22 +289,6 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
     ['rankBand', '다. 시공능력평가순위'],
   ];
   const reqLeft = REQ.filter(([k]) => !site[k]).length;
-
-  /*
-    **시공순위를 또 묻고 있었다**(사용자 지적) — 시공사는 맨 처음에 고르고,
-    순위는 이 앱이 공시 명부에서 이미 찾아 두었다. 구간은 순위에서 바로 나온다.
-    「말없이 채우지 않는다」 는 규칙은 지키되, 채운 **출처를 칸 옆에 적어** 지킨다 —
-    조용한 자동채움이 문제였지 자동채움 자체가 문제가 아니었다.
-    사람이 다른 구간으로 바꾸면 그대로 둔다(공동시공은 다른 시공자로 볼 때가 있다).
-  */
-  const autoRank = useRef(null);
-  useEffect(() => {
-    const band = rankBandOf(companyRank);
-    if (!band || autoRank.current === companyRank) return;
-    autoRank.current = companyRank;
-    if (!site.rankBand) setSite({ rankBand: band, rankAuto: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyRank]);
 
   /* 본건 제원을 하나도 안 채웠으면 유사도를 "0개 일치" 로 붉게 띄우지 않는다 — 겁만 준다 */
   const siteFilled = Boolean(site.houseType || site.sizeBand || site.rankBand || site.landType);
@@ -565,38 +539,31 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
               {HOUSE_TYPES.map(x => <option key={x} value={x}>{x}</option>)}
             </select>
           </label>
+          {/* 나·다 는 이미 넣은 값에서 정해진다 — 읽기만 한다(사용자 지적 2026-10-02). 원값이 없을 때만 고른다 */}
           <label style={S.field}>
             <span style={S.label}>나. 단지규모{!site.sizeBand && !firstInDistrict && <span style={S.must}>필수</span>}</span>
-            <select style={{ ...S.select, ...S.needs(!site.sizeBand && !firstInDistrict) }} value={site.sizeBand ?? ''} onChange={e => setSite({ sizeBand: e.target.value, sizeAuto: false })}>
-              <option value="">선택</option>
-              {SIZE_BANDS.map(x => <option key={x} value={x}>{x}</option>)}
-            </select>
-            {site.sizeBand && site.sizeAuto && households
-              ? <span style={S.from}>총세대수 {Number(households).toLocaleString('ko-KR')}세대에서 자동</span>
-              : !site.sizeBand && <span style={S.hint}>[수기입력] 총세대수를 넣으면 자동으로 찹니다</span>}
+            {siteFrom.sizeBand
+              ? <><span style={S.readVal}>{site.sizeBand}</span><span style={S.from}>{siteFrom.sizeBand}</span></>
+              : <>
+                  <select style={{ ...S.select, ...S.needs(!site.sizeBand && !firstInDistrict) }} value={site.sizeBand ?? ''} onChange={e => setSite({ sizeBand: e.target.value, sizeAuto: false })}>
+                    <option value="">선택</option>
+                    {SIZE_BANDS.map(x => <option key={x} value={x}>{x}</option>)}
+                  </select>
+                  <span style={S.hint}>[수기입력] 총세대수를 넣으면 자동으로 정해집니다</span>
+                </>}
           </label>
           <label style={S.field}>
-            <span style={S.label}>
-              다. 시공능력평가순위{!site.rankBand && !firstInDistrict && <span style={S.must}>필수</span>}
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <select style={{ ...S.select, ...S.needs(!site.rankBand && !firstInDistrict) }} value={site.rankBand ?? ''}
-                onChange={e => setSite({ rankBand: e.target.value, rankAuto: false })}>
-                <option value="">선택</option>
-                {RANK_BANDS.map(x => <option key={x} value={x}>{x}</option>)}
-              </select>
-              {rankBandOf(companyRank) && site.rankBand !== rankBandOf(companyRank) && (
-                <button type="button" style={S.take}
-                  title={`시공사 ${company ?? ''} ${companyRank}위 → ${rankBandOf(companyRank)}`}
-                  onClick={() => setSite({ rankBand: rankBandOf(companyRank), rankAuto: true })}>
-                  {rankBandOf(companyRank)}
-                </button>
-              )}
-            </span>
-            {/* 자동으로 채웠으면 **어디서 왔는지 그 자리에 적는다** — 조용히 채우면 입력값과 구분이 안 된다 */}
-            {site.rankBand && site.rankAuto && companyRank && (
-              <span style={S.from}>시공사 {company ?? ''} {companyRank}위에서 자동</span>
-            )}
+            <span style={S.label}>다. 시공능력평가순위{!site.rankBand && !firstInDistrict && <span style={S.must}>필수</span>}</span>
+            {siteFrom.rankBand
+              ? <><span style={S.readVal}>{site.rankBand}</span><span style={S.from}>{siteFrom.rankBand}</span></>
+              : <>
+                  <select style={{ ...S.select, ...S.needs(!site.rankBand && !firstInDistrict) }} value={site.rankBand ?? ''}
+                    onChange={e => setSite({ rankBand: e.target.value, rankAuto: false })}>
+                    <option value="">선택</option>
+                    {RANK_BANDS.map(x => <option key={x} value={x}>{x}</option>)}
+                  </select>
+                  <span style={S.hint}>맨 위 시공사가 공시 명부에 없어 직접 고릅니다</span>
+                </>}
           </label>
           <label style={S.field}>
             <span style={S.label}>라. 택지유형<span style={S.opt}>참고</span></span>

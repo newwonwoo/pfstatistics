@@ -102,7 +102,7 @@ const SITE_FIELDS = [
 
 export default function NearbyPresale({
   region, addr, coord, polygon, radiusBasis, series = '주택',
-  site = {}, onSite, value, onChange, district = null, onDistrict = null,
+  site = {}, onSite, siteFrom = {}, value, onChange, district = null, onDistrict = null,
 }) {
   const v = value ?? {};
   const set = (patch) => onChange?.({ ...v, ...patch });
@@ -212,11 +212,12 @@ export default function NearbyPresale({
           {SITE_FIELDS.map(([k, label, opts]) => (
             <label key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: T.ink2 }}>
               {label}
+              {siteFrom[k] ? <b style={{ color: T.ink }} title={siteFrom[k]}>{site[k]}</b> :
               <select style={S.siteSel(!site[k])} value={site[k] ?? ''}
                 onChange={e => onSite?.({ [k]: e.target.value || null, ...(k === 'sizeBand' ? { sizeAuto: false } : k === 'rankBand' ? { rankAuto: false } : null) })}>
                 <option value="">선택</option>
                 {opts.map(x => <option key={x} value={x}>{x}</option>)}
-              </select>
+              </select>}
             </label>
           ))}
           <span style={S.hit}>

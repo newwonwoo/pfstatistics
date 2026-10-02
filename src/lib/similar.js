@@ -29,6 +29,12 @@ export const sizeBandOf = (n) => {
   if (!(x > 0)) return null;
   return x < 500 ? SIZE_BANDS[0] : x < 1000 ? SIZE_BANDS[1] : SIZE_BANDS[2];
 };
+/** 시공능력평가순위 → 다. 시공순위 구간 */
+export const rankBandOf = (rank) => {
+  const n = Number(rank);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n <= 50 ? '50위 이내' : n <= 100 ? '51~100위' : n <= 200 ? '101~200위' : n <= 300 ? '201~300위' : '300위 밖';
+};
 export const RANK_BANDS = ['50위 이내', '51~100위', '101~200위', '201~300위', '300위 밖'];
 export const LAND_TYPES = ['민간택지', '공공택지', '신도시', '기타'];
 

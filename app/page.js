@@ -20,7 +20,7 @@ import SourceHealth from './SourceHealth';
 import PolygonDrawer from './PolygonDrawer';
 import RegionPicker from './RegionPicker';
 import { matchRegion } from '../src/lib/sido';
-import { sizeBandOf } from '../src/lib/similar';
+import { sizeBandOf, rankBandOf } from '../src/lib/similar';
 import CompanyPicker from './CompanyPicker';
 import DistrictRow, { initialDistrict, districtLabel } from './DistrictRow';
 import * as store from './storage';
@@ -246,15 +246,29 @@ export default function Home() {
       : { ...(rv ?? {}), 시공능력평가액순위: String(rankNow) }));
   }, [rankNow]);
   const households = sheetInput?.규모및배치?.총세대수;
+  /*
+    **본건 제원의 나. 단지규모 · 다. 시공순위는 읽기만 한다**(사용자 지적 2026-10-02 「읽기만 해야지 왜 선택해」).
+    둘 다 이미 넣은 값(총세대수 · 맨 위 시공사)에서 정해진다 — 고르는 칸을 두면 원값과 갈린다.
+    원값이 있으면 늘 그 값을 따른다. 원값이 없을 때만 비교사업장·인근 단지 조사 화면이 고르는 칸을 세운다.
+  */
+  const sizeAutoBand = sizeBandOf(households);
+  const rankAutoBand = rankBandOf(rankNow);
   useEffect(() => {
-    const band = sizeBandOf(households);
-    if (!band) return;
+    if (!sizeAutoBand && !rankAutoBand) return;
     setCompare(c => {
       const s = c?.site ?? {};
-      if (s.sizeBand === band || (s.sizeBand && !s.sizeAuto)) return c;
-      return { ...(c ?? {}), site: { ...s, sizeBand: band, sizeAuto: true } };
+      const next = { ...s,
+        ...(sizeAutoBand ? { sizeBand: sizeAutoBand, sizeAuto: true } : null),
+        ...(rankAutoBand ? { rankBand: rankAutoBand, rankAuto: true } : null) };
+      return next.sizeBand === s.sizeBand && next.rankBand === s.rankBand && next.sizeAuto === s.sizeAuto && next.rankAuto === s.rankAuto
+        ? c : { ...(c ?? {}), site: next };
     });
-  }, [households]);
+  }, [sizeAutoBand, rankAutoBand]);
+  /* 읽기 전용으로 보여 줄 때 「어디서 왔는지」 — 두 화면이 같은 문구를 쓴다 */
+  const siteFrom = {
+    ...(sizeAutoBand ? { sizeBand: `[수기입력] 총세대수 ${Number(households).toLocaleString('ko-KR')}세대` } : null),
+    ...(rankAutoBand ? { rankBand: `시공사 ${data?.company ?? ''} ${rankNow}위` } : null),
+  };
   useEffect(() => { if (basisMode) setRadiusBasis(basisMode); }, [basisMode]);
 
   // 경계를 다 그리면 다음에 누를 곳을 알려준다 (수집 버튼은 위 단계 줄에 하나만 둔다)
@@ -1410,6 +1424,7 @@ export default function Home() {
                   value={rate} onChange={setRate} onJump={jump}
                   district={manual['사업지구']}
                   onDistrict={(d) => setManual(m => ({ ...m, 사업지구: d }))}
+                  siteFrom={siteFrom}
                 />
               )
               : s.kind === 'comp'
@@ -1422,7 +1437,7 @@ export default function Home() {
                   companyRank={rankNow}
                   excl={mSum.excl} manualSum={mSum} district={manual['사업지구']}
                   firstInDistrict={isFirstInDistrict(manual['사업지구'], sheetInput?.인근초기분양률)}
-                  households={households}
+                  households={households} siteFrom={siteFrom}
                   value={compare} onChange={setCompare}
                 />
               )

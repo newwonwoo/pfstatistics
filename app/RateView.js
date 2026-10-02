@@ -88,7 +88,7 @@ const SERIES = [
 
 export default function RateView({ region, addr, coord, polygon, radiusBasis, company,
   facilities, compare, onCompare, excl: exclProp = null, manualSum = null,
-  sheetInput = null, onSheetInput, value, onChange, onJump, district = null, onDistrict = null }) {
+  sheetInput = null, onSheetInput, value, onChange, onJump, district = null, onDistrict = null, siteFrom = {} }) {
   const v = value ?? {};
   const series = v.series ?? '주택';
   /*
@@ -182,7 +182,7 @@ export default function RateView({ region, addr, coord, polygon, radiusBasis, co
           region={region} addr={addr} coord={coord} polygon={polygon} radiusBasis={radiusBasis}
           series={series}
           /* 비고2 의 4개 항목 = 비교사업장 탭 [본건 제원] 과 같은 값(한 곳에서 들고 있는다) */
-          site={compare?.site ?? {}}
+          site={compare?.site ?? {}} siteFrom={siteFrom}
           onSite={(patch) => onCompare?.({ ...(compare ?? {}), site: { ...(compare?.site ?? {}), ...patch } })}
           value={sheetInput?.인근초기분양률}
           /* 함수로 오면 그 시점의 값에 얹는다 — 수집을 기다리는 사이 넣은 값을 지키려고 */
