@@ -136,6 +136,7 @@ export default function ReviewInputs({ value, onChange, companyRank = null, comp
         <div style={S.note}>
           ※ 점수가 아니라 <b>원시값</b>을 넣습니다 — 사업수익률 10.64(%) · 누적DSCR 1.05. 구간표가 점수를 냅니다.
           {companyRank != null && <> 시공능력평가순위는 위에서 고른 시공사{company ? `(${company})` : ''}의 공시 순위 <b>{companyRank}위</b>가 그대로 들어갑니다.</>}
+          <br />
           초기분양률(22)은 이 앱이 산정한 <b>초기예상분양률</b>에서 나므로 칸이 없습니다.
           사업수익률의 분양가는 <b>Min(적정분양가, 예정분양가)</b> — 적정분양가는 [비교사업장 · 분양가] 탭이 냅니다.
         </div>
