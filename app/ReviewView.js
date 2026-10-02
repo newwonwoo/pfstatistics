@@ -105,7 +105,7 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
   const items = r.groups.flatMap(g => g.items).length;
 
   /*
-    이 앱이 수집한 시공능력평가순위는 [수기입력] 탭이 **버튼 없이 바로 채운다**
+    시공능력평가순위는 맨 위에서 고른 시공사로 정해진다 — 수기입력 칸도 없다(2026-10-02)
     (사용자 지적 2026-09-25 — 「3위인데 넣어주면 되지 왜 버튼을 또 누르게 해」).
     여기서는 그 사실을 근거 칸에 적기만 한다.
   */
@@ -113,7 +113,7 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
     const g = (id) => (data?.results ?? []).find(x => x.indicatorId === id && x.ok)?.value ?? null;
     const rank = g('construction_capability_rank');
     return rank == null ? {} : {
-      '시공능력평가액순위': { text: `이 앱이 수집한 순위 : ${rank}위 — [수기입력] 탭에서 자동으로 들어갑니다` },
+      '시공능력평가액순위': { text: `위에서 고른 시공사${data?.company ? `(${data.company})` : ''}의 공시 순위 ${rank}위 — 시공사를 바꾸면 같이 바뀝니다` },
     };
   }, [data]);
   const t = tableOf('심사평점표');
@@ -129,7 +129,7 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
         <span style={{ color: T.muted }}>
           <b>이 표는 결과만 보여줍니다</b> — 사업수익률·누적DSCR·자기자금·신용등급 같은 값은
           사업수지표·신용평가에서 나오므로 <b>[수기입력] 탭</b>에서 받습니다.
-          시공능력평가순위는 이 앱이 수집한 값이 그 탭에 자동으로 들어갑니다.
+          시공능력평가순위는 맨 위에서 고른 시공사로 정해집니다.
         </span>
         {/* 「초기분양률」 이 세 곳에 나와 헷갈린다 — 세 탭에 같은 그림을 둔다 */}
         <PresaleChain

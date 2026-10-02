@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { T, mono } from './theme';
 import { reviewScore } from '../src/lib/scoring';
 
@@ -53,21 +53,11 @@ export default function ReviewInputs({ value, onChange, companyRank = null, comp
   const put = (id, x) => onChange?.({ ...v, [id]: x });
 
   /*
-    **시공능력평가순위는 이 앱이 이미 수집한 값이다**(사용자 지적 2026-09-25 —
-    「3위인데 넣어주면 되지 왜 버튼을 또 누르게 해」). 그래서 [N위 넣기] 버튼을 없애고
-    **빈 칸일 때 바로 채운다.** 손댄 적이 있으면(빈 문자열 포함) 건드리지 않는다 —
-    공동시공처럼 다른 시공자로 볼 때 지운 값을 되살리면 안 된다.
-    어디서 온 값인지는 근거 칸에 적는다.
+    **시공능력평가순위는 칸을 두지 않는다**(사용자 지적 2026-10-02) — 맨 위에서 고른 시공사로 이미 정해진다.
+    값은 page.js 가 시공사 순위를 따라 넣는다. 공시 명부에 없는 상호일 때만 칸을 세운다.
   */
   const rankId = '시공능력평가액순위';
-  useEffect(() => {
-    if (companyRank == null) return;
-    if (v[rankId] !== undefined) return;
-    onChange?.({ ...v, [rankId]: String(companyRank) });
-  }, [companyRank, v, onChange]);
-
   const r = useMemo(() => reviewScore({ manual: v, rate: NaN }), [v]);
-  const fromApp = companyRank != null && String(v[rankId] ?? '') === String(companyRank);
 
   /*
     **넣는 칸은 폼으로, 표는 결과만**(사용자 지적 2026-10-01 「모든 수기입력사항은 별도폼으로 두고 표는 그 결과만 보는 곳」).
@@ -79,7 +69,6 @@ export default function ReviewInputs({ value, onChange, companyRank = null, comp
     <div key={it.id} style={S.field}>
       <span style={S.lab}>
         {it.id}
-        {it.id === rankId && fromApp && <span style={S.auto}>자동</span>}
         <span style={S.max}>배점 {it.max}</span>
       </span>
       {it.select
@@ -99,12 +88,7 @@ export default function ReviewInputs({ value, onChange, companyRank = null, comp
       <span style={S.out}>
         {it.score == null ? '' : `${typeof it.band === 'string' && it.band ? `${it.band} → ` : ''}${it.score}점`}
       </span>
-      {it.id === rankId && companyRank != null && (
-        <span style={S.tip}>
-          {company ? `${company} ` : ''}{companyRank}위 — 이 앱이 수집한 값
-          {!fromApp && <b style={{ color: T.warn }}> (칸의 값과 다릅니다)</b>}
-        </span>
-      )}
+      {it.id === rankId && <span style={S.tip}>위에서 고른 시공사{company ? `(${company})` : ''}가 공시 명부에 없어 직접 넣습니다</span>}
       {it.formula && <span style={S.tip}>{it.formula}</span>}
     </div>
   );
@@ -117,7 +101,7 @@ export default function ReviewInputs({ value, onChange, companyRank = null, comp
       </div>
       <div style={S.body}>
         {r.groups.map(g => {
-          const items = g.items.filter(it => !it.auto);
+          const items = g.items.filter(it => !it.auto && !(it.id === rankId && companyRank != null));
           if (!items.length) return null;
           return (
             <div key={g.label} style={S.group}>
@@ -150,7 +134,8 @@ export default function ReviewInputs({ value, onChange, companyRank = null, comp
         )}
 
         <div style={S.note}>
-          ※ 점수가 아니라 <b>원시값</b>을 넣습니다 — 사업수익률 10.64(%) · 누적DSCR 1.05 · 순위 3(위). 구간표가 점수를 냅니다.
+          ※ 점수가 아니라 <b>원시값</b>을 넣습니다 — 사업수익률 10.64(%) · 누적DSCR 1.05. 구간표가 점수를 냅니다.
+          {companyRank != null && <> 시공능력평가순위는 위에서 고른 시공사{company ? `(${company})` : ''}의 공시 순위 <b>{companyRank}위</b>가 그대로 들어갑니다.</>}
           초기분양률(22)은 이 앱이 산정한 <b>초기예상분양률</b>에서 나므로 칸이 없습니다.
           사업수익률의 분양가는 <b>Min(적정분양가, 예정분양가)</b> — 적정분양가는 [비교사업장 · 분양가] 탭이 냅니다.
         </div>

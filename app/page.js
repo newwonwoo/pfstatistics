@@ -233,6 +233,18 @@ export default function Home() {
     시공순위처럼 비어 있거나 앞서 자동으로 채운 것이면 그 값에서 구간을 낸다. 사람이 고른 구간은 건드리지 않는다.
     비교사업장 탭과 인근 단지 조사가 같은 본건 제원(compare.site)을 쓰므로 여기 한 곳에서 채운다.
   */
+  /*
+    **시공능력평가순위는 맨 위에서 고른 시공사로 정해진다**(사용자 지적 2026-10-02 「시공사를 위에서 선택하면
+    시공능력평가순위가 자동으로 결정될텐데 수기입력에 왜 또 있지?」). 수기입력 칸을 없애고 그 값을 여기서 따라 넣는다.
+    시공사를 바꾸면 순위도 같이 바뀐다 — 공동시공처럼 다른 시공자로 볼 때는 맨 위 시공사를 바꾼다.
+    명부에 없는 상호일 때만 수기입력에 칸이 선다(ReviewInputs).
+  */
+  const rankNow = (data?.results ?? []).find(r => r.indicatorId === 'construction_capability_rank' && r.ok)?.value ?? null;
+  useEffect(() => {
+    if (rankNow == null) return;
+    setReview(rv => (String(rv?.['시공능력평가액순위'] ?? '') === String(rankNow) ? rv
+      : { ...(rv ?? {}), 시공능력평가액순위: String(rankNow) }));
+  }, [rankNow]);
   const households = sheetInput?.규모및배치?.총세대수;
   useEffect(() => {
     const band = sizeBandOf(households);
@@ -863,7 +875,9 @@ export default function Home() {
   const tabProgress = useMemo(() => {
     /* 수기입력 — 이 탭에서 손으로 넣는 칸(분양가격지수 제외 항목의 값→점수 + 심사평점표 입력값). 감점은 없는 것이 정상이라 세지 않는다 */
     const formRows = (mSum.rows ?? []).filter(r => r.kind === 'form' && (r.tab ?? '수기입력') === '수기입력');
-    const rvItems = (reviewRes?.groups ?? []).flatMap(g => g.items).filter(it => !it.auto);
+    /* 시공순위는 맨 위 시공사에서 정해지므로 손으로 넣는 칸이 아니다 — 명부에 없을 때만 센다 */
+    const rvItems = (reviewRes?.groups ?? []).flatMap(g => g.items)
+      .filter(it => !it.auto && !(it.id === '시공능력평가액순위' && rankNow != null));
     const manualTotal = formRows.length + rvItems.length;
     const manualDone = formRows.filter(r => r.score != null).length
       + rvItems.filter(it => String(it.value ?? '') !== '').length;
@@ -877,7 +891,7 @@ export default function Home() {
       초기예상분양률: { done: [nb, ratePct != null, ratePct != null && presaleScore].filter(Boolean).length, total: 3 },
       심사평점표: { done: rvAll.filter(it => it.score != null).length, total: rvAll.length },
     };
-  }, [mSum.rows, reviewRes, ratePct]);
+  }, [mSum.rows, reviewRes, ratePct, rankNow]);
 
 
   return (
@@ -1373,7 +1387,7 @@ export default function Home() {
                   /* 심사평점표가 쓰는 입력값도 여기서 받는다 — 그 탭은 결과만 읽는 자리다 */
                   review={review} onReview={setReview}
                   company={data?.company}
-                  companyRank={(data?.results ?? []).find(r => r.indicatorId === 'construction_capability_rank' && r.ok)?.value ?? null}
+                  companyRank={rankNow}
                 />
               )
               : s.kind === 'review'
@@ -1405,7 +1419,7 @@ export default function Home() {
                   radiusBasis={radiusBasis}
                   company={data?.company}
                   /* 시공능력평가순위는 이미 수집돼 있다 — 본건 유사도 판정에 참고로 보여준다 */
-                  companyRank={(data?.results ?? []).find(r => r.indicatorId === 'construction_capability_rank' && r.ok)?.value ?? null}
+                  companyRank={rankNow}
                   excl={mSum.excl} manualSum={mSum} district={manual['사업지구']}
                   firstInDistrict={isFirstInDistrict(manual['사업지구'], sheetInput?.인근초기분양률)}
                   households={households}
