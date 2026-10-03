@@ -295,12 +295,16 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
      *   첫 점 → 사업지 경계 위로 붙인다(경계가 없으면 찍은 자리) · 둘째 점 → 끝점 40m 안에 도로 선형이 있으면 그 도로 위로 붙인다
      *   거리 = 두 점 사이 실거리 · 도로명 = 둘째 점이 붙은 도로(지도에 표시 중인 도로를 먼저 본다)
      * 점을 찍을 때 한 번만 부른다.
+     *
+     * **경계 쪽 점은 찍지 않고 잰다 — 도로 위 그 점에서 가장 가까운 경계 점**(사용자 지적 2026-10-03
+     * 「최단거리 설정을 못하는 것 같은데? 사업경계지 우측 모서리에서 가야 최단거리일 거 아냐. 지레짐작해서 선 긋지 말고 제대로 측정해야지」).
+     * 사람이 경계를 찍으면 찍은 모서리에서 출발해 최단거리가 아니게 된다 — 규정이 재는 것은 「단지 경계로부터」의 거리다.
+     * 그래서 실무자는 **6차선인 도로 위 한 점만** 찍고, 경계 쪽 끝은 `nearestOnRing(도로 점, 경계, {edge})` 로 정한다.
+     * 경계가 없으면(대표지번 중심 기준) 중심점에서 잰다.
      */
     const measureDrawn = (label, pts) => {
       if (!pts?.length) return null;
       const site = siteOf();
-      const start = site.polygon ? nearestOnRing(pts[0], site.polygon, { edge: true }) : pts[0];
-      if (pts.length < 2) return { start, path: [start], distance: null, road: null };
       const raw = pts[pts.length - 1];
       const rows = roadList[label] ?? [];
       const on = shownSet(manual?.[label], rows);
@@ -310,6 +314,7 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
         .sort((x, y) => x.s.distance - y.s.distance)[0] ?? null;
       const hit = pick(rows.filter(r => on.has(r.name) || r.name === manual?.[label]?.name)) ?? pick(rows);
       const end = hit ? hit.s.at : raw;
+      const start = site.polygon ? nearestOnRing(end, site.polygon, { edge: true }) : site.center;
       return { start, end, path: [start, end], distance: Math.round(haversine(start, end)), road: hit?.r.name ?? null };
     };
 
@@ -332,7 +337,7 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
             <button style={S.drawStart} onClick={() => set({ on: true, pts: [], name: '' })}>✎ 도로 위치 그리기</button>
             {v?.method === 'drawn' ? (
               <span style={S.drawTxt}>
-                적용됨 — 사업지 경계 ~ <b>{v.name}</b> 두 점 사이{' '}
+                적용됨 — 사업지 경계에서 <b>{v.name}</b> 위 지정한 점까지 최단거리{' '}
                 <span style={S.drawNum}>{v.distance}m</span>
                 <button style={S.undo} onClick={() => onManual?.(f.label, {
                   ...v, method: null, drawn: null, drawnLength: null, name: null, distance: null, x: null, y: null, source: null, from: null, confirmed: false,
@@ -340,7 +345,7 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
               </span>
             ) : (
               <span style={S.drawTxt}>
-                <b>사업지 경계에 한 점, 6차선 도로 위에 한 점</b>을 찍으면 두 점 사이 거리를 잽니다
+                <b>6차선인 도로 위 한 점</b>을 찍으면 사업지 경계에서 그 점까지 <b>최단거리</b>를 잽니다
               </span>
             )}
           </div>
@@ -356,30 +361,27 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
         <div style={S.drawBar(true)}>
           <span style={S.drawTxt}>
             {st.pts.length === 0
-              ? <>① <b>사업지 경계</b>를 찍으세요 — 경계 위로 붙습니다</>
-              : st.pts.length === 1
-                ? <>② <b>6차선 도로</b> 위를 찍으세요 — 도로 선 위로 붙습니다</>
-                : <>사업지 경계 ~ {m?.road ? <b>{m.road}</b> : '찍은 점'} 두 점 사이 <span style={S.drawNum}>{m?.distance}m</span>
-                    <span style={{ color: T.muted }}> · 다시 찍으면 둘째 점이 옮겨 갑니다</span></>}
+              ? <><b>6차선인 도로</b> 위를 찍으세요 — 도로 선 위로 붙고, 사업지 경계에서 가장 가까운 점까지 잽니다</>
+              : <>사업지 경계 ~ {m?.road ? <b>{m.road}</b> : '찍은 점'} 최단거리 <span style={S.drawNum}>{m?.distance}m</span>
+                  <span style={{ color: T.muted }}> · 다시 찍으면 점이 옮겨 갑니다</span></>}
           </span>
           {m && m.distance != null && !m.road && (
             <span style={S.drawWarn}>
-              둘째 점 40m 안에 도로 선이 없어 <b>찍은 자리</b>까지 잽니다 — 6차선 도로 선 위를 찍으면 도로 위로 붙습니다
+              찍은 점 40m 안에 도로 선이 없어 <b>찍은 자리</b>까지 잽니다 — 6차선 도로 선 위를 찍으면 도로 위로 붙습니다
             </span>
           )}
           <input style={S.drawName} placeholder="도로명" value={name}
             onChange={(e) => set({ name: e.target.value })} />
-          <button style={S.drawBtn} disabled={!st.pts.length} onClick={() => setPts(st.pts.slice(0, -1))}>한 점 취소</button>
-          <button style={S.drawBtn} disabled={!st.pts.length} onClick={() => setPts([])}>전체 지우기</button>
+          <button style={S.drawBtn} disabled={!st.pts.length} onClick={() => setPts([])}>점 지우기</button>
           <button style={S.drawGo(m?.distance != null)} disabled={m?.distance == null}
-            title={st.pts.length < 2 ? '점을 두 개 이상 찍어야 적용할 수 있습니다' : ''}
+            title={!st.pts.length ? '도로 위 한 점을 찍어야 적용할 수 있습니다' : ''}
             onClick={() => {
               const nm = name || '도로명 미상';
               onManual?.(f.label, {
                 ...(v ?? {}),
                 name: nm, distance: m.distance, x: m.end.lng, y: m.end.lat, from: m.start,
                 method: 'drawn', precision: null,
-                source: '실무자가 지도에 찍은 두 점(사업지 경계 ~ 6차선 도로) 사이 거리',
+                source: '실무자가 지도에 찍은 6차선 도로 위 한 점 ~ 사업지 경계 최단거리',
                 drawn: m.path, drawnLength: m.distance,
                 // 같은 도로면 센 차선 수를 이어 쓰고, 다른 도로면 다시 센다(앞 도로 값을 물려받으면 판정이 틀린다)
                 lanes: v?.name === nm ? (v?.lanes ?? 0) : 0,
@@ -388,7 +390,7 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
               });
               setRoadDraw(prev => ({ ...prev, [f.label]: { on: false, pts: [], name: '' } }));
             }}>
-            {m?.distance != null ? `${m.road ? `${m.road} ` : ''}${m.distance}m 로 적용` : '두 점을 찍으세요'}
+            {m?.distance != null ? `${m.road ? `${m.road} ` : ''}${m.distance}m 로 적용` : '도로 위를 찍으세요'}
           </button>
           <button style={S.drawBtn} onClick={() => set({ on: false, pts: [], name: '' })}>취소</button>
         </div>
@@ -757,8 +759,8 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                       drawMode={Boolean(f.manual && roadDraw[f.label]?.on)}
                       onDrawClick={(pt) => setRoadDraw(prev => {
                         const cur = prev[f.label] ?? { on: true, pts: [], name: '' };
-                        /* 두 점만 쓴다 — 셋째부터는 둘째 점을 옮긴다 */
-                        const pts = cur.pts.length >= 2 ? [cur.pts[0], pt] : [...cur.pts, pt];
+                        /* 도로 위 한 점만 쓴다 — 다시 찍으면 옮긴다(경계 쪽 끝은 measureDrawn 이 최단으로 정한다) */
+                        const pts = [pt];
                         const meas = measureDrawn(f.label, pts);
                         return { ...prev, [f.label]: { ...cur, pts, meas, guess: meas?.road ?? '' } };
                       })}
@@ -766,7 +768,7 @@ export default function SheetView({ sheetId, data, facilities, manual, onManual,
                         const { pts, meas: mm } = roadDraw[f.label];
                         const path = mm?.path ?? pts;
                         const mid = path.length >= 2 ? { lat: (path[0].lat + path[1].lat) / 2, lng: (path[0].lng + path[1].lng) / 2 } : null;
-                        /* 배지는 두 점 사이 가운데에 그 거리만 */
+                        /* 배지는 잰 선분(경계 최근접점 ~ 도로 점) 가운데에 그 거리만 */
                         return { path, at: mid, from: null, text: mm?.distance != null ? `${mm.distance}m` : null };
                       })() : null}
                       /*

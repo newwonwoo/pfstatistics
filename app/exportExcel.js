@@ -661,7 +661,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
         const rm = manual?.[f.label];
         ws.getCell(row, 2).value = f.manual
           ? (rm?.method === 'drawn'
-            ? `* 도로 거리 = 실무자가 지도에 찍은 두 점(사업지 ${facilities?.basis === 'polygon' ? '경계' : '대표지번 중심'} 위 한 점 ~ ${rm.name} 위 한 점) 사이 실거리 ${rm.distance ?? '?'}m`
+            ? `* 도로 거리 = 실무자가 지도에 찍은 ${rm.name} 위 한 점에서 사업지 ${facilities?.basis === 'polygon' ? '경계(가장 가까운 점)' : '대표지번 중심'}까지 최단거리 ${rm.distance ?? '?'}m`
               + ` · 차선 수 = 로드뷰 육안 판정 · 기준 반경 ${f.radius}m`
             : rm?.method === 'geometry'
             ? `* 출처 : ${rm.source} — 도로 선형 좌표 · 거리는 도로 선까지 최단거리(±${rm.precision ?? 5}m)`
