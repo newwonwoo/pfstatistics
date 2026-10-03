@@ -241,10 +241,13 @@ export default function RadiusMap({ title, center, radius, steps = null, markers
           new kakao.maps.Polyline({ map, path, strokeWeight: 2.5, strokeColor: '#ad1457', strokeOpacity: 0.95, strokeStyle: 'shortdash' });
           return;
         }
-        /* `ruler` = 실무자가 찍은 두 점(사업지 경계 ~ 6차선 도로)을 잇는 잣대 — 그리는 중과 같은 자홍, 흰 테두리 */
+        /*
+          `ruler` = 실무자가 찍은 두 점(사업지 경계 ~ 6차선 도로)을 잇는 잣대.
+          **찍는 중의 점선 그대로 남긴다**(사용자 요청 2026-10-03 「점선으로 하니까 훨씬 낫네 이대로 지도에도 반영」) —
+          적용하면 굵은 실선으로 바뀌어 도로(파랑 실선)와 겹쳐 읽혔다. 거리 선은 점선, 도로는 실선으로 갈린다.
+        */
         if (ln.ruler) {
-          new kakao.maps.Polyline({ map, path, strokeWeight: 9, strokeColor: '#ffffff', strokeOpacity: 0.85, strokeStyle: 'solid' });
-          new kakao.maps.Polyline({ map, path, strokeWeight: 4, strokeColor: '#d81b60', strokeOpacity: 0.95, strokeStyle: 'solid' });
+          new kakao.maps.Polyline({ map, path, strokeWeight: 2.5, strokeColor: '#ad1457', strokeOpacity: 0.95, strokeStyle: 'shortdash' });
           return;
         }
         /*

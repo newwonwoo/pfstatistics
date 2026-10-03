@@ -307,16 +307,8 @@ export async function composeMap(el, spec = {}) {
       if (path.length < 2) return;
       ctx.beginPath();
       path.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
-      /* 두 점 잣대 — 화면과 같은 흰 테두리 + 자홍 */
-      if (ln.ruler) {
-        ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-        ctx.strokeStyle = '#ffffff'; ctx.globalAlpha = 0.85; ctx.lineWidth = 9; ctx.stroke();
-        ctx.strokeStyle = '#d81b60'; ctx.globalAlpha = 0.95; ctx.lineWidth = 4; ctx.stroke();
-        ctx.globalAlpha = 1;
-        return;
-      }
-      /* 잰 거리(경계 ~ 도로) — 화면과 같은 가는 점선 */
-      if (ln.measure) {
+      /* 잰 거리(경계 ~ 도로)와 두 점 잣대 — 화면과 같은 가는 점선(2026-10-03 잣대도 점선으로 통일) */
+      if (ln.measure || ln.ruler) {
         ctx.strokeStyle = '#ad1457'; ctx.lineWidth = 2.5; ctx.setLineDash([6, 4]); ctx.lineCap = 'butt';
         ctx.stroke(); ctx.setLineDash([]);
         return;
