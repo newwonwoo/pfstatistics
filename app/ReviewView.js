@@ -186,7 +186,7 @@ export default function ReviewView({ region, addr, data, facilities, compare, ra
         <div style={S.warn}>
           <b>0점 처리 규칙이 걸렸습니다</b> — {r.zero.text}<br />
           {r.zero.lowRate && <>· 초기예상분양률 {pct}% 가 50% 미만입니다<br /></>}
-          {r.zero.lowDscr && <>· 누적DSCR {v.__dscr} 이 1.00 미만입니다<br /></>}
+          {r.zero.lowDscr && <>· 누적DSCR {v['누적DSCR분석값'] ?? v.__dscr} 이 1.00 미만입니다<br /></>}
           <span style={{ color: T.ink2 }}>초기분양률·누적DSCR 두 항목의 평점을 0점으로 내렸습니다.</span>
         </div>
       )}

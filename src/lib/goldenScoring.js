@@ -156,6 +156,9 @@ export function checkScoringGolden() {
   const zDscr = reviewScore({ manual: { ...baseManual, '누적DSCR분석값': 0.99 }, rate: 70 });
   chk('0점규칙 DSCR 0.99 → ③ 0점', pick(zDscr, '초기분양률'), 0);
   chk('0점규칙 DSCR 0.99 → DSCR 0점', pick(zDscr, '누적DSCR분석값'), 0);
+  /* 빈 칸은 「안 넣음」이지 0 이 아니다 — 0점 처리를 걸면 안 된다 */
+  const zBlank = reviewScore({ manual: { ...baseManual, '누적DSCR분석값': '' }, rate: 70 });
+  chk('0점규칙 DSCR 빈칸 → ③ 16점 그대로', pick(zBlank, '초기분양률'), 16);
 
   const failures = out.filter(c => c.status !== 'pass');
   return {

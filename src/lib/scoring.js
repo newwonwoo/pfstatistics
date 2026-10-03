@@ -558,8 +558,13 @@ export function reviewScore({ manual = {}, rate = null } = {}) {
 
   const presale = scorePresaleRate(Number.isFinite(rate) ? rate : NaN);
   const z = t.zeroRule;
-  /* 이제 누적DSCR 은 실측값 자체를 받으므로 0점 처리 판정도 같은 값으로 한다 */
-  const dscr = Number(manual['누적DSCR분석값'] ?? manual.__dscr);
+  /*
+    이제 누적DSCR 은 실측값 자체를 받으므로 0점 처리 판정도 같은 값으로 한다.
+    **빈 칸은 0 이 아니라 「아직 안 넣음」이다** — `Number('')` 가 0 이라 칸을 비워 두기만 해도
+    「1.00 미만」 으로 읽혀 초기분양률 70%(16점)가 0점으로 떨어졌다(사용자 지적 2026-10-03).
+  */
+  const rawDscr = manual['누적DSCR분석값'] ?? manual.__dscr;
+  const dscr = rawDscr == null || String(rawDscr).trim() === '' ? NaN : Number(rawDscr);
   const lowRate = Number.isFinite(rate) && rate < z.rateUnder;
   const lowDscr = Number.isFinite(dscr) && dscr < z.dscrUnder;
   const zeroed = lowRate || lowDscr;
