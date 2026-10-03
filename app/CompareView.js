@@ -51,8 +51,12 @@ const GEOCODE_LABEL = {
   dong: '주소로 못 찾아 읍면동 중심으로 잼(근사)', place: '주소로 못 찾아 지구명으로 찾은 위치',
   sample: '주소로 못 찾아 견본주택 위치로 잼',
 };
-/* 지도 이름표에는 짧게 — 긴 문장이 붙으면 지도를 덮는다 */
-const GEOCODE_PIN = { name: '단지명 검색 위치', zone: '택지지구 중심', dong: '읍면동 중심', place: '지구명 검색 위치', sample: '견본주택' };
+/*
+  지도 이름표에는 **핀이 단지 자리가 아닐 때만** 붙인다(짧게 — 긴 문장이 붙으면 지도를 덮는다).
+  단지명으로 찾은 위치(name)는 그 단지 자체라 핀이 맞다 — 꼬리표를 달면 군말이다(사용자 지적 2026-10-03
+  「이름표에 단지명 검색 위치 — 이건 왜 딸려 나오냐」). 찾은 방법은 표의 배지가 말한다.
+*/
+const GEOCODE_PIN = { zone: '택지지구 중심', dong: '읍면동 중심', place: '지구 위치 · 근사', sample: '견본주택 위치' };
 const GEOCODE_NOTE = {
   name: '공고 주소(지번)가 카카오 주소 목록에 없어 단지명으로 검색한 위치입니다 — 재개발로 지번이 바뀐 곳에서 흔합니다',
   zone: '공고 주소에 지번이 없어 택지지구(카카오맵 개발지구) 중심으로 잰 거리입니다',
@@ -394,7 +398,7 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
     };
   })();
 
-  /* 근사 좌표로 찍은 핀은 이름에 그 사실을 적는다 — 지도에서 정확한 핀과 구분이 안 되면 안 된다 */
+  /* 근사 좌표(지구·읍면동 중심 · 견본주택)로 찍은 핀만 이름에 그 사실을 적는다 — 정확한 핀과 구분이 안 되면 안 된다 */
   /*
     **기축·미공고 단지도 골라서 지도에 띄운다**(사용자 요청 2026-10-01 「선택해서 지도에 표시하는 옵션」).
     분양가가 없어 평균에는 못 넣지만 「옆에 뭐가 있나」 는 지도로 봐야 한다. 청록 핀 · 번호 「기N」 = 기축 표의 #.
@@ -405,7 +409,7 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
     /* **본건은 핀을 달지 않는다** — 경계선이 이미 위치를 말한다(사용자 원칙). 번호는 표의 # 그대로 둔다 */
     ...items.map((a, i) => ({ a, i })).filter(({ a }) => !a.isSite).map(({ a, i }) => ({
       no: i + 1, lat: a.y, lng: a.x, distance: a.distance,
-      name: a.geocode && a.geocode !== 'exact' ? `${a.name} (${GEOCODE_PIN[a.geocode] ?? '근사'})` : a.name,
+      name: GEOCODE_PIN[a.geocode] ? `${a.name} (${GEOCODE_PIN[a.geocode]})` : a.name,
     })),
     ...knownItems.map((a, i) => ({ a, i })).filter(({ a }) => knownOn.includes(a.name) && a.y != null)
       .map(({ a, i }) => ({ no: `기${i + 1}`, lat: Number(a.y), lng: Number(a.x), distance: a.distance,
