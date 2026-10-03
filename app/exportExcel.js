@@ -262,7 +262,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
 
     const COLS = ['No.', '종류', '단지명', '시공사', '주소', '거리(m)', '분양개시일', '시기', '공급세대',
       `${areaBasis === 'supply' ? '공급' : '전용'}면적(㎡)`, '분양가(원/㎡)', '사업부지', '사업부지 상세', '유사도'];
-    const WIDTH = [6, 9, 26, 20, 30, 9, 12, 15, 9, 15, 15, 10, 44, 38];
+    const WIDTH = [6, 11, 26, 20, 30, 9, 14, 15, 9, 15, 15, 10, 44, 38];
     const PRICE_COL = 2 + COLS.indexOf('분양가(원/㎡)');
     const head = 5;
     COLS.forEach((h, k) => {
@@ -388,7 +388,8 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
       cw.getCell(crow + 1, 2).value = `▶ ${areaBasis === 'supply' ? '공급면적' : '전용면적'} 기준 · 세대수 = 특별공급 + 일반공급 · 원/㎡ = 세대당분양가 ÷ ${areaBasis === 'supply' ? '공급면적' : '전용면적'}`;
       cw.getCell(crow + 1, 2).font = { size: 10, color: { argb: 'FF666666' } };
       const dh = crow + 3;
-      ['No.', '단지명', '주택형', '전용면적(㎡)', '공급면적(㎡)', '세대수', '세대당분양가(원)', '원/㎡']
+      /* 위 표와 열을 맞춘다(C 종류 ↔ 주택형 · D 단지명) — 어긋나면 한쪽 폭이 다른 쪽 칸을 넓힌다 */
+      ['No.', '주택형', '단지명', '전용면적(㎡)', '공급면적(㎡)', '세대수', '세대당분양가(원)', '원/㎡']
         .forEach((h, k) => put(dh, 2 + k, h, { bold: true, fill: HEAD_FILL }));
       let dr = dh + 1;
       const AREA = areaBasis === 'supply' ? 'F' : 'E';   // 공급 F · 전용 E
@@ -399,8 +400,8 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
           const area = areaBasis === 'supply' ? tp.supplyArea : tp.area;
           const unit = area > 0 && tp.amount != null ? tp.amount / area : null;
           put(dr, 2, i + 1);
-          put(dr, 3, a.name, { h: 'left' });
-          put(dr, 4, tp.type ?? '');
+          put(dr, 3, tp.type ?? '');
+          put(dr, 4, a.name, { h: 'left' });
           put(dr, 5, tp.area ?? '', { fmt: '0.0000' });
           put(dr, 6, tp.supplyArea ?? '', { fmt: '0.0000' });
           put(dr, 7, tp.households ?? '', { fmt: '#,##0' });
@@ -438,10 +439,6 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
           x.note = `${note}\n= ${Math.round(price).toLocaleString('ko-KR')} 원/㎡\n※ 일부 주택형에 분양가나 면적이 없어 계산값을 적었습니다(수식 아님) — ${a0}~${a1}행`;
         }
       });
-      [6, 26, 12, 13, 13, 9, 16, 14].forEach((w, k) => {
-        const col = cw.getColumn(2 + k);
-        col.width = Math.max(col.width ?? 0, w);
-      });
       crow = dr + 2;
     }
 
@@ -457,6 +454,17 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
         cw.addImage(imgId, { tl: { col: 1, row: crow }, ext: { width: IMG_W, height: h } });
       }
     }
+    /*
+      제목 · 요약 · 안내 줄은 B 칸 하나에 적혀 있다 — B 는 No. 열이라 폭이 6 이다.
+      엑셀은 옆 칸이 비면 글을 흘려 보여 주지만, 그렇지 않은 뷰어에서는 잘린다 → 표 폭만큼 병합한다.
+    */
+    const LAST = 1 + COLS.length;
+    cw.eachRow((row, rn) => {
+      const bc = row.getCell(2);
+      if (bc.isMerged || bc.value == null || bc.value === '') return;
+      for (let k = 3; k <= LAST; k += 1) { const x = row.getCell(k); if (x.isMerged || (x.value != null && x.value !== '')) return; }
+      cw.mergeCells(rn, 2, rn, LAST);
+    });
   }
 
   /*
