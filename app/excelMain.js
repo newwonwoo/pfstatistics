@@ -65,8 +65,21 @@ function title(ws, r, c1, c2, text, sub) {
   if (sub) { merge(ws, r + 1, c1, r + 1, c2, sub, { size: 9, color: MUTED }); }
 }
 
-/** 사업장 정보 — 이름 칸 / 값 칸 두 쌍씩 */
-function info(ws, r, c1, pairs) {
+/**
+ * 사업장 정보 — 이름 칸 / 값 칸 두 쌍씩.
+ * `single` 이면 한 줄에 한 쌍(이름 c1~c1+1 · 값 c1+2~c1+5) — 첫 열이 좁은 시트(No. 열)용.
+ * [초기예상분양률] 은 B 가 No.(폭 6)라 「사업\n장」 으로 꺾이고 「시공사」 가 평가내용(폭 44) 칸에 앉았다.
+ */
+function info(ws, r, c1, pairs, { single = false } = {}) {
+  if (single) {
+    pairs.forEach(([k, v], i) => {
+      merge(ws, r + i, c1, r + i, c1 + 1, k, { bold: true, fill: LABEL });
+      merge(ws, r + i, c1 + 2, r + i, c1 + 5, v, { h: 'left' });
+      ws.getRow(r + i).height = 20;
+    });
+    grid(ws, r, c1, r + pairs.length - 1, c1 + 5);
+    return r + pairs.length - 1;
+  }
   for (let i = 0; i < pairs.length; i += 2) {
     const row = r + i / 2;
     const [[k1, v1], [k2, v2] = ['', '']] = [pairs[i], pairs[i + 1]];
@@ -186,7 +199,7 @@ export function writeMainSheets(wb, { data, facilities, manual, compare, rate, r
     page(ws);
     [2, 6, 26, 8, 44, 10, 9].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
     title(ws, 2, 2, 7, '초기예상분양률 산정', '분양률 산정을 위한 평가기준 · 시트별 항목 점수 → 종합평가 점수 → 초기예상분양률');
-    let r = info(ws, 5, 2, infoPairs) + 2;
+    let r = info(ws, 5, 2, infoPairs, { single: true }) + 2;
 
     const head = ['No', '평가항목', '배점', '평가내용', '등급', '점수'];
     head.forEach((t, i) => cell(ws, r, 2 + i, t, { bold: true, fill: HEAD }));
