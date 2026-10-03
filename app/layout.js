@@ -1,6 +1,6 @@
 export const metadata = {
-  title: 'PF 보증심사 통계 자동수집',
-  description: '시군구를 입력하면 심사에 필요한 통계와 증빙을 자동으로 수집합니다',
+  title: 'PF보증 심사평가 시뮬레이터',
+  description: '사업장 주소로 PF보증 심사 통계·증빙을 모으고 초기예상분양률 · 심사평점표까지 산정합니다',
 };
 
 export default function RootLayout({ children }) {

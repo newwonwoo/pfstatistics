@@ -1,8 +1,9 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { T, mono } from './theme';
 import { fetchJson } from './fetchJson';
 import RadiusMap from './RadiusMap';
+import { lookupLand } from './landLookup';
 import { scoreMatrix } from '../src/lib/scoring';
 import { similarityOf, pickComparables, guaranteeSetOf, baseRadius, PRIORITY_YEARS,
   HOUSE_TYPES, SIZE_BANDS, RANK_BANDS, LAND_TYPES, rankBandOf } from '../src/lib/similar';
@@ -305,6 +306,23 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
 
   /* 본건은 보관본에서 복원돼도 평균에 들어가지 않는다 */
   const chosen = useMemo(() => items.filter(a => picked.includes(a.manageNo) && !a.isSite), [items, picked]);
+  /*
+    **고른 단지의 사업부지(민간/공공/수용/환지)를 조회해 둔다**(사용자 요청 2026-10-03).
+    청약홈 공공택지 표시만으로는 도시개발구역·산업단지를 못 가린다 — 그 단지 좌표의 사업지구를 묻는다.
+    고를 때 받아 두면 엑셀이 다시 부르지 않는다. 응답이 온 시점의 값에 얹는다(함수형 갱신).
+  */
+  const land = v.land ?? {};
+  const landKey = chosen.filter(a => !land[a.manageNo]).map(a => a.manageNo).join(',');
+  useEffect(() => {
+    if (!landKey) return undefined;
+    let dead = false;
+    lookupLand(chosen.filter(a => !land[a.manageNo])).then(found => {
+      if (dead || !Object.keys(found).length) return;
+      onChange?.(prev => ({ ...(prev ?? {}), land: { ...(prev?.land ?? {}), ...found } }));
+    });
+    return () => { dead = true; };
+  }, [landKey]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   /* 고를 수 있는 것 — 본건(심사대상)과 분양가가 없는 임대는 뺀다 */
   const selectable = useMemo(() => items.filter(a => !a.isSite && isSale(a)), [items]);
 
@@ -895,7 +913,9 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
                         본건 (심사대상) — 비교에서 제외
                       </span></>}
                       {/* 택지유형은 청약홈 공고의 공공택지 표시에서 온다 — 어느 표시인지 줄에서 말한다 */}
-                      {a.landFlags?.length > 0 && <><br /><span style={S.landSrc}>청약홈 : {a.landFlags.join(' · ')}</span></>}
+                      {on && land[a.manageNo]?.type
+                        ? <><br /><span style={S.landSrc}>사업부지 : <b>{land[a.manageNo].type}</b>{land[a.manageNo].detail && land[a.manageNo].detail !== '-' ? ` — ${land[a.manageNo].detail}` : ''}</span></>
+                        : a.landFlags?.length > 0 && <><br /><span style={S.landSrc}>청약홈 : {a.landFlags.join(' · ')}</span></>}
                       {drop && <><br /><span style={S.badge('warn')}>
                         {a.publicSale ? '공공분양 — 제외 권고' : '분양개시 10년 경과 — 제외 권고'}
                       </span></>}

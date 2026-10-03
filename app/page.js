@@ -911,7 +911,7 @@ export default function Home() {
   return (
     <main style={S.shell}>
       <div style={S.head}>
-        <h1 style={S.h1}>PF 보증심사 통계 자동수집</h1>
+        <h1 style={S.h1}>PF보증 심사평가 시뮬레이터</h1>
         <span style={S.tag}>원천 직결</span>
         {/*
           **한 사업장을 끝내면 다음 사업장으로**(사용자 요청 2026-10-01 「상단에 다른 사업장 심사하기를 눌러서 처음 진행상태로」).

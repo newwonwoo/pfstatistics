@@ -27,8 +27,9 @@ import { districtLabel, DISTRICT_SHEETS, floorNote } from './DistrictRow';
 import { scoreSheet, scoreGroup, scoreFacility, scorePoi, scoreMatrix, scoreAverage, expectedSaleRate, reviewScore, tableOf } from '../src/lib/scoring';
 import { expectedRateOf, firstOpts } from '../src/lib/compare';
 import { manualSummary } from '../src/lib/manual';
-import { guaranteeSetOf, PRIORITY_YEARS } from '../src/lib/similar';
-import { writeMainSheets } from './excelMain';
+import { guaranteeSetOf, PRIORITY_YEARS, similarityOf } from '../src/lib/similar';
+import { writeMainSheets, writeManualSheet } from './excelMain';
+import { lookupLand } from './landLookup';
 
 const fmt = (v) =>
   typeof v === 'number' ? v : (v == null || v === '' ? '' : String(v));
@@ -136,7 +137,7 @@ function writeTable(ws, startRow, { title, subtitle, columns, rows, markCell }) 
 export async function exportWorkbook({ data, facilities, manual, compare, rate, review, sheetInput, excl = null, manualSum = null, sheets, buildSheet, getCardEl, onProgress }) {
   const ExcelJS = (await import('exceljs')).default ?? (await import('exceljs'));
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'PF 보증심사 통계 자동수집';
+  wb.creator = 'PF보증 심사평가 시뮬레이터';
   wb.created = new Date();
 
   const byId = Object.fromEntries((data?.results ?? []).map(r => [r.indicatorId, r]));
@@ -146,7 +147,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
     종합(초기분양률 산정표) · 심사평점표 — 제목·사업장 정보·굵은 바깥선·결론 줄 강조·A4 인쇄 설정까지 갖춘 문서로.
     예전의 「초기예상분양률」 · 「심사평점표」 덤프 시트는 이 두 장이 대신한다.
   */
-  onProgress?.('종합 · 심사평점표');
+  onProgress?.('심사평점표 · 초기예상분양률');
   writeMainSheets(wb, { data, facilities, manual, compare, rate, review, sheetInput, excl, manualSum });
 
   // ── 요약 시트 ────────────────────────────────────────────
@@ -202,7 +203,8 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
     // 화면에서 켠 종류만 내보낸다 (화면 상태를 그대로 읽는다는 원칙)
     const kinds = compare.kinds ?? ['아파트'];
     const shown = c.items.filter(a => kinds.includes(a.kind ?? '아파트'));
-    const chosen = c.items.filter(a => picked.includes(a.manageNo));
+    /* 화면과 같은 기준 — 켠 종류 안에서 고른 것 · 본건 제외 */
+    const chosen = shown.filter(a => picked.includes(a.manageNo) && !a.isSite);
     const vals = chosen.filter(isSale).map(priceOf).filter(v => v != null);
     const avg = vals.length ? vals.reduce((s2, v) => s2 + v, 0) / vals.length : null;
     /* 적정분양가는 분양보증 기준(C) — 화면과 같은 한 줄(5년 이내 분양개시 우선)을 건다 */
@@ -211,30 +213,107 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
     const gAvg = gVals.length ? gVals.reduce((s2, v) => s2 + v, 0) / gVals.length : null;
     const rkm = c.radius >= 1000 ? `${c.radius / 1000}km` : `${c.radius}m`;
 
+    /*
+      **고른 단지만 · 숫자는 숫자로 · 단가는 수식으로**(사용자 지적 2026-10-03).
+      「선택 된 것만 나오는 거니까 엑셀에선 선택 칸을 없애고 # 은 No.」 · 「분양가는 숫자로(2,000,000)」 ·
+      「유사도가 공란」(엑셀이 화면의 유사도를 다시 내지 않고 제외 권고만 적고 있었다) ·
+      「택지 → 사업부지(민간/공공/수용/환지) + 상세」 · 「㎡당 분양가 계산내역을 산식으로(메모 + 엑셀 수식)」.
+      분양가 칸은 아래 「선택 단지 상세」 의 주택형 줄을 가리키는 **엑셀 수식**이다 — 칸을 누르면 산식이 보이고, 메모에 계산 내역이 있다.
+    */
+    const land = { ...(compare.land ?? {}) };
+    const needLand = chosen.filter(a => !land[a.manageNo]);
+    if (needLand.length) {
+      onProgress?.('비교사업장 · 사업부지 조회');
+      try { Object.assign(land, await lookupLand(needLand)); } catch { /* 조회가 안 돼도 표는 나간다 */ }
+    }
+    const siteFilled = Boolean(site.houseType || site.sizeBand || site.rankBand || site.landType);
+    const simText = (a) => {
+      const s = similarityOf(site, a);
+      const lines = siteFilled
+        ? [`${s.n}개 일치 (4개 중)`, `일치 : ${s.hit.join(' · ') || '없음'}`, s.miss.length ? `불일치 : ${s.miss.join(' · ')}` : null]
+        : ['본건 제원 미입력 — 유사도를 판정하지 않음'];
+      if (a.publicSale) lines.push('공공분양 — 제외 권고');
+      else if (a.years > 10) lines.push('분양개시 10년 경과 — 제외 권고');
+      return lines.filter(Boolean).join('\n');
+    };
+    const L = (n) => String.fromCharCode(64 + n);
+    const thin = (c) => { c.border = box; };
+    const put = (r, col, v, o = {}) => {
+      const x = cw.getCell(r, col);
+      x.value = v == null ? '' : v;
+      x.font = { size: 10, bold: Boolean(o.bold), color: o.color ? { argb: o.color } : undefined };
+      x.alignment = { horizontal: o.h ?? 'center', vertical: 'middle', wrapText: true };
+      if (o.fill) x.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: o.fill } };
+      if (o.fmt) x.numFmt = o.fmt;
+      thin(x);
+      return x;
+    };
+
     const cw = wb.addWorksheet('비교사업장', { views: [{ showGridLines: false }] });
-    let cur = writeTable(cw, 2, {
-      title: '비교사업장',
-      subtitle: `▶ 사업지 : ${compare.addr ?? facilities?.address ?? data.region}`
-        + ` · 반경 ${rkm}`
-        + ` · 거리 기준 : ${c.distance?.from ?? (c.basis === 'polygon' ? '사업지 경계' : '대표지번 중심')}`
-        + ` ↔ ${c.distance?.to ?? '상대 단지 대표지번'} 최단거리`
-        + (c.distance?.parcelCount ? ` (필지 경계 ${c.distance.parcelCount}곳${c.distance.pointCount ? ` · 대표지번 점 ${c.distance.pointCount}곳` : ''})` : ''),
-      columns: ['선택', '#', '종류', '단지명', '시공사', '주소', '거리', '분양개시일', '시기', '공급세대', '면적(㎡)', '분양가(원/㎡)', '택지 (청약홈 표시)', '유사도'],
-      rows: shown.map((a, i) => [
-        picked.includes(a.manageNo) ? '■' : '',
-        i + 1, a.kind ?? '아파트', a.name,
-        `${a.builder ?? ''}${a.builderRank ? ` (${a.builderRank}위)` : ''}`,
-        a.address, `${a.distance}m`, a.saleStart ?? '', a.timing ?? '',
-        a.totalHouseholds ?? '',
-        areaBasis === 'supply'
-          ? (a.supplyMin ? `${a.supplyMin.toFixed(2)}~${a.supplyMax.toFixed(2)}` : '')
-          : (a.areaMin ? `${a.areaMin.toFixed(2)}~${a.areaMax.toFixed(2)}` : ''),
-        priceOf(a) == null ? '' : (isSale(a) ? Math.round(priceOf(a)) : `(임대보증금) ${Math.round(priceOf(a)).toLocaleString('ko-KR')}`),
-        a.landFlags?.length ? `공공택지 — ${a.landFlags.join(' · ')}` : (a.landNote ?? ''),
-        a.publicSale ? '공공분양 — 제외 권고' : (a.years > 10 ? '10년 경과 — 제외 권고' : ''),
-      ]),
-      markCell: [0, 11],
+    cw.getCell(2, 2).value = '비교사업장';
+    cw.getCell(2, 2).font = { bold: true, size: 13 };
+    cw.getCell(3, 2).value = `▶ 사업지 : ${compare.addr ?? facilities?.address ?? data.region}`
+      + ` · 반경 ${rkm}`
+      + ` · 거리 기준 : ${c.distance?.from ?? (c.basis === 'polygon' ? '사업지 경계' : '대표지번 중심')}`
+      + ` ↔ ${c.distance?.to ?? '상대 단지 대표지번'} 최단거리`
+      + (c.distance?.parcelCount ? ` (필지 경계 ${c.distance.parcelCount}곳${c.distance.pointCount ? ` · 대표지번 점 ${c.distance.pointCount}곳` : ''})` : '')
+      + ` · 고른 단지 ${chosen.length}곳`;
+    cw.getCell(3, 2).font = { size: 10, color: { argb: 'FF666666' } };
+
+    const COLS = ['No.', '종류', '단지명', '시공사', '주소', '거리(m)', '분양개시일', '시기', '공급세대',
+      `${areaBasis === 'supply' ? '공급' : '전용'}면적(㎡)`, '분양가(원/㎡)', '사업부지', '사업부지 상세', '유사도'];
+    const WIDTH = [6, 9, 26, 20, 30, 9, 12, 15, 9, 15, 15, 10, 44, 38];
+    const PRICE_COL = 2 + COLS.indexOf('분양가(원/㎡)');
+    const head = 5;
+    COLS.forEach((h, k) => {
+      put(head, 2 + k, h, { bold: true, fill: HEAD_FILL });
+      cw.getColumn(2 + k).width = WIDTH[k];
     });
+    cw.getRow(head).height = 22;
+    const mainRow = {};   // manageNo → 행
+    let rr = head + 1;
+    if (!chosen.length) {
+      cw.mergeCells(rr, 2, rr, 1 + COLS.length);
+      put(rr, 2, '고른 비교단지가 없습니다 — [비교사업장 · 분양가] 탭에서 단지를 고르면 여기에 나옵니다', { h: 'left', color: 'FF767E8A' });
+      rr += 1;
+    }
+    chosen.forEach((a, i) => {
+      const lt = land[a.manageNo] ?? { type: '미확인', detail: '사업지구를 조회하지 못했습니다' };
+      const vals = [
+        [i + 1], [a.kind ?? '아파트'], [a.name, { h: 'left' }],
+        [`${a.builder ?? ''}${a.builderRank ? ` (${a.builderRank}위)` : ''}`, { h: 'left' }],
+        [a.address, { h: 'left' }], [a.distance, { fmt: '#,##0' }], [a.saleStart ?? ''], [a.timing ?? ''],
+        [a.totalHouseholds ?? '', { fmt: '#,##0' }],
+        [areaBasis === 'supply'
+          ? (a.supplyMin ? `${a.supplyMin.toFixed(2)}~${a.supplyMax.toFixed(2)}` : '')
+          : (a.areaMin ? `${a.areaMin.toFixed(2)}~${a.areaMax.toFixed(2)}` : '')],
+        [priceOf(a) == null ? '' : Math.round(priceOf(a)), { fmt: '#,##0', bold: true }],
+        [lt.type ?? '미확인', { bold: true }],
+        [lt.type === '민간' ? '-' : (lt.detail || '-'), { h: lt.type === '민간' ? 'center' : 'left' }],
+        [simText(a), { h: 'left' }],
+      ];
+      vals.forEach(([v, o], k) => put(rr, 2 + k, v, o));
+      cw.getRow(rr).height = Math.max(34, 14 * simText(a).split('\n').length + 6);
+      mainRow[a.manageNo] = rr;
+      rr += 1;
+    });
+    /* 평균 줄 — 위 분양가 칸들의 산술평균(엑셀 수식) */
+    let avgCell = null;
+    if (chosen.length) {
+      cw.mergeCells(rr, 2, rr, PRICE_COL - 1);
+      put(rr, 2, `선택 단지 ${chosen.length}곳 평균 (산술평균) — ${areaBasis === 'supply' ? '공급면적 기준(심사기준)' : '전용면적 기준'}`, { bold: true, fill: MARK_FILL, h: 'right' });
+      avgCell = put(rr, PRICE_COL, avg == null ? '' : { formula: `AVERAGE(${L(PRICE_COL)}${head + 1}:${L(PRICE_COL)}${rr - 1})`, result: avg },
+        { fmt: '#,##0', bold: true, fill: MARK_FILL });
+      avgCell.note = `산술평균 = (${chosen.map(a => Math.round(priceOf(a) ?? 0).toLocaleString('ko-KR')).join(' + ')}) ÷ ${chosen.length}`
+        + `\n= ${avg == null ? '-' : Math.round(avg).toLocaleString('ko-KR')} 원/㎡`;
+      for (let k = PRICE_COL + 1; k <= 1 + COLS.length; k += 1) put(rr, k, '', { fill: MARK_FILL });
+      rr += 1;
+    }
+    cw.getCell(rr, 2).value = '※ 분양가(원/㎡) 칸은 엑셀 수식입니다 — 칸을 누르면 산식이, 메모(오른쪽 위 빨간 삼각형)에 계산 내역이 있습니다. 근거는 아래 「선택 단지 상세」 의 주택형 줄입니다.';
+    cw.getCell(rr, 2).font = { size: 9, color: { argb: 'FF666666' } };
+    cw.getCell(rr + 1, 2).value = '※ 사업부지 : 청약홈 공공택지 표시 + 그 단지 좌표의 사업지구(택지정보시스템 사업지구경계 · 토지이용계획)로 가릅니다. 공공 = 공공택지(택지개발 · 공공주택지구 등) · 수용 = 수용 방식 사업지구 · 수용·환지 = 도시개발구역(방식이 원천에 없어 확인 필요) · 민간 = 둘 다 없음.';
+    cw.getCell(rr + 1, 2).font = { size: 9, color: { argb: 'FF666666' } };
+    let cur = { nextRow: rr + 3 };
 
     const sitePrice = Number(site.unitPrice) || null;
     /* 지구 내 최초 분양사업이면 분양가격지수 100(가이드북 원문) — 화면과 같은 판정 */
@@ -300,18 +379,70 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
     }
 
     if (chosen.length) {
-      cur = writeTable(cw, crow, {
-        title: '선택 단지 상세 (면적별)',
-        subtitle: '▶ 전용면적 기준 · 세대수 = 특별공급 + 일반공급',
-        columns: ['단지명', '주소', '주택형', '전용면적(㎡)', '공급면적(㎡)', '세대수', '세대당분양가(원)', '원/㎡'],
-        rows: chosen.flatMap(a => a.types.map(t => [
-          a.name, a.address, t.type, t.area, t.supplyArea ?? '', t.households, t.amount ?? '',
-          (areaBasis === 'supply' ? t.unitPriceSupply : t.unitPrice) == null
-            ? '' : Math.round(areaBasis === 'supply' ? t.unitPriceSupply : t.unitPrice),
-        ])),
-        markCell: [0, 7],
+      /*
+        면적별 상세 — 위 분양가 칸의 수식이 이 줄들을 가리킨다.
+        원/㎡ = 세대당분양가 ÷ 면적(엑셀 수식). 단지 대표단가는 위 표의 분양가 칸에 수식으로 있다.
+      */
+      cw.getCell(crow, 2).value = '선택 단지 상세 (면적별)';
+      cw.getCell(crow, 2).font = { bold: true, size: 12 };
+      cw.getCell(crow + 1, 2).value = `▶ ${areaBasis === 'supply' ? '공급면적' : '전용면적'} 기준 · 세대수 = 특별공급 + 일반공급 · 원/㎡ = 세대당분양가 ÷ ${areaBasis === 'supply' ? '공급면적' : '전용면적'}`;
+      cw.getCell(crow + 1, 2).font = { size: 10, color: { argb: 'FF666666' } };
+      const dh = crow + 3;
+      ['No.', '단지명', '주택형', '전용면적(㎡)', '공급면적(㎡)', '세대수', '세대당분양가(원)', '원/㎡']
+        .forEach((h, k) => put(dh, 2 + k, h, { bold: true, fill: HEAD_FILL }));
+      let dr = dh + 1;
+      const AREA = areaBasis === 'supply' ? 'F' : 'E';   // 공급 F · 전용 E
+      chosen.forEach((a, i) => {
+        const types = a.types ?? [];
+        const a0 = dr;
+        for (const tp of types) {
+          const area = areaBasis === 'supply' ? tp.supplyArea : tp.area;
+          const unit = area > 0 && tp.amount != null ? tp.amount / area : null;
+          put(dr, 2, i + 1);
+          put(dr, 3, a.name, { h: 'left' });
+          put(dr, 4, tp.type ?? '');
+          put(dr, 5, tp.area ?? '', { fmt: '0.0000' });
+          put(dr, 6, tp.supplyArea ?? '', { fmt: '0.0000' });
+          put(dr, 7, tp.households ?? '', { fmt: '#,##0' });
+          put(dr, 8, tp.amount ?? '', { fmt: '#,##0' });
+          put(dr, 9, unit == null ? '' : { formula: `H${dr}/${AREA}${dr}`, result: unit }, { fmt: '#,##0' });
+          dr += 1;
+        }
+        const a1 = dr - 1;
+        /* 위 표의 분양가 칸을 이 줄들로 계산하는 수식으로 바꾼다 */
+        const mr = mainRow[a.manageNo];
+        const price = priceOf(a);
+        if (mr == null || price == null || !types.length) return;
+        const ok = types.every(tp => tp.amount != null && tp.households > 0 && (areaBasis === 'supply' ? tp.supplyArea > 0 : tp.area > 0));
+        const G = `G${a0}:G${a1}`, H = `H${a0}:H${a1}`, I = `I${a0}:I${a1}`, A = `${AREA}${a0}:${AREA}${a1}`;
+        const sumHH = types.reduce((s, tp) => s + tp.households, 0);
+        const num = types.reduce((s, tp) => s + tp.households * (tp.amount ?? 0), 0);
+        const den = types.reduce((s, tp) => s + tp.households * ((areaBasis === 'supply' ? tp.supplyArea : tp.area) ?? 0), 0);
+        const basisWord = areaBasis === 'supply' ? '공급면적' : '전용면적';
+        let formula, note;
+        if (mode === 'weighted' && areaBasis === 'supply') {
+          formula = `SUMPRODUCT(${G},${H})/SUMPRODUCT(${G},${A})`;
+          note = `㎡당 분양가(공급면적 · 세대수 가중)\n= Σ(세대수 × 세대당분양가) ÷ Σ(세대수 × 공급면적)\n= ${Math.round(num).toLocaleString('ko-KR')} ÷ ${den.toFixed(2)}`;
+        } else if (mode === 'weighted') {
+          formula = `SUMPRODUCT(${G},${I})/SUM(${G})`;
+          note = `㎡당 분양가(전용면적 · 세대수 가중)\n= Σ(세대수 × 주택형 원/㎡) ÷ Σ세대수\n(세대수 합 ${sumHH.toLocaleString('ko-KR')})`;
+        } else {
+          formula = `AVERAGE(${I})`;
+          note = `㎡당 분양가(${basisWord} · 주택형 단순평균)\n= Σ(세대당분양가 ÷ ${basisWord}) ÷ 주택형 ${types.length}개`;
+        }
+        const x = cw.getCell(mr, PRICE_COL);
+        if (ok) {
+          x.value = { formula, result: price };
+          x.note = `${note}\n= ${Math.round(price).toLocaleString('ko-KR')} 원/㎡\n근거 : 아래 「선택 단지 상세」 ${a0}~${a1}행`;
+        } else {
+          x.note = `${note}\n= ${Math.round(price).toLocaleString('ko-KR')} 원/㎡\n※ 일부 주택형에 분양가나 면적이 없어 계산값을 적었습니다(수식 아님) — ${a0}~${a1}행`;
+        }
       });
-      crow = cur.nextRow + 1;
+      [6, 26, 12, 13, 13, 9, 16, 14].forEach((w, k) => {
+        const col = cw.getColumn(2 + k);
+        col.width = Math.max(col.width ?? 0, w);
+      });
+      crow = dr + 2;
     }
 
     // 반경 지도도 증빙으로 넣는다 (다른 시트와 같은 캔버스 합성 캡쳐를 쓴다)
@@ -335,36 +466,11 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
   */
 
   /*
-    ── 수기입력 (A 산출근거) ──────────────────────────────
-    분양가격지수 제외 항목 점수(A)가 어떻게 만들어졌는지 남긴다.
-    A 한 숫자만 적으면 나중에 근거를 못 찾는다.
+    ── 수기입력 ─────────────────────────────────────────
+    화면 [수기입력] 탭의 입력 ①·② 칸 그대로(폼). 산출근거 표는 [초기예상분양률] 시트가 말한다.
   */
-  {
-    onProgress?.('수기입력');
-    const ms = manualSum ?? manualSummary({ sheetInput: sheetInput ?? {}, data, facilities, manual });
-    const mw = wb.addWorksheet('수기입력', { views: [{ showGridLines: false }] });
-    const KIND = { auto: '자동', form: '값→점수', typed: '점수 직접' };
-    let r = writeTable(mw, 2, {
-      title: '수기입력 — 분양가격지수 제외 항목 점수 산출근거',
-      subtitle: `▶ 사업지 : ${facilities?.address ?? data.region}`,
-      columns: ['평가항목', '구분', '배점', '점수', '근거'],
-      rows: [
-        ...ms.rows.map(x => [x.id, x.kindText ?? KIND[x.kind], x.max ?? '', x.score ?? '', x.why ?? '']),
-        ['합계', '', '', ms.excl ?? '',
-          ms.override != null
-            ? `직접 입력한 ${ms.override} 적용 (자동 합계 ${ms.missing.length ? '산출 불가' : ms.sum})`
-            : ms.missing.length
-              ? `미입력 ${ms.missing.length}개 — ${ms.missing.join(' · ')} (부분 합계 ${ms.sum})`
-              : '전 항목 입력됨'],
-      ],
-    });
-    mw.getCell(r + 2, 2).value = '※ 한 항목이라도 비면 A 를 확정하지 않는다 — 부분 합계를 A 로 쓰면 분양률이 통째로 낮아진다';
-    mw.getCell(r + 2, 2).font = { size: 9, color: { argb: 'FF666666' } };
-    mw.getCell(r + 3, 2).value = '※ 평형구성 산식은 원문 끝의 ×100 을 빼고 적용했다 — 급간(1.81~3.78)이 가중치 범위(1.73~6.66) 안에 들어오기 때문';
-    mw.getCell(r + 3, 2).font = { size: 9, color: { argb: 'FF666666' } };
-    mw.getColumn(2).width = 28; mw.getColumn(3).width = 11; mw.getColumn(4).width = 8;
-    mw.getColumn(5).width = 8; mw.getColumn(6).width = 74;
-  }
+  onProgress?.('수기입력');
+  writeManualSheet(wb, { data, facilities, manual, compare, review, sheetInput, manualSum });
 
   /*
     ── 심사평점표 ─────────────────────────────────────────
