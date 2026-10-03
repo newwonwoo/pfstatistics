@@ -3,7 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { T, mono } from './theme';
 import { fetchJson } from './fetchJson';
 import RadiusMap from './RadiusMap';
-import { lookupLand } from './landLookup';
+import { lookupLand, hasLandInfo } from './landLookup';
+import { LAND_CHOICES } from '../src/lib/landSite';
 import { scoreMatrix } from '../src/lib/scoring';
 import { similarityOf, pickComparables, guaranteeSetOf, baseRadius, PRIORITY_YEARS,
   HOUSE_TYPES, SIZE_BANDS, RANK_BANDS, LAND_TYPES, rankBandOf } from '../src/lib/similar';
@@ -174,6 +175,14 @@ const S = {
   baseNum: { fontSize: 17, fontWeight: 800, ...mono },
   simHit: { fontSize: 10.5, color: T.ok ?? '#1a7f4b', marginTop: 3, lineHeight: 1.4, whiteSpace: 'normal', maxWidth: 150 },
   landSrc: { fontSize: 10.5, color: T.muted },
+  /* 사업부지 — 원천 정보 한 줄 + 실무자가 고르는 칩(판정하지 않는다) */
+  landBox: { display: 'inline-flex', flexDirection: 'column', gap: 4, marginTop: 5, padding: '5px 8px',
+             border: `1px solid ${T.line}`, borderRadius: 6, background: '#fafbfc', maxWidth: 420 },
+  landRow: { display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' },
+  landLab: { fontSize: 10.5, fontWeight: 800, color: T.ink2, marginRight: 2 },
+  landChip: (on) => ({ padding: '1px 8px', fontSize: 11, fontWeight: 700, borderRadius: 4, cursor: 'pointer',
+    border: `1px solid ${on ? T.accent : T.line}`, background: on ? T.accentSoft : '#fff', color: on ? T.accent : T.ink2,
+    boxShadow: on ? `inset 0 -2px 0 ${T.accent}` : 'none' }),
   simMiss: { fontSize: 10.5, color: T.muted, lineHeight: 1.4, whiteSpace: 'normal', maxWidth: 150 },
   link: { color: T.accent, textDecoration: 'none' },
   kind: { fontSize: 11, color: T.muted, background: '#f1f3f5', padding: '2px 7px', borderRadius: 4 },
@@ -307,21 +316,33 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
   /* 본건은 보관본에서 복원돼도 평균에 들어가지 않는다 */
   const chosen = useMemo(() => items.filter(a => picked.includes(a.manageNo) && !a.isSite), [items, picked]);
   /*
-    **고른 단지의 사업부지(민간/공공/수용/환지)를 조회해 둔다**(사용자 요청 2026-10-03).
-    청약홈 공공택지 표시만으로는 도시개발구역·산업단지를 못 가린다 — 그 단지 좌표의 사업지구를 묻는다.
-    고를 때 받아 두면 엑셀이 다시 부르지 않는다. 응답이 온 시점의 값에 얹는다(함수형 갱신).
+    **고른 단지의 사업부지 원천 정보를 받아 두고, 민간/공공/환지/수용은 실무자가 고른다**(사용자 지적 2026-10-03
+    「그걸 왜 자동화를 하려고 해 정보만 표출해주고 유저가 선택하게 하는거잖아」).
+    정보 = 청약홈 공공택지 표시 + 그 단지 좌표의 사업지구 · 토지이용계획. 고른 값은 `land[no].type`, 엑셀이 그대로 쓴다.
+    응답이 온 시점의 값에 얹는다(함수형 갱신) — 기다리는 사이 고른 칩을 덮지 않는다.
   */
   const land = v.land ?? {};
-  const landKey = chosen.filter(a => !land[a.manageNo]).map(a => a.manageNo).join(',');
+  const landKey = chosen.filter(a => !hasLandInfo(land[a.manageNo])).map(a => a.manageNo).join(',');
   useEffect(() => {
     if (!landKey) return undefined;
     let dead = false;
-    lookupLand(chosen.filter(a => !land[a.manageNo])).then(found => {
+    lookupLand(chosen.filter(a => !hasLandInfo(land[a.manageNo]))).then(found => {
       if (dead || !Object.keys(found).length) return;
-      onChange?.(prev => ({ ...(prev ?? {}), land: { ...(prev?.land ?? {}), ...found } }));
+      onChange?.(prev => {
+        const cur = prev?.land ?? {};
+        const next = { ...cur };
+        for (const [no, info] of Object.entries(found)) {
+          next[no] = { info, type: hasLandInfo(cur[no]) ? (cur[no].type ?? null) : null };
+        }
+        return { ...(prev ?? {}), land: next };
+      });
     });
     return () => { dead = true; };
   }, [landKey]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const setLandType = (no, type) => onChange?.(prev => {
+    const cur = prev?.land ?? {};
+    return { ...(prev ?? {}), land: { ...cur, [no]: { ...(cur[no] ?? {}), type: cur[no]?.type === type ? null : type } } };
+  });
 
   /* 고를 수 있는 것 — 본건(심사대상)과 분양가가 없는 임대는 뺀다 */
   const selectable = useMemo(() => items.filter(a => !a.isSite && isSale(a)), [items]);
@@ -913,8 +934,20 @@ export default function CompareView({ addr, coord, region, polygon, radiusBasis,
                         본건 (심사대상) — 비교에서 제외
                       </span></>}
                       {/* 택지유형은 청약홈 공고의 공공택지 표시에서 온다 — 어느 표시인지 줄에서 말한다 */}
-                      {on && land[a.manageNo]?.type
-                        ? <><br /><span style={S.landSrc}>사업부지 : <b>{land[a.manageNo].type}</b>{land[a.manageNo].detail && land[a.manageNo].detail !== '-' ? ` — ${land[a.manageNo].detail}` : ''}</span></>
+                      {on
+                        ? (<><br /><span style={S.landBox}>
+                            <span style={S.landRow}>
+                              <span style={S.landLab}>사업부지</span>
+                              {LAND_CHOICES.map(c => (
+                                <button key={c} style={S.landChip(land[a.manageNo]?.type === c)}
+                                  onClick={() => setLandType(a.manageNo, c)}>{c}</button>
+                              ))}
+                              {!land[a.manageNo]?.type && <span style={{ fontSize: 10.5, color: T.warn, fontWeight: 700 }}>고르세요</span>}
+                            </span>
+                            <span style={S.landSrc}>
+                              {hasLandInfo(land[a.manageNo]) ? land[a.manageNo].info : '사업지구 정보를 받는 중…'}
+                            </span>
+                          </span></>)
                         : a.landFlags?.length > 0 && <><br /><span style={S.landSrc}>청약홈 : {a.landFlags.join(' · ')}</span></>}
                       {drop && <><br /><span style={S.badge('warn')}>
                         {a.publicSale ? '공공분양 — 제외 권고' : '분양개시 10년 경과 — 제외 권고'}

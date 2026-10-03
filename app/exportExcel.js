@@ -29,7 +29,7 @@ import { expectedRateOf, firstOpts } from '../src/lib/compare';
 import { manualSummary } from '../src/lib/manual';
 import { guaranteeSetOf, PRIORITY_YEARS, similarityOf } from '../src/lib/similar';
 import { writeMainSheets, writeManualSheet } from './excelMain';
-import { lookupLand } from './landLookup';
+import { lookupLand, hasLandInfo } from './landLookup';
 
 const fmt = (v) =>
   typeof v === 'number' ? v : (v == null || v === '' ? '' : String(v));
@@ -220,11 +220,16 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
       「택지 → 사업부지(민간/공공/수용/환지) + 상세」 · 「㎡당 분양가 계산내역을 산식으로(메모 + 엑셀 수식)」.
       분양가 칸은 아래 「선택 단지 상세」 의 주택형 줄을 가리키는 **엑셀 수식**이다 — 칸을 누르면 산식이 보이고, 메모에 계산 내역이 있다.
     */
-    const land = { ...(compare.land ?? {}) };
+    /* 사업부지 — 고른 값은 실무자가 화면 칩으로 정한 것(판정하지 않는다) · 상세는 원천 정보 */
+    const land = {};
+    for (const [no, e] of Object.entries(compare.land ?? {})) if (hasLandInfo(e)) land[no] = e;
     const needLand = chosen.filter(a => !land[a.manageNo]);
     if (needLand.length) {
-      onProgress?.('비교사업장 · 사업부지 조회');
-      try { Object.assign(land, await lookupLand(needLand)); } catch { /* 조회가 안 돼도 표는 나간다 */ }
+      onProgress?.('비교사업장 · 사업부지 정보');
+      try {
+        const found = await lookupLand(needLand);
+        for (const [no, info] of Object.entries(found)) land[no] = { info, type: null };
+      } catch { /* 조회가 안 돼도 표는 나간다 */ }
     }
     const siteFilled = Boolean(site.houseType || site.sizeBand || site.rankBand || site.landType);
     const simText = (a) => {
@@ -278,7 +283,9 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
       rr += 1;
     }
     chosen.forEach((a, i) => {
-      const lt = land[a.manageNo] ?? { type: '미확인', detail: '사업지구를 조회하지 못했습니다' };
+      const le = land[a.manageNo] ?? { info: '사업지구 정보를 받지 못했습니다', type: null };
+      /* 「해당사항 없으면 대시」 — 민간이면 상세는 「-」, 공공·환지·수용(또는 아직 안 고름)이면 원천 정보 */
+      const lt = { type: le.type ?? '미선택', detail: le.type === '민간' ? '-' : (le.info || '-') };
       const vals = [
         [i + 1], [a.kind ?? '아파트'], [a.name, { h: 'left' }],
         [`${a.builder ?? ''}${a.builderRank ? ` (${a.builderRank}위)` : ''}`, { h: 'left' }],
@@ -288,7 +295,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
           ? (a.supplyMin ? `${a.supplyMin.toFixed(2)}~${a.supplyMax.toFixed(2)}` : '')
           : (a.areaMin ? `${a.areaMin.toFixed(2)}~${a.areaMax.toFixed(2)}` : '')],
         [priceOf(a) == null ? '' : Math.round(priceOf(a)), { fmt: '#,##0', bold: true }],
-        [lt.type ?? '미확인', { bold: true }],
+        [lt.type, { bold: true, color: le.type ? undefined : 'FFB45309' }],
         [lt.type === '민간' ? '-' : (lt.detail || '-'), { h: lt.type === '민간' ? 'center' : 'left' }],
         [simText(a), { h: 'left' }],
       ];
@@ -311,7 +318,7 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
     }
     cw.getCell(rr, 2).value = '※ 분양가(원/㎡) 칸은 엑셀 수식입니다 — 칸을 누르면 산식이, 메모(오른쪽 위 빨간 삼각형)에 계산 내역이 있습니다. 근거는 아래 「선택 단지 상세」 의 주택형 줄입니다.';
     cw.getCell(rr, 2).font = { size: 9, color: { argb: 'FF666666' } };
-    cw.getCell(rr + 1, 2).value = '※ 사업부지 : 청약홈 공공택지 표시 + 그 단지 좌표의 사업지구(택지정보시스템 사업지구경계 · 토지이용계획)로 가릅니다. 공공 = 공공택지(택지개발 · 공공주택지구 등) · 수용 = 수용 방식 사업지구 · 수용·환지 = 도시개발구역(방식이 원천에 없어 확인 필요) · 민간 = 둘 다 없음.';
+    cw.getCell(rr + 1, 2).value = '※ 사업부지(민간 · 공공 · 환지 · 수용)는 심사자가 화면에서 고른 값입니다. 상세는 원천 정보(청약홈 공공택지 표시 · 택지정보시스템 사업지구 · 토지이용계획)입니다 — 개발방식은 어느 원천에도 필드가 없습니다.';
     cw.getCell(rr + 1, 2).font = { size: 9, color: { argb: 'FF666666' } };
     let cur = { nextRow: rr + 3 };
 
