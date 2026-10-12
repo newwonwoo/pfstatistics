@@ -149,7 +149,14 @@ export function presaleCandidates(items = [], site = {}, { officetel = false } =
   const siteRows = items.filter(a => a.isSite);
   const notSite = items.filter(a => !a.isSite);
   const typed = notSite.filter(kindOK);
-  const sale = typed.filter(isSale);
+  /*
+    **시기는 최초 공고로 가른다**(사용자 지적 2026-10-12) — 자격 취소분·조합원 취소분 같은 재공고는
+    분양개시일이 늦게 찍혀 몇 해 전 단지가 「1년 이내 분양개시」 로 들어왔다. 최초 공고(`original`)가 없으면
+    (원공고가 청약홈 적재기간 밖) 후보에서 뺀다. 옛 보관본(`original` 필드 없음)은 그 단지 값 그대로 쓴다.
+  */
+  const sale = typed.filter(isSale)
+    .filter(a => a.original !== null)
+    .map(a => (a.original ? { ...a, timing: a.original.timing, years: a.original.years, saleStart: a.original.saleStart, firstNotice: a.original } : a));
   const fresh = sale.filter(a => a.timing === TIMING.FRESH);
   const ongoing = sale.filter(a => a.timing === TIMING.ONGOING);
   const done = sale.filter(a => a.timing === TIMING.DONE);

@@ -763,6 +763,23 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
     if (!prev || String(n.r.RCRIT_PBLANC_DE) > String(prev.r.RCRIT_PBLANC_DE)) latest.set(key, n);
   }
   const uniq = [...latest.values()];
+  /*
+    **최초 공고**(사용자 지적 2026-10-12 「초기분양률 단지 선정의 1년 이내 분양개시는 자격 취소분·조합원 취소분 공고는 빼고 최초 공고만」).
+    묶음은 최신 공고를 남기므로, 몇 해 전 분양한 단지의 취소분 재공고가 「1년 이내 분양개시」 로 잡혔다.
+    묶음마다 **재공고 표기(취소분·잔여·무순위·재공고·추가) 가 없는 가장 이른 공고**를 따로 들고 간다 — 없으면 null
+    (원공고가 청약홈 적재기간 2020-02 밖이라는 뜻이다). 인근아파트 초기분양률(B)이 이것으로 시기를 가른다.
+  */
+  const RENOTICE = /취소|잔여|무순위|재공고|추가\s*모집|임의\s*공급|선착순/;
+  const firstOf = new Map();
+  for (const n of notices) {
+    if (RENOTICE.test(n.r.HOUSE_NM ?? '')) continue;
+    const base = `${n.kind}|${nameKey(n.r)}`;
+    const key = `${base}|${dongOf(n.r.HSSPLY_ADRES) || dongByName.get(base) || ''}`;
+    const prev = firstOf.get(key);
+    if (!prev || String(n.r.RCRIT_PBLANC_DE) < String(prev.RCRIT_PBLANC_DE)) firstOf.set(key, n.r);
+  }
+  const firstByNo = new Map();
+  for (const [key, n] of latest) firstByNo.set(n.r.HOUSE_MANAGE_NO, firstOf.get(key) ?? null);
 
   // 1차 — 시군구 중심으로 거른다
   const sggs = [...new Set(uniq.map(n => sggOf(n.r.HSSPLY_ADRES)))].filter(Boolean);
@@ -950,6 +967,14 @@ export async function collectComparables({ site, region, radius = 2000, polygon 
       saleStart: r.CNTRCT_CNCLS_BGNDE ?? null,
       ...timingOf({ saleStart: r.CNTRCT_CNCLS_BGNDE, moveIn: r.MVN_PREARNGE_YM }),
       moveIn: r.MVN_PREARNGE_YM,
+      /* 최초 공고(재공고 표기 없음) — 인근아파트 초기분양률 선정은 이것의 분양개시일로 시기를 가른다 */
+      original: (() => {
+        const f = firstByNo.get(r.HOUSE_MANAGE_NO);
+        if (!f) return null;
+        return { manageNo: f.HOUSE_MANAGE_NO, name: f.HOUSE_NM, noticeDate: f.RCRIT_PBLANC_DE,
+                 saleStart: f.CNTRCT_CNCLS_BGNDE ?? null, ...timingOf({ saleStart: f.CNTRCT_CNCLS_BGNDE, moveIn: f.MVN_PREARNGE_YM }) };
+      })(),
+      renotice: RENOTICE.test(r.HOUSE_NM ?? ''),
       builder: r.CNSTRCT_ENTRPS_NM,
       builderRank: rank,
       developer: r.BSNS_MBY_NM,
