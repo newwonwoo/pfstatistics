@@ -154,9 +154,16 @@ export function presaleCandidates(items = [], site = {}, { officetel = false } =
     분양개시일이 늦게 찍혀 몇 해 전 단지가 「1년 이내 분양개시」 로 들어왔다. 최초 공고(`original`)가 없으면
     (원공고가 청약홈 적재기간 밖) 후보에서 뺀다. 옛 보관본(`original` 필드 없음)은 그 단지 값 그대로 쓴다.
   */
-  const sale = typed.filter(isSale)
+  const saleAll = typed.filter(isSale);
+  // 최초 공고를 못 찾은 것은 조용히 버리지 않고 깔때기에 건수·이름으로 남긴다
+  const noOriginal = saleAll.filter(a => a.original === null);
+  const sale = saleAll
     .filter(a => a.original !== null)
-    .map(a => (a.original ? { ...a, timing: a.original.timing, years: a.original.years, saleStart: a.original.saleStart, firstNotice: a.original } : a));
+    .map(a => (a.original ? {
+      ...a, timing: a.original.timing, years: a.original.years, saleStart: a.original.saleStart, firstNotice: a.original,
+      // 표에는 최초 공고 이름을 쓴다 — 날짜는 최초 공고인데 이름이 「(조합원 취소분)」 이면 앞뒤가 안 맞는다
+      name: a.original.name ?? a.name, latestName: a.name,
+    } : a));
   const fresh = sale.filter(a => a.timing === TIMING.FRESH);
   const ongoing = sale.filter(a => a.timing === TIMING.ONGOING);
   const done = sale.filter(a => a.timing === TIMING.DONE);
@@ -164,7 +171,7 @@ export function presaleCandidates(items = [], site = {}, { officetel = false } =
   const rows = (stage === 'fresh' ? fresh : stage === 'ongoing' ? ongoing : [])
     .map(a => ({ ...a, sim: similarityOf(site, a) }))
     .sort((x, y) => (y.sim.n - x.sim.n) || ((x.distance ?? 0) - (y.distance ?? 0)));
-  return { site: siteRows, notSite, typed, sale, fresh, ongoing, done, stage, rows };
+  return { site: siteRows, notSite, typed, sale, noOriginal, fresh, ongoing, done, stage, rows };
 }
 
 /**

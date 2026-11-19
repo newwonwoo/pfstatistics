@@ -287,6 +287,11 @@ export default function NearbyPresale({
             <span style={funnel.stage === 'fresh' ? S.stepOn : S.step}>1년 이내 분양개시 {funnel.fresh.length}건</span>
             <span style={S.arrow}>›</span>
             <span style={funnel.stage === 'ongoing' ? S.stepOn : S.step}>분양 진행중 {funnel.ongoing.length}건</span>
+            {funnel.noOriginal.length > 0 && (
+              <span style={{ color: T.muted }}>
+                (재공고만 있고 최초 공고가 청약홈 적재기간(2020-02~) 밖이라 제외 {funnel.noOriginal.length}건 — {funnel.noOriginal.map(a => a.name).join(' · ')})
+              </span>
+            )}
             {funnel.done.length > 0 && (
               <span style={{ ...S.hit, marginLeft: 4 }}>
                 (준공 {funnel.done.length}건은 대상이 아니어서 제외)
@@ -339,6 +344,9 @@ export default function NearbyPresale({
                       <td style={S.td}>{i + 1}</td>
                       <td style={S.tdL}>
                         {a.name}
+                        {a.latestName && a.latestName !== a.name && (
+                          <div style={{ fontSize: 10.5, color: T.muted }}>최초 공고 기준 · 최근 재공고 「{a.latestName}」</div>
+                        )}
                         {a.landFlags?.length > 0 && <div style={{ fontSize: 10.5, color: T.muted }}>청약홈 : {a.landFlags.join(' · ')}</div>}
                       </td>
                       <td style={S.td}>{a.distance}m</td>
