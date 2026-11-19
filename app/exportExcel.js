@@ -26,8 +26,9 @@ const box = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
 import { districtLabel, DISTRICT_SHEETS, floorNote } from './DistrictRow';
 import { scoreSheet, scoreGroup, scoreFacility, scorePoi, scoreMatrix, scoreAverage, expectedSaleRate, reviewScore, tableOf } from '../src/lib/scoring';
 import { expectedRateOf, firstOpts } from '../src/lib/compare';
-import { manualSummary } from '../src/lib/manual';
-import { guaranteeSetOf, PRIORITY_YEARS, similarityOf } from '../src/lib/similar';
+import { manualSummary, nearbySurvey, nearbySpecial } from '../src/lib/manual';
+import { scoreNearbyPresale } from '../src/lib/scoring';
+import { guaranteeSetOf, PRIORITY_YEARS, similarityOf, presaleCandidates, pickPresale } from '../src/lib/similar';
 import { writeMainSheets, writeManualSheet } from './excelMain';
 import { lookupLand, hasLandInfo } from './landLookup';
 
@@ -492,6 +493,66 @@ export async function exportWorkbook({ data, facilities, manual, compare, rate, 
     최종 산출물. 이 앱이 만든 초기예상분양률이 여기서 점수가 되어 종합평점에 들어간다.
     사업성·시공자 항목은 수동입력이라 화면에 넣은 값을 그대로 옮긴다.
   */
+
+  // ── 인근아파트 초기분양률 선정표 ─────────────────────────
+  /* 화면(NearbyPresale)과 같은 함수로 거른다 — 점수만 A 합산표에 가고 「누구를 왜 골랐나」 가 엑셀에 없었다 */
+  {
+    onProgress?.('인근초기분양률');
+    const nb = sheetInput?.인근초기분양률 ?? {};
+    const site = compare?.site ?? {};
+    const officetel = (rate?.series ?? '주택') === '오피스텔';
+    const ws = wb.addWorksheet('인근초기분양률', { views: [{ showGridLines: false }] });
+    const note = (r, text) => { const c = ws.getCell(r, 2); c.value = text; c.font = { size: 10, color: { argb: 'FF666666' } }; };
+    const survey = nearbySurvey(nb);
+    const special = nearbySpecial(nb, manual?.['사업지구'] ?? null);
+    const sc = (survey.pending && !special) ? null : scoreNearbyPresale(survey.value, special);
+    let r = 2;
+    ws.getCell(r, 2).value = '인근아파트 초기 분양률 (배점 10) — 조사 대상 선정';
+    ws.getCell(r, 2).font = { bold: true, size: 13 }; r += 1;
+    note(r++, `선정 방법 : 거리 ${nb.data?.radius ? `${nb.data.radius / 1000}km` : '-'} 이내 · 1년 이내 분양개시(없으면 분양 진행중) · 주택유형 일치(${officetel ? '오피스텔·도시형' : '아파트'}) · 가~라 4개 항목 최다 일치(동률이면 평균)`);
+    note(r++, '분양개시일 = 최초 공고의 공급계약시작일 — 자격 취소분·조합원 취소분 등 재공고는 시기 판정에 쓰지 않는다');
+    note(r++, `본건 제원 : 가. 주택유형 ${site.houseType ?? '미선택'} · 나. 단지규모 ${site.sizeBand ?? '미선택'} · 다. 시공순위 ${site.rankBand ?? '미선택'} · 라. 택지유형 ${site.landType ?? '미선택'}`);
+    if (!nb.data?.items) {
+      r += 1; ws.getCell(r, 2).value = '수집하지 않았습니다 — [초기예상분양률] 탭에서 [인근 단지 찾기] 를 누르면 채워집니다.';
+      if (nb.rate != null && nb.rate !== '') { r += 1; ws.getCell(r, 2).value = `직접 입력한 조사값 : ${nb.rate}%`; }
+      ws.getColumn(2).width = 100;
+    } else {
+      const f = presaleCandidates(nb.data.items, site, { officetel });
+      const best = pickPresale(f.rows);
+      const picked = nb.picked ?? {};
+      const extra = [
+        f.site.length ? `본건으로 판정해 제외 ${f.site.length}건(${f.site.map(a => a.name).join(' · ')})` : null,
+        f.noOriginal?.length ? `재공고만 있고 최초 공고가 적재기간(2020-02~) 밖이라 제외 ${f.noOriginal.length}건(${f.noOriginal.map(a => a.name).join(' · ')})` : null,
+        f.done.length ? `준공 ${f.done.length}건 제외` : null,
+      ].filter(Boolean).join(' · ');
+      note(r++, `단계별 건수 : 반경 안 ${f.notSite.length}건 → 주택유형 일치 ${f.sale.length}건 → 1년 이내 분양개시 ${f.fresh.length}건 · 분양 진행중 ${f.ongoing.length}건${extra ? ` (${extra})` : ''}`);
+      note(r++, `적용 단계 : ${f.stage === 'fresh' ? '1년 이내 분양개시' : f.stage === 'ongoing' ? '분양 진행중(1년 이내 분양개시 없음)' : '해당 없음 — 최하위 배점'}`);
+      const rows = f.rows.map((a, i) => [
+        i + 1, a.name,
+        a.latestName && a.latestName !== a.name ? `재공고 「${a.latestName}」` : '-',
+        a.distance != null ? `${Math.round(a.distance).toLocaleString('ko-KR')}m` : '-',
+        a.saleStart ?? '-', a.timing ?? '-', a.households ?? '-',
+        a.builder ? `${a.builder}${a.builderRank ? ` (${a.builderRank}위)` : ''}` : '-',
+        `${a.sim?.n ?? 0}개 일치${best.ids.includes(a.manageNo) ? ' · 최다' : ''}`,
+        (a.sim?.hit ?? []).join(' · ') || '-',
+        (a.sim?.miss ?? []).join(' · ') || '-',
+        a.manageNo in picked ? '선정' : '-',
+        a.manageNo in picked ? (picked[a.manageNo] === '' ? '미입력' : `${picked[a.manageNo]}%`) : '-',
+      ]);
+      const res = writeTable(ws, r, {
+        columns: ['No.', '단지명(최초 공고)', '재공고', '거리', '분양개시일', '시기', '세대수', '시공사', '유사도', '일치 항목', '불일치 항목', '조사', '초기분양률'],
+        rows: rows.length ? rows : [['-', '대상 없음', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-']],
+      });
+      r = res.nextRow;
+    }
+    r += 1;
+    ws.getCell(r, 2).value = sc?.score != null
+      ? `결과 : ${sc.text} → ${sc.label} ${sc.score}점 / 10${survey.count > 1 ? ` (선정 ${survey.count}곳 평균)` : ''}`
+      : `결과 : 미확정 — ${survey.pending ?? sc?.text ?? '조사값이 없습니다'}`;
+    ws.getCell(r, 2).font = { bold: true, size: 11 };
+    r += 1;
+    note(r, '* 초기분양률(6개월 이내) 값은 공개 원천에 없다 — 선정한 단지를 조사해 넣은 값이다. 출처 : 한국부동산원 청약홈 분양정보(공공데이터포털)');
+  }
 
   // ── 시트별 ──────────────────────────────────────────────
   const failed = [];
